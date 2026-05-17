@@ -1,14 +1,24 @@
-from oryntra_agent.agent.supervisor import run_chatwoot_runtime
+import pytest
+
+from oryntra_agent.agent.supervisor import get_runtime_graph, run_chatwoot_runtime, runtime_config
 from oryntra_agent.api.schemas import ChatwootRuntimeRequest
 
 
-def supervisor_payload(content: str = "preciso de ajuda no suporte") -> ChatwootRuntimeRequest:
+@pytest.fixture(autouse=True)
+def clear_runtime_graph_cache() -> None:
+    get_runtime_graph.cache_clear()
+
+
+def supervisor_payload(
+    content: str = "preciso de ajuda no suporte",
+    thread_id: str = "workspace:1:account:5:conversation:99",
+) -> ChatwootRuntimeRequest:
     return ChatwootRuntimeRequest.model_validate(
         {
             "workspace_id": 1,
             "agent_id": 10,
             "agent_mode": "supervisor",
-            "thread_id": "workspace:1:account:5:conversation:99",
+            "thread_id": thread_id,
             "messages": [{"id": "123", "content": content}],
             "specialists": [
                 {
@@ -64,6 +74,29 @@ def test_supervisor_waits_for_human_when_confidence_is_below_threshold() -> None
     assert response.specialist_id is None
     assert response.response.confidence == 0.5
     assert response.trace[1].output["reason"] == "below_confidence_threshold"
+
+
+def test_runtime_checkpointer_reuses_state_for_same_thread_id() -> None:
+    payload = supervisor_payload(thread_id="workspace:1:account:5:conversation:checkpoint-a")
+
+    first = run_chatwoot_runtime(payload)
+    second = run_chatwoot_runtime(payload)
+    state = get_runtime_graph().get_state(runtime_config(payload)).values
+
+    assert first.trace[0].input["turn_count"] == 1
+    assert second.trace[0].input["turn_count"] == 2
+    assert state["turn_count"] == 2
+
+
+def test_runtime_checkpointer_isolates_different_thread_ids() -> None:
+    first_thread = supervisor_payload(thread_id="workspace:1:account:5:conversation:checkpoint-a")
+    second_thread = supervisor_payload(thread_id="workspace:1:account:5:conversation:checkpoint-b")
+
+    run_chatwoot_runtime(first_thread)
+    run_chatwoot_runtime(first_thread)
+    isolated = run_chatwoot_runtime(second_thread)
+
+    assert isolated.trace[0].input["turn_count"] == 1
 
 
 def test_single_agent_path_stays_compatible() -> None:

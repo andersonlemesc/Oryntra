@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
+from functools import lru_cache
 from typing import Any, Literal
 
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
@@ -19,13 +21,14 @@ class SupervisorState(TypedDict, total=False):
     confidence: float
     reason: str
     response: ChatwootRuntimeResponse
+    turn_count: int
 
 
 def run_chatwoot_runtime(payload: ChatwootRuntimeRequest) -> ChatwootRuntimeResponse:
-    graph = build_runtime_graph()
+    graph = get_runtime_graph()
     result = graph.invoke(
         {"payload": payload},
-        {"configurable": {"thread_id": payload.thread_id}},
+        runtime_config(payload),
     )
     response = result.get("response")
 
@@ -33,6 +36,11 @@ def run_chatwoot_runtime(payload: ChatwootRuntimeRequest) -> ChatwootRuntimeResp
         raise RuntimeError("Supervisor graph did not produce a runtime response.")
 
     return response
+
+
+@lru_cache(maxsize=1)
+def get_runtime_graph() -> Any:
+    return build_runtime_graph()
 
 
 def build_runtime_graph() -> Any:
@@ -49,17 +57,23 @@ def build_runtime_graph() -> Any:
     )
     builder.add_edge("respond", END)
 
-    return builder.compile()
+    return builder.compile(checkpointer=InMemorySaver())
+
+
+def runtime_config(payload: ChatwootRuntimeRequest) -> dict[str, dict[str, str]]:
+    return {"configurable": {"thread_id": payload.thread_id}}
 
 
 def route_node(state: SupervisorState) -> SupervisorState:
     payload = state["payload"]
+    turn_count = state.get("turn_count", 0) + 1
 
     if payload.agent_mode != "supervisor":
         return {
             "selected_specialist": None,
             "confidence": 1.0,
             "reason": "single_agent",
+            "turn_count": turn_count,
         }
 
     selected_specialist, confidence, reason = choose_specialist(payload)
@@ -68,6 +82,7 @@ def route_node(state: SupervisorState) -> SupervisorState:
         "selected_specialist": selected_specialist,
         "confidence": confidence,
         "reason": reason,
+        "turn_count": turn_count,
     }
 
 
@@ -80,22 +95,33 @@ def respond_node(state: SupervisorState) -> SupervisorState:
     selected_specialist = state.get("selected_specialist")
     confidence = state.get("confidence", 0.0)
     reason = state.get("reason", "unknown")
+    turn_count = state.get("turn_count", 1)
 
     if payload.agent_mode != "supervisor":
-        return {"response": single_agent_response(payload)}
+        return {"response": single_agent_response(payload, turn_count=turn_count)}
 
     if selected_specialist is None:
-        return {"response": no_route_response(payload=payload, confidence=confidence, reason=reason)}
+        return {
+            "response": no_route_response(
+                payload=payload,
+                confidence=confidence,
+                reason=reason,
+                turn_count=turn_count,
+            )
+        }
 
-    return {"response": routed_specialist_response(
-        payload=payload,
-        selected_specialist=selected_specialist,
-        confidence=confidence,
-        reason=reason,
-    )}
+    return {
+        "response": routed_specialist_response(
+            payload=payload,
+            selected_specialist=selected_specialist,
+            confidence=confidence,
+            reason=reason,
+            turn_count=turn_count,
+        )
+    }
 
 
-def single_agent_response(payload: ChatwootRuntimeRequest) -> ChatwootRuntimeResponse:
+def single_agent_response(payload: ChatwootRuntimeRequest, turn_count: int) -> ChatwootRuntimeResponse:
     message_count = len(payload.messages)
 
     return ChatwootRuntimeResponse(
@@ -106,12 +132,17 @@ def single_agent_response(payload: ChatwootRuntimeRequest) -> ChatwootRuntimeRes
             confidence=1.0,
         ),
         trace=[
-            runtime_trace_step(payload=payload),
+            runtime_trace_step(payload=payload, turn_count=turn_count),
         ],
     )
 
 
-def no_route_response(payload: ChatwootRuntimeRequest, confidence: float, reason: str) -> ChatwootRuntimeResponse:
+def no_route_response(
+    payload: ChatwootRuntimeRequest,
+    confidence: float,
+    reason: str,
+    turn_count: int,
+) -> ChatwootRuntimeResponse:
     return ChatwootRuntimeResponse(
         status="waiting_human",
         response=RuntimeResponsePayload(
@@ -121,7 +152,7 @@ def no_route_response(payload: ChatwootRuntimeRequest, confidence: float, reason
             confidence=confidence,
         ),
         trace=[
-            runtime_trace_step(payload=payload),
+            runtime_trace_step(payload=payload, turn_count=turn_count),
             TraceStep(
                 step=2,
                 type="supervisor_route",
@@ -144,6 +175,7 @@ def routed_specialist_response(
     selected_specialist: SpecialistConfig,
     confidence: float,
     reason: str,
+    turn_count: int,
 ) -> ChatwootRuntimeResponse:
     return ChatwootRuntimeResponse(
         status="completed",
@@ -154,7 +186,7 @@ def routed_specialist_response(
         ),
         specialist_id=selected_specialist.id,
         trace=[
-            runtime_trace_step(payload=payload),
+            runtime_trace_step(payload=payload, turn_count=turn_count),
             TraceStep(
                 step=2,
                 type="supervisor_route",
@@ -205,7 +237,7 @@ def choose_specialist(payload: ChatwootRuntimeRequest) -> tuple[SpecialistConfig
     return best_specialist, confidence, "keyword_match"
 
 
-def runtime_trace_step(payload: ChatwootRuntimeRequest) -> TraceStep:
+def runtime_trace_step(payload: ChatwootRuntimeRequest, turn_count: int) -> TraceStep:
     return TraceStep(
         step=1,
         type="runtime_mock",
@@ -213,6 +245,7 @@ def runtime_trace_step(payload: ChatwootRuntimeRequest) -> TraceStep:
             "agent_mode": payload.agent_mode,
             "message_count": len(payload.messages),
             "thread_id": payload.thread_id,
+            "turn_count": turn_count,
         },
         output={"response_type": "text"},
         ts=datetime.now(UTC),
