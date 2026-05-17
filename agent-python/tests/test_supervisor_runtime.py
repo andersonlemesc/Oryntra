@@ -1,12 +1,21 @@
 import pytest
+from langgraph.checkpoint.memory import InMemorySaver
 
-from oryntra_agent.agent.supervisor import get_runtime_graph, run_chatwoot_runtime, runtime_config
+from oryntra_agent import settings as settings_module
+from oryntra_agent.agent import supervisor
+from oryntra_agent.agent.supervisor import (
+    get_runtime_graph,
+    run_chatwoot_runtime,
+    runtime_checkpointer,
+    runtime_config,
+)
 from oryntra_agent.api.schemas import ChatwootRuntimeRequest
 
 
 @pytest.fixture(autouse=True)
 def clear_runtime_graph_cache() -> None:
     get_runtime_graph.cache_clear()
+    settings_module.settings.langgraph_checkpointer = "memory"
 
 
 def supervisor_payload(
@@ -97,6 +106,32 @@ def test_runtime_checkpointer_isolates_different_thread_ids() -> None:
     isolated = run_chatwoot_runtime(second_thread)
 
     assert isolated.trace[0].input["turn_count"] == 1
+
+
+def test_runtime_checkpointer_defaults_to_memory() -> None:
+    assert isinstance(runtime_checkpointer(), InMemorySaver)
+
+
+def test_runtime_checkpointer_uses_postgres_when_configured(monkeypatch) -> None:
+    class FakeContext:
+        entered = False
+
+        def __enter__(self) -> str:
+            self.entered = True
+            return "postgres-checkpointer"
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+    fake_context = FakeContext()
+    settings_module.settings.langgraph_checkpointer = "postgres"
+    settings_module.settings.postgres_url = "postgresql://test:test@postgres:5432/test"
+    monkeypatch.setattr(supervisor.PostgresSaver, "from_conn_string", lambda url: fake_context)
+    supervisor._postgres_checkpointer_context = None
+
+    assert runtime_checkpointer() == "postgres-checkpointer"
+    assert fake_context.entered is True
+    assert supervisor._postgres_checkpointer_context is fake_context
 
 
 def test_single_agent_path_stays_compatible() -> None:

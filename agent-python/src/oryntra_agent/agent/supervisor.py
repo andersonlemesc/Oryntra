@@ -1,8 +1,10 @@
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any, Literal
 
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
@@ -13,6 +15,9 @@ from oryntra_agent.api.schemas import (
     SpecialistConfig,
     TraceStep,
 )
+from oryntra_agent.settings import settings
+
+_postgres_checkpointer_context: AbstractContextManager[Any] | None = None
 
 
 class SupervisorState(TypedDict, total=False):
@@ -57,7 +62,19 @@ def build_runtime_graph() -> Any:
     )
     builder.add_edge("respond", END)
 
-    return builder.compile(checkpointer=InMemorySaver())
+    return builder.compile(checkpointer=runtime_checkpointer())
+
+
+def runtime_checkpointer() -> Any:
+    global _postgres_checkpointer_context
+
+    if settings.langgraph_checkpointer == "postgres":
+        if _postgres_checkpointer_context is None:
+            _postgres_checkpointer_context = PostgresSaver.from_conn_string(settings.postgres_url)
+
+        return _postgres_checkpointer_context.__enter__()
+
+    return InMemorySaver()
 
 
 def runtime_config(payload: ChatwootRuntimeRequest) -> dict[str, dict[str, str]]:
