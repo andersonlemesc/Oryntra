@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
+use App\Enums\AgentChatwootBindingStatus;
 use App\Enums\ChatwootConnectionStatus;
 use App\Jobs\Chatwoot\DeleteChatwootAgentBotJob;
 use Database\Factories\ChatwootConnectionFactory;
@@ -10,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 #[Fillable([
@@ -69,6 +73,23 @@ class ChatwootConnection extends Model
     public function webhookEvents(): HasMany
     {
         return $this->hasMany(ChatwootWebhookEvent::class);
+    }
+
+    /**
+     * @return HasMany<AgentChatwootBinding, $this>
+     */
+    public function agentBindings(): HasMany
+    {
+        return $this->hasMany(AgentChatwootBinding::class);
+    }
+
+    /**
+     * @return HasOne<AgentChatwootBinding, $this>
+     */
+    public function activeAgentBinding(): HasOne
+    {
+        return $this->hasOne(AgentChatwootBinding::class)
+            ->where('status', AgentChatwootBindingStatus::Active->value);
     }
 
     /**

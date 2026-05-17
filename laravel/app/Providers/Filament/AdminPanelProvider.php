@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Tenancy\RegisterWorkspace;
@@ -30,7 +32,6 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
             ->tenant(Workspace::class)
             ->tenantRegistration(RegisterWorkspace::class)
             ->searchableTenantMenu()

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Database\Factories\ChatwootWebhookEventFactory;
@@ -15,6 +17,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'chatwoot_account_id',
     'conversation_id',
     'chatwoot_message_id',
+    'resolved_agent_id',
+    'agent_run_id',
     'payload',
     'signature',
     'status',
@@ -45,6 +49,22 @@ class ChatwootWebhookEvent extends Model
     public function chatwootConnection(): BelongsTo
     {
         return $this->belongsTo(ChatwootConnection::class);
+    }
+
+    /**
+     * @return BelongsTo<Agent, $this>
+     */
+    public function resolvedAgent(): BelongsTo
+    {
+        return $this->belongsTo(Agent::class, 'resolved_agent_id');
+    }
+
+    /**
+     * @return BelongsTo<AgentRun, $this>
+     */
+    public function agentRun(): BelongsTo
+    {
+        return $this->belongsTo(AgentRun::class);
     }
 
     /**

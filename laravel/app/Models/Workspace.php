@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Database\Factories\WorkspaceFactory;
@@ -32,6 +34,30 @@ class Workspace extends Model implements HasName
     public function chatwootConnections(): HasMany
     {
         return $this->hasMany(ChatwootConnection::class);
+    }
+
+    /**
+     * @return HasMany<Agent, $this>
+     */
+    public function agents(): HasMany
+    {
+        return $this->hasMany(Agent::class);
+    }
+
+    /**
+     * @return HasMany<AgentChatwootBinding, $this>
+     */
+    public function agentChatwootBindings(): HasMany
+    {
+        return $this->hasMany(AgentChatwootBinding::class);
+    }
+
+    /**
+     * @return HasMany<AgentLlmKey, $this>
+     */
+    public function agentLlmKeys(): HasMany
+    {
+        return $this->hasMany(AgentLlmKey::class);
     }
 
     /**

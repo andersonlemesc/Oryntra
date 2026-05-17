@@ -9,7 +9,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    internal_api_token: str = "replace_me_with_long_random_string"
+    internal_api_token: str = ""
     postgres_url: str = "postgresql://oryntra:oryntra_dev_pw@postgres:5432/oryntra"
     log_level: str = "INFO"
 
