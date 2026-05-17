@@ -1,14 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Actions\Chatwoot\ClassifyChatwootWebhookEvent;
+use App\Actions\Chatwoot\EnqueueAgentRunForEvent;
+use App\Actions\Chatwoot\ResolveAgentForChatwootEvent;
+use App\Enums\AgentChatwootBindingStatus;
 use App\Jobs\Chatwoot\ProcessChatwootWebhookEventJob;
+use App\Models\Agent;
+use App\Models\AgentChatwootBinding;
 use App\Models\ChatwootConnection;
 use App\Models\ChatwootWebhookEvent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Queue;
-use Tests\TestCase;
 
 use function Pest\Laravel\postJson;
+
+use Tests\TestCase;
 
 uses(TestCase::class);
 uses(RefreshDatabase::class);
@@ -128,20 +137,37 @@ it('is idempotent by chatwoot message id', function () {
     Queue::assertPushed(ProcessChatwootWebhookEventJob::class, 1);
 });
 
-it('processes queued webhook events under a conversation lock', function () {
+it('processes queued webhook events under a conversation lock and enters debounce', function () {
+    Bus::fake();
+
     $event = ChatwootWebhookEvent::factory()->create([
         'status' => 'queued',
         'conversation_id' => 654,
         'processed_at' => null,
     ]);
 
-    (new ProcessChatwootWebhookEventJob($event->id))->handle(app(ClassifyChatwootWebhookEvent::class));
+    $agent = Agent::factory()->active()->create([
+        'workspace_id' => $event->workspace_id,
+    ]);
+    AgentChatwootBinding::factory()->create([
+        'workspace_id' => $event->workspace_id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $event->chatwoot_connection_id,
+        'status' => AgentChatwootBindingStatus::Active,
+    ]);
+
+    (new ProcessChatwootWebhookEventJob($event->id))->handle(
+        app(ClassifyChatwootWebhookEvent::class),
+        app(ResolveAgentForChatwootEvent::class),
+        app(EnqueueAgentRunForEvent::class),
+    );
 
     $event->refresh();
 
-    expect($event->status)->toBe('processed')
-        ->and($event->processing_started_at)->not->toBeNull()
-        ->and($event->processed_at)->not->toBeNull();
+    expect($event->status)->toBe('debouncing')
+        ->and($event->resolved_agent_id)->toBe($agent->id)
+        ->and($event->agent_run_id)->not->toBeNull()
+        ->and($event->processing_started_at)->not->toBeNull();
 });
 
 it('ignores outgoing Chatwoot messages so Oryntra does not reply to agents', function () {
@@ -153,7 +179,11 @@ it('ignores outgoing Chatwoot messages so Oryntra does not reply to agents', fun
         'payload' => chatwootRealMessagePayload(messageType: 'outgoing', senderType: 'user'),
     ]);
 
-    (new ProcessChatwootWebhookEventJob($event->id))->handle(app(ClassifyChatwootWebhookEvent::class));
+    (new ProcessChatwootWebhookEventJob($event->id))->handle(
+        app(ClassifyChatwootWebhookEvent::class),
+        app(ResolveAgentForChatwootEvent::class),
+        app(EnqueueAgentRunForEvent::class),
+    );
 
     $event->refresh();
 
@@ -171,7 +201,11 @@ it('ignores private Chatwoot messages', function () {
         'payload' => chatwootRealMessagePayload(private: true),
     ]);
 
-    (new ProcessChatwootWebhookEventJob($event->id))->handle(app(ClassifyChatwootWebhookEvent::class));
+    (new ProcessChatwootWebhookEventJob($event->id))->handle(
+        app(ClassifyChatwootWebhookEvent::class),
+        app(ResolveAgentForChatwootEvent::class),
+        app(EnqueueAgentRunForEvent::class),
+    );
 
     $event->refresh();
 
@@ -180,6 +214,8 @@ it('ignores private Chatwoot messages', function () {
 });
 
 it('processes incoming Chatwoot media messages with captions', function () {
+    Bus::fake();
+
     $event = ChatwootWebhookEvent::factory()->create([
         'event_name' => 'message_created',
         'conversation_id' => 654,
@@ -197,8 +233,22 @@ it('processes incoming Chatwoot media messages with captions', function () {
         ),
     ]);
 
+    $agent = Agent::factory()->active()->create([
+        'workspace_id' => $event->workspace_id,
+    ]);
+    AgentChatwootBinding::factory()->create([
+        'workspace_id' => $event->workspace_id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $event->chatwoot_connection_id,
+        'status' => AgentChatwootBindingStatus::Active,
+    ]);
+
     $classification = app(ClassifyChatwootWebhookEvent::class)->execute($event);
-    (new ProcessChatwootWebhookEventJob($event->id))->handle(app(ClassifyChatwootWebhookEvent::class));
+    (new ProcessChatwootWebhookEventJob($event->id))->handle(
+        app(ClassifyChatwootWebhookEvent::class),
+        app(ResolveAgentForChatwootEvent::class),
+        app(EnqueueAgentRunForEvent::class),
+    );
 
     $event->refresh();
 
@@ -206,7 +256,9 @@ it('processes incoming Chatwoot media messages with captions', function () {
         ->and($classification['normalized']['content'])->toBe('Imagem com legenda')
         ->and($classification['normalized']['attachments'])->toHaveCount(1)
         ->and($classification['normalized']['attachments'][0]['file_type'])->toBe('image')
-        ->and($event->status)->toBe('processed')
+        ->and($event->status)->toBe('debouncing')
+        ->and($event->resolved_agent_id)->toBe($agent->id)
+        ->and($event->agent_run_id)->not->toBeNull()
         ->and($event->ignored_reason)->toBeNull();
 });
 
@@ -236,7 +288,7 @@ function chatwootWebhookPayload(int $messageId = 987, int $conversationId = 654,
 }
 
 /**
- * @param  array<int, array<string, mixed>>  $attachments
+ * @param  array<int, array<string, mixed>> $attachments
  * @return array<string, mixed>
  */
 function chatwootRealMessagePayload(

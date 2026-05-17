@@ -1,5 +1,8 @@
 name: CI Laravel
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches: [main, develop]
@@ -46,10 +49,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP 8.3
+      - name: Setup PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: pdo_pgsql, pgsql, intl, bcmath, redis, zip, gd, pcntl, sockets
           coverage: pcov
           tools: composer:v2

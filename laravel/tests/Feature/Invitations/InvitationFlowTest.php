@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Actions\Invitations\SendUserInvitation;
 use App\Models\User;
 use App\Models\UserInvitation;
@@ -8,18 +10,26 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
-use Tests\TestCase;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
 use function Pest\Laravel\post;
 
+use Tests\TestCase;
+
 uses(TestCase::class);
 uses(RefreshDatabase::class);
 
-it('redirects the root path to the login page for guests', function () {
+it('redirects the root path to the login page for guests when users exist', function () {
+    User::factory()->create();
+
     get('/')
         ->assertRedirect(route('login'));
+});
+
+it('redirects the root path to /register when no users exist', function () {
+    get('/')
+        ->assertRedirect('/register');
 });
 
 it('redirects the root path to admin for authenticated users', function () {
@@ -73,7 +83,7 @@ it('GET /accept-invitation/{token} shows form even when another user is authenti
 });
 
 it('GET /accept-invitation/{token} redirects to login on invalid token', function () {
-    get('/accept-invitation/'.str_repeat('x', 64))
+    get('/accept-invitation/' . str_repeat('x', 64))
         ->assertRedirect(route('login'));
 });
 

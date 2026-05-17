@@ -1,12 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
-use Tests\TestCase;
 
 use function Pest\Laravel\get;
 use function Pest\Laravel\post;
+
+use Tests\TestCase;
 
 uses(TestCase::class);
 uses(RefreshDatabase::class);
@@ -27,10 +30,10 @@ it('renders enabled Fortify auth views', function (string $path) {
     '/forgot-password',
 ]);
 
-it('keeps Fortify login routes registered', function () {
+it('keeps Fortify login routes registered as the single auth entry point', function () {
     expect(Route::has('login'))->toBeTrue()
         ->and(Route::has('login.store'))->toBeTrue()
-        ->and(Route::has('filament.admin.auth.login'))->toBeTrue();
+        ->and(Route::has('filament.admin.auth.login'))->toBeFalse();
 });
 
 it('creates an account through Fortify registration', function () {
@@ -39,7 +42,7 @@ it('creates an account through Fortify registration', function () {
         'email' => 'anderson@example.com',
         'password' => 'password',
         'password_confirmation' => 'password',
-    ])->assertRedirect('/admin');
+    ])->assertRedirect(route('setup.platform.show'));
 
     expect(User::where('email', 'anderson@example.com')->exists())->toBeTrue();
 });

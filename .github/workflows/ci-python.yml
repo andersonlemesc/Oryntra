@@ -1,5 +1,8 @@
 name: CI Python
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches: [main, develop]
@@ -31,6 +34,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
+          cache-dependency-glob: agent-python/uv.lock
 
       - name: Install dependencies
         working-directory: agent-python

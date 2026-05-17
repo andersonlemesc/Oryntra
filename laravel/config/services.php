@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
 
     /*
@@ -33,6 +35,12 @@ return [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
+    ],
+
+    'agent_runtime' => [
+        'base_url' => env('AGENT_RUNTIME_URL', 'http://agent-python:8000'),
+        'internal_token' => env('AGENT_RUNTIME_INTERNAL_TOKEN'),
+        'timeout' => (int) env('AGENT_RUNTIME_TIMEOUT', 30),
     ],
 
 ];

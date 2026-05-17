@@ -1,13 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Jobs\Chatwoot;
 
 use App\Actions\Chatwoot\ClassifyChatwootWebhookEvent;
+use App\Actions\Chatwoot\EnqueueAgentRunForEvent;
+use App\Actions\Chatwoot\ResolveAgentForChatwootEvent;
 use App\Models\ChatwootWebhookEvent;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Throwable;
@@ -23,25 +27,22 @@ class ProcessChatwootWebhookEventJob implements ShouldQueue
 
     public int $timeout = 120;
 
-    /**
-     * Create a new job instance.
-     */
     public function __construct(public int $webhookEventId)
     {
         $this->onQueue('chatwoot-webhooks');
     }
 
-    /**
-     * Execute the job.
-     */
-    public function handle(ClassifyChatwootWebhookEvent $classifyWebhookEvent): void
-    {
+    public function handle(
+        ClassifyChatwootWebhookEvent $classifyWebhookEvent,
+        ResolveAgentForChatwootEvent $resolveAgent,
+        EnqueueAgentRunForEvent $enqueueAgentRun,
+    ): void {
         $event = ChatwootWebhookEvent::query()->findOrFail($this->webhookEventId);
         $lockKey = $event->conversation_id
             ? "chatwoot:conversation:{$event->chatwoot_connection_id}:{$event->conversation_id}"
             : "chatwoot:webhook-event:{$event->id}";
 
-        Cache::lock($lockKey, 120)->block(30, function () use ($event, $classifyWebhookEvent): void {
+        Cache::lock($lockKey, 120)->block(30, function () use ($event, $classifyWebhookEvent, $resolveAgent, $enqueueAgentRun): void {
             try {
                 $event->forceFill([
                     'status' => 'processing',
@@ -61,11 +62,28 @@ class ProcessChatwootWebhookEventJob implements ShouldQueue
                     return;
                 }
 
-                // Agent execution will be connected in the next phase. At this
-                // point the webhook is known to be an incoming contact message.
+                $resolution = $resolveAgent->execute($event, $classification['normalized']);
+
+                if ($resolution['agent'] === null) {
+                    $event->forceFill([
+                        'status' => 'ignored',
+                        'ignored_reason' => $resolution['ignored_reason'],
+                        'resolved_agent_id' => null,
+                        'processed_at' => now(),
+                        'failed_reason' => null,
+                        'failure_reason' => null,
+                    ])->save();
+
+                    return;
+                }
+
+                $run = $enqueueAgentRun->execute($event, $resolution['agent'], $classification['normalized']);
+
                 $event->forceFill([
-                    'status' => 'processed',
-                    'processed_at' => now(),
+                    'status' => 'debouncing',
+                    'resolved_agent_id' => $resolution['agent']->id,
+                    'agent_run_id' => $run->id,
+                    'processed_at' => null,
                     'ignored_reason' => null,
                     'failed_reason' => null,
                     'failure_reason' => null,
