@@ -6,6 +6,7 @@ from typing import Any, Literal
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
 from oryntra_agent.api.schemas import (
@@ -18,6 +19,12 @@ from oryntra_agent.api.schemas import (
 from oryntra_agent.settings import settings
 
 _postgres_checkpointer_context: AbstractContextManager[Any] | None = None
+
+
+class SpecialistChoice(BaseModel):
+    specialist_id: int | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason: str
 
 
 class SupervisorState(TypedDict, total=False):
@@ -232,6 +239,24 @@ def routed_specialist_response(
 
 
 def choose_specialist(payload: ChatwootRuntimeRequest) -> tuple[SpecialistConfig | None, float, str]:
+    llm_choice = choose_specialist_with_llm(payload)
+
+    if llm_choice is not None:
+        specialist = specialist_by_choice(payload, llm_choice)
+
+        if specialist is not None and llm_choice.confidence >= specialist.confidence_threshold:
+            return specialist, llm_choice.confidence, llm_choice.reason
+
+        return None, llm_choice.confidence, llm_choice.reason
+
+    return choose_specialist_deterministically(payload)
+
+
+def choose_specialist_with_llm(_payload: ChatwootRuntimeRequest) -> SpecialistChoice | None:
+    return None
+
+
+def choose_specialist_deterministically(payload: ChatwootRuntimeRequest) -> tuple[SpecialistConfig | None, float, str]:
     message_text = " ".join(message.content or "" for message in payload.messages).casefold()
     best_specialist: SpecialistConfig | None = None
     best_matches = 0
@@ -252,6 +277,17 @@ def choose_specialist(payload: ChatwootRuntimeRequest) -> tuple[SpecialistConfig
         return None, confidence, "below_confidence_threshold"
 
     return best_specialist, confidence, "keyword_match"
+
+
+def specialist_by_choice(payload: ChatwootRuntimeRequest, choice: SpecialistChoice) -> SpecialistConfig | None:
+    if choice.specialist_id is None:
+        return None
+
+    for specialist in payload.specialists:
+        if specialist.id == choice.specialist_id:
+            return specialist
+
+    return None
 
 
 def payload_from_state(state: SupervisorState) -> ChatwootRuntimeRequest:

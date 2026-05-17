@@ -61,6 +61,14 @@ it('sends supervisor config and active specialists to runtime', function () {
         'priority' => 1,
     ]);
 
+    $otherWorkspace = Workspace::factory()->create();
+
+    AgentSpecialist::factory()->for($agent)->create([
+        'workspace_id' => $otherWorkspace->id,
+        'name' => 'Outro Workspace',
+        'priority' => 1,
+    ]);
+
     $run = AgentRun::factory()->create([
         'workspace_id' => $workspace->id,
         'agent_id' => $agent->id,

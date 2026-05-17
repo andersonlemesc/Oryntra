@@ -1,4 +1,5 @@
 from oryntra_agent import manage
+from oryntra_agent.api.schemas import ChatwootRuntimeResponse, RuntimeResponsePayload, TraceStep
 
 
 class FakeCheckpointer:
@@ -54,3 +55,44 @@ def test_main_setup_checkpointer_returns_success(monkeypatch, capsys) -> None:
     assert result == 0
     assert called["postgres_url"] == "postgresql://test:test@postgres:5432/test"
     assert "LangGraph checkpointer setup complete." in capsys.readouterr().out
+
+
+def test_smoke_supervisor_returns_summary(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run_chatwoot_runtime(payload):
+        captured["thread_id"] = payload.thread_id
+        return ChatwootRuntimeResponse(
+            status="completed",
+            response=RuntimeResponsePayload(type="text", content="ok", confidence=1.0),
+            specialist_id=5,
+            trace=[
+                TraceStep(
+                    step=1,
+                    type="runtime_mock",
+                    input={"turn_count": 3},
+                    output={"response_type": "text"},
+                    ts="2026-05-17T00:00:00Z",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(manage, "run_chatwoot_runtime", fake_run_chatwoot_runtime)
+
+    result = manage.smoke_supervisor("workspace:1:account:1:conversation:custom")
+
+    assert captured["thread_id"] == "workspace:1:account:1:conversation:custom"
+    assert result == {"status": "completed", "specialist_id": 5, "turn_count": 3}
+
+
+def test_main_smoke_supervisor_prints_json(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        manage,
+        "smoke_supervisor",
+        lambda thread_id: {"status": "completed", "specialist_id": 5, "turn_count": 1},
+    )
+
+    result = manage.main(["smoke-supervisor", "--thread-id", "workspace:1:account:1:conversation:custom"])
+
+    assert result == 0
+    assert capsys.readouterr().out == '{"specialist_id": 5, "status": "completed", "turn_count": 1}\n'

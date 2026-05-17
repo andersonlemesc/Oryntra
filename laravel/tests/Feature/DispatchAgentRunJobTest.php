@@ -20,7 +20,7 @@ use Tests\TestCase;
 uses(TestCase::class);
 uses(RefreshDatabase::class);
 
-it('marks agent_run completed with runtime output and transitions linked events to processed', function () {
+it('marks agent_run completed with supervisor runtime output and transitions linked events to processed', function () {
     Config::set('services.agent_runtime.base_url', 'http://agent-python:8000');
     Config::set('services.agent_runtime.internal_token', 'ci-token');
 
@@ -29,18 +29,28 @@ it('marks agent_run completed with runtime output and transitions linked events 
             'status' => 'completed',
             'response' => [
                 'type' => 'text',
-                'content' => '[mock] Recebi 2 mensagem(ns).',
+                'content' => '[mock] Suporte recebeu 2 mensagem(ns).',
                 'document_id' => null,
                 'handoff_reason' => null,
                 'confidence' => 1.0,
             ],
-            'specialist_id' => null,
+            'specialist_id' => 5,
             'trace' => [
                 [
                     'step' => 1,
                     'type' => 'runtime_mock',
                     'input' => ['message_count' => 2],
                     'output' => ['response_type' => 'text'],
+                    'tokens' => ['input' => 0, 'output' => 0],
+                    'latency_ms' => 0,
+                    'ts' => now()->toISOString(),
+                ],
+                [
+                    'step' => 2,
+                    'type' => 'supervisor_route',
+                    'specialist_id' => 5,
+                    'input' => ['specialists' => ['Suporte']],
+                    'output' => ['specialist_id' => 5, 'confidence' => 1.0],
                     'tokens' => ['input' => 0, 'output' => 0],
                     'latency_ms' => 0,
                     'ts' => now()->toISOString(),
@@ -87,8 +97,11 @@ it('marks agent_run completed with runtime output and transitions linked events 
     $freshEvent = $event->fresh();
 
     expect($freshRun?->status)->toBe(AgentRunStatus::Completed)
-        ->and($freshRun?->output['response']['content'] ?? null)->toBe('[mock] Recebi 2 mensagem(ns).')
+        ->and($freshRun?->output['response']['content'] ?? null)->toBe('[mock] Suporte recebeu 2 mensagem(ns).')
+        ->and($freshRun?->output['specialist_id'] ?? null)->toBe(5)
         ->and($freshRun?->output['trace'][0]['type'] ?? null)->toBe('runtime_mock')
+        ->and($freshRun?->output['trace'][1]['specialist_id'] ?? null)->toBe(5)
+        ->and($freshRun?->output['usage']['total_cost_cents'] ?? null)->toBe(0)
         ->and($freshRun?->started_at)->not->toBeNull()
         ->and($freshRun?->finished_at)->not->toBeNull()
         ->and($freshEvent?->status)->toBe('processed')
@@ -166,7 +179,9 @@ it('marks agent_run waiting_human when runtime requests human handoff', function
     $freshRun = $run->fresh();
 
     expect($freshRun?->status)->toBe(AgentRunStatus::WaitingHuman)
-        ->and($freshRun?->output['response']['type'] ?? null)->toBe('escalate');
+        ->and($freshRun?->output['response']['type'] ?? null)->toBe('escalate')
+        ->and($freshRun?->output['response']['confidence'] ?? null)->toBe(0.2)
+        ->and($freshRun?->output['response']['handoff_reason'] ?? null)->toBe('confidence_below_threshold');
 });
 
 it('marks agent_run failed when runtime call fails', function () {

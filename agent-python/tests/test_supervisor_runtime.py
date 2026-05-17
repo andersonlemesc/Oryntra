@@ -4,6 +4,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from oryntra_agent import settings as settings_module
 from oryntra_agent.agent import supervisor
 from oryntra_agent.agent.supervisor import (
+    SpecialistChoice,
     get_runtime_graph,
     run_chatwoot_runtime,
     runtime_checkpointer,
@@ -83,6 +84,38 @@ def test_supervisor_waits_for_human_when_confidence_is_below_threshold() -> None
     assert response.specialist_id is None
     assert response.response.confidence == 0.5
     assert response.trace[1].output["reason"] == "below_confidence_threshold"
+
+
+def test_supervisor_uses_llm_choice_interface_when_available(monkeypatch) -> None:
+    payload = supervisor_payload("sem palavra chave")
+
+    monkeypatch.setattr(
+        supervisor,
+        "choose_specialist_with_llm",
+        lambda payload: SpecialistChoice(specialist_id=6, confidence=0.9, reason="llm_choice"),
+    )
+
+    response = run_chatwoot_runtime(payload)
+
+    assert response.status == "completed"
+    assert response.specialist_id == 6
+    assert response.trace[1].output["reason"] == "llm_choice"
+
+
+def test_supervisor_waits_when_llm_choice_is_below_threshold(monkeypatch) -> None:
+    payload = supervisor_payload("sem palavra chave")
+
+    monkeypatch.setattr(
+        supervisor,
+        "choose_specialist_with_llm",
+        lambda payload: SpecialistChoice(specialist_id=6, confidence=0.4, reason="llm_low_confidence"),
+    )
+
+    response = run_chatwoot_runtime(payload)
+
+    assert response.status == "waiting_human"
+    assert response.specialist_id is None
+    assert response.trace[1].output["reason"] == "llm_low_confidence"
 
 
 def test_runtime_checkpointer_reuses_state_for_same_thread_id() -> None:
