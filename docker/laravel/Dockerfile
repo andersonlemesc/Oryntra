@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM php:8.3-fpm-bookworm
+FROM php:8.4-fpm-bookworm
 
 ARG WWWUSER=1000
 ARG WWWGROUP=1000

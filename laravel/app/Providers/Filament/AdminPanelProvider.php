@@ -2,8 +2,10 @@
 
 namespace App\Providers\Filament;
 
-use Filament\Http\Middleware\Authenticate;
+use App\Filament\Pages\Tenancy\RegisterWorkspace;
+use App\Models\Workspace;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -29,6 +31,9 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->tenant(Workspace::class)
+            ->tenantRegistration(RegisterWorkspace::class)
+            ->searchableTenantMenu()
             ->colors([
                 'primary' => Color::Amber,
             ])

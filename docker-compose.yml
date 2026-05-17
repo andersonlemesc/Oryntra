@@ -53,6 +53,8 @@ services:
     pull_policy: build
     container_name: oryntra-laravel-horizon
     restart: unless-stopped
+    healthcheck:
+      disable: true
     volumes:
       - ./laravel:/var/www/html/laravel
     working_dir: /var/www/html/laravel
@@ -70,6 +72,8 @@ services:
     pull_policy: build
     container_name: oryntra-laravel-scheduler
     restart: unless-stopped
+    healthcheck:
+      disable: true
     volumes:
       - ./laravel:/var/www/html/laravel
     working_dir: /var/www/html/laravel
@@ -85,6 +89,8 @@ services:
     pull_policy: build
     container_name: oryntra-laravel-reverb
     restart: unless-stopped
+    healthcheck:
+      disable: true
     volumes:
       - ./laravel:/var/www/html/laravel
     working_dir: /var/www/html/laravel
@@ -108,8 +114,8 @@ services:
     volumes:
       - ./agent-python/src:/app/src
     environment:
-      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
-      POSTGRES_URL: ${POSTGRES_URL}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-replace_me_with_long_random_string}
+      POSTGRES_URL: ${POSTGRES_URL:-postgresql://oryntra:oryntra_dev_pw@postgres:5432/oryntra}
     expose:
       - "8000"
     depends_on:

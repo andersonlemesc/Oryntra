@@ -13,7 +13,4 @@ parameters:
         - bootstrap/cache/*
         - storage/*
         - vendor/*
-    checkMissingIterableValueType: false
     treatPhpDocTypesAsCertain: false
-    ignoreErrors:
-        - identifier: missingType.iterableValue

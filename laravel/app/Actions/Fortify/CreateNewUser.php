@@ -16,6 +16,8 @@ class CreateNewUser implements CreatesNewUsers
     /**
      * Validate and create a newly registered user.
      *
+     * First registered user becomes super_admin (mirrors Chatwoot install flow).
+     *
      * @param  array<string, string>  $input
      *
      * @throws ValidationException
@@ -34,10 +36,13 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $this->passwordRules(),
         ])->validate();
 
+        $isFirstUser = User::query()->doesntExist();
+
         return User::create([
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => Hash::make($input['password']),
+            'is_super_admin' => $isFirstUser,
         ]);
     }
 }

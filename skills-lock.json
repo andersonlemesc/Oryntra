@@ -25,11 +25,23 @@
       "skillPath": "skills/postgres/SKILL.md",
       "computedHash": "2acf9fae4fcdb6c392923708b67234828f8a9f10b10dfa5d228eaab6e9108245"
     },
+    "postgresql-code-review": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/postgresql-code-review/SKILL.md",
+      "computedHash": "1167ec9449aa866e16bc7449e05ab4d391cdce95a0b0c5e1155b793160471eb5"
+    },
     "postgresql-optimization": {
       "source": "github/awesome-copilot",
       "sourceType": "github",
       "skillPath": "skills/postgresql-optimization/SKILL.md",
       "computedHash": "8022448de70ba9a485e3b5bce34c5bbc644f93eb39b68431c9f7dabcf03aeb09"
+    },
+    "postgresql-table-design": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/database-design/skills/postgresql/SKILL.md",
+      "computedHash": "dcace78e5cef7d8dce8ffef7ebee146e6c83a438aa4cf80bf502730e870c02d4"
     }
   }
 }
