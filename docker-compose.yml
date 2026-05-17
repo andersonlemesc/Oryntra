@@ -31,6 +31,7 @@ services:
         WWWUSER: ${WWWUSER:-1000}
         WWWGROUP: ${WWWGROUP:-1000}
     image: oryntra/laravel:dev
+    pull_policy: build
     container_name: oryntra-laravel-app
     restart: unless-stopped
     volumes:
@@ -49,6 +50,7 @@ services:
 
   laravel-horizon:
     image: oryntra/laravel:dev
+    pull_policy: build
     container_name: oryntra-laravel-horizon
     restart: unless-stopped
     volumes:
@@ -65,6 +67,7 @@ services:
 
   laravel-scheduler:
     image: oryntra/laravel:dev
+    pull_policy: build
     container_name: oryntra-laravel-scheduler
     restart: unless-stopped
     volumes:
@@ -79,6 +82,7 @@ services:
 
   laravel-reverb:
     image: oryntra/laravel:dev
+    pull_policy: build
     container_name: oryntra-laravel-reverb
     restart: unless-stopped
     volumes:
@@ -98,6 +102,7 @@ services:
       context: ./agent-python
       dockerfile: ../docker/agent-python/Dockerfile
     image: oryntra/agent-python:dev
+    pull_policy: build
     container_name: oryntra-agent-python
     restart: unless-stopped
     volumes:
