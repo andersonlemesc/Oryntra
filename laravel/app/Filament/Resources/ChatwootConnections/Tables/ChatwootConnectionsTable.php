@@ -22,9 +22,15 @@ class ChatwootConnectionsTable
                 TextColumn::make('base_url')
                     ->label('URL base')
                     ->searchable()
-                    ->limit(48),
+                    ->limit(48)
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('account_id')
                     ->label('Account ID')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('agent_bot_id')
+                    ->label('Agent Bot')
+                    ->placeholder('Pendente')
                     ->sortable(),
                 TextColumn::make('status')
                     ->label('Status')
@@ -38,6 +44,10 @@ class ChatwootConnectionsTable
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),
+                TextColumn::make('provisioning_error')
+                    ->label('Erro')
+                    ->limit(48)
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 //

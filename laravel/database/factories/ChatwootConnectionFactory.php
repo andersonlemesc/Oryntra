@@ -26,8 +26,11 @@ class ChatwootConnectionFactory extends Factory
             'name' => fake()->company().' Chatwoot',
             'base_url' => 'https://chatwoot.example.com',
             'account_id' => fake()->unique()->numberBetween(1, 999999),
+            'agent_bot_id' => fake()->unique()->numberBetween(1, 999999),
+            'agent_bot_outgoing_url' => 'https://oryntra.example.com/api/webhooks/chatwoot/'.fake()->uuid(),
             'api_access_token' => Str::random(40),
             'webhook_secret' => Str::random(48),
+            'provisioned_at' => now(),
             'status' => ChatwootConnectionStatus::Active,
         ];
     }

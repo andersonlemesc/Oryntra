@@ -34,6 +34,14 @@ class Workspace extends Model implements HasName
         return $this->hasMany(ChatwootConnection::class);
     }
 
+    /**
+     * @return HasMany<ChatwootWebhookEvent, $this>
+     */
+    public function chatwootWebhookEvents(): HasMany
+    {
+        return $this->hasMany(ChatwootWebhookEvent::class);
+    }
+
     public function getFilamentName(): string
     {
         return $this->name;
