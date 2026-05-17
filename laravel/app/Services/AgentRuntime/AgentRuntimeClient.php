@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Services\AgentRuntime;
 
+use App\Enums\AgentLlmKeyStatus;
+use App\Enums\AgentLlmProvider;
 use App\Enums\AgentMode;
 use App\Enums\AgentSpecialistStatus;
 use App\Models\Agent;
+use App\Models\AgentLlmKey;
 use App\Models\AgentRun;
+use App\Models\AgentSpecialist;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -56,7 +60,9 @@ class AgentRuntimeClient
     {
         $run->loadMissing([
             'agent',
+            'agent.supervisorLlmKey',
             'agent.specialists' => fn ($query) => $query
+                ->with('llmKey')
                 ->where('workspace_id', $run->workspace_id)
                 ->where('status', AgentSpecialistStatus::Active->value)
                 ->orderBy('priority')
@@ -75,6 +81,7 @@ class AgentRuntimeClient
         }
 
         /** @var array<string, mixed> $input */
+        $supervisorCredential = $this->supervisorCredential($agent, $run->workspace_id);
 
         return [
             'workspace_id' => $run->workspace_id,
@@ -84,30 +91,79 @@ class AgentRuntimeClient
             'supervisor' => [
                 'prompt' => $agent->supervisor_prompt,
                 'llm_key_id' => $agent->supervisor_llm_key_id,
+                'llm_provider' => $supervisorCredential['provider'],
                 'llm_model' => $agent->supervisor_llm_model,
+                'llm_api_key' => $supervisorCredential['api_key'],
             ],
             'specialists' => $agent->specialists
-                ->map(fn ($specialist): array => [
-                    'id' => $specialist->id,
-                    'name' => $specialist->name,
-                    'description' => $specialist->description,
-                    'role_prompt' => $specialist->role_prompt,
-                    'llm_key_id' => $specialist->llm_key_id,
-                    'llm_model' => $specialist->llm_model,
-                    'llm_temperature' => $specialist->llm_temperature,
-                    'tools' => $specialist->tools_allowlist,
-                    'intent_keywords' => $specialist->intent_keywords,
-                    'confidence_threshold' => $specialist->confidence_threshold,
-                    'fallback_specialist_id' => $specialist->fallback_specialist_id,
-                ])
+                ->map(function (AgentSpecialist $specialist) use ($run): array {
+                    $specialistCredential = $this->specialistCredential($specialist, $run->workspace_id);
+
+                    return [
+                        'id' => $specialist->id,
+                        'name' => $specialist->name,
+                        'description' => $specialist->description,
+                        'role_prompt' => $specialist->role_prompt,
+                        'llm_key_id' => $specialist->llm_key_id,
+                        'llm_provider' => $specialistCredential['provider'],
+                        'llm_model' => $specialist->llm_model,
+                        'llm_api_key' => $specialistCredential['api_key'],
+                        'llm_temperature' => $specialist->llm_temperature,
+                        'tools' => $specialist->tools_allowlist,
+                        'intent_keywords' => $specialist->intent_keywords,
+                        'confidence_threshold' => $specialist->confidence_threshold,
+                        'fallback_specialist_id' => $specialist->fallback_specialist_id,
+                    ];
+                })
                 ->values()
                 ->all(),
             'messages' => array_values($this->arrayInput($input, 'messages')),
-            'contact' => $this->arrayInput($input, 'contact'),
-            'inbox' => $this->arrayInput($input, 'inbox'),
-            'guard_config' => $this->arrayInput($input, 'guard_config'),
-            'media_config' => $this->arrayInput($input, 'media_config'),
-            'runtime_config' => $this->arrayInput($input, 'runtime_config'),
+            'contact' => $this->objectInput($input, 'contact'),
+            'inbox' => $this->objectInput($input, 'inbox'),
+            'guard_config' => $this->objectInput($input, 'guard_config'),
+            'media_config' => $this->objectInput($input, 'media_config'),
+            'runtime_config' => $this->objectInput($input, 'runtime_config'),
+        ];
+    }
+
+    /**
+     * @return array{provider: string|null, api_key: string|null}
+     */
+    private function specialistCredential(AgentSpecialist $specialist, int $workspaceId): array
+    {
+        return $this->credentialFromKey($specialist->llmKey, $workspaceId);
+    }
+
+    /**
+     * @return array{provider: string|null, api_key: string|null}
+     */
+    private function supervisorCredential(Agent $agent, int $workspaceId): array
+    {
+        return $this->credentialFromKey($agent->supervisorLlmKey, $workspaceId);
+    }
+
+    /**
+     * @return array{provider: string|null, api_key: string|null}
+     */
+    private function credentialFromKey(?AgentLlmKey $llmKey, int $workspaceId): array
+    {
+        if (
+            ! $llmKey instanceof AgentLlmKey
+            || $llmKey->workspace_id !== $workspaceId
+            || $llmKey->status !== AgentLlmKeyStatus::Active
+        ) {
+            return ['provider' => null, 'api_key' => null];
+        }
+
+        $provider = $llmKey->getAttribute('provider');
+
+        if ($provider instanceof AgentLlmProvider) {
+            $provider = $provider->value;
+        }
+
+        return [
+            'provider' => is_string($provider) ? $provider : null,
+            'api_key' => $llmKey->api_key,
         ];
     }
 
@@ -120,6 +176,22 @@ class AgentRuntimeClient
         $value = $input[$key] ?? [];
 
         return is_array($value) ? $value : [];
+    }
+
+    /**
+     * @param  array<string, mixed>           $input
+     * @return array<string, mixed>|\stdClass
+     */
+    private function objectInput(array $input, string $key): array|\stdClass
+    {
+        $value = $input[$key] ?? [];
+
+        if (! is_array($value) || $value === []) {
+            return new \stdClass;
+        }
+
+        /** @var array<string, mixed> $value */
+        return $value;
     }
 
     /**
