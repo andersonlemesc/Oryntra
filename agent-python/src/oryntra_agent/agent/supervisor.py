@@ -21,26 +21,26 @@ _postgres_checkpointer_context: AbstractContextManager[Any] | None = None
 
 
 class SupervisorState(TypedDict, total=False):
-    payload: ChatwootRuntimeRequest
-    selected_specialist: SpecialistConfig | None
+    payload: dict[str, Any]
+    selected_specialist: dict[str, Any] | None
     confidence: float
     reason: str
-    response: ChatwootRuntimeResponse
+    response: dict[str, Any]
     turn_count: int
 
 
 def run_chatwoot_runtime(payload: ChatwootRuntimeRequest) -> ChatwootRuntimeResponse:
     graph = get_runtime_graph()
     result = graph.invoke(
-        {"payload": payload},
+        {"payload": payload.model_dump(mode="json")},
         runtime_config(payload),
     )
     response = result.get("response")
 
-    if not isinstance(response, ChatwootRuntimeResponse):
+    if not isinstance(response, dict):
         raise RuntimeError("Supervisor graph did not produce a runtime response.")
 
-    return response
+    return ChatwootRuntimeResponse.model_validate(response)
 
 
 @lru_cache(maxsize=1)
@@ -82,7 +82,7 @@ def runtime_config(payload: ChatwootRuntimeRequest) -> dict[str, dict[str, str]]
 
 
 def route_node(state: SupervisorState) -> SupervisorState:
-    payload = state["payload"]
+    payload = payload_from_state(state)
     turn_count = state.get("turn_count", 0) + 1
 
     if payload.agent_mode != "supervisor":
@@ -96,7 +96,7 @@ def route_node(state: SupervisorState) -> SupervisorState:
     selected_specialist, confidence, reason = choose_specialist(payload)
 
     return {
-        "selected_specialist": selected_specialist,
+        "selected_specialist": selected_specialist.model_dump(mode="json") if selected_specialist is not None else None,
         "confidence": confidence,
         "reason": reason,
         "turn_count": turn_count,
@@ -108,14 +108,14 @@ def route_after_decision(_state: SupervisorState) -> Literal["respond", "__end__
 
 
 def respond_node(state: SupervisorState) -> SupervisorState:
-    payload = state["payload"]
-    selected_specialist = state.get("selected_specialist")
+    payload = payload_from_state(state)
+    selected_specialist = specialist_from_state(state)
     confidence = state.get("confidence", 0.0)
     reason = state.get("reason", "unknown")
     turn_count = state.get("turn_count", 1)
 
     if payload.agent_mode != "supervisor":
-        return {"response": single_agent_response(payload, turn_count=turn_count)}
+        return {"response": single_agent_response(payload, turn_count=turn_count).model_dump(mode="json")}
 
     if selected_specialist is None:
         return {
@@ -124,7 +124,7 @@ def respond_node(state: SupervisorState) -> SupervisorState:
                 confidence=confidence,
                 reason=reason,
                 turn_count=turn_count,
-            )
+            ).model_dump(mode="json")
         }
 
     return {
@@ -134,7 +134,7 @@ def respond_node(state: SupervisorState) -> SupervisorState:
             confidence=confidence,
             reason=reason,
             turn_count=turn_count,
-        )
+        ).model_dump(mode="json")
     }
 
 
@@ -252,6 +252,19 @@ def choose_specialist(payload: ChatwootRuntimeRequest) -> tuple[SpecialistConfig
         return None, confidence, "below_confidence_threshold"
 
     return best_specialist, confidence, "keyword_match"
+
+
+def payload_from_state(state: SupervisorState) -> ChatwootRuntimeRequest:
+    return ChatwootRuntimeRequest.model_validate(state["payload"])
+
+
+def specialist_from_state(state: SupervisorState) -> SpecialistConfig | None:
+    selected_specialist = state.get("selected_specialist")
+
+    if selected_specialist is None:
+        return None
+
+    return SpecialistConfig.model_validate(selected_specialist)
 
 
 def runtime_trace_step(payload: ChatwootRuntimeRequest, turn_count: int) -> TraceStep:
