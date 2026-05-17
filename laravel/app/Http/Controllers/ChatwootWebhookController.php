@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\ChatwootConnectionStatus;
 use App\Jobs\Chatwoot\ProcessChatwootWebhookEventJob;
 use App\Models\ChatwootConnection;
 use App\Models\ChatwootWebhookEvent;
@@ -14,16 +13,9 @@ class ChatwootWebhookController extends Controller
 {
     public function __invoke(Request $request, string $connectionUuid): JsonResponse
     {
-        $connection = ChatwootConnection::query()
-            ->where('connection_uuid', $connectionUuid)
-            ->first();
-
-        if (! $connection || $connection->status !== ChatwootConnectionStatus::Active) {
+        $connection = $request->attributes->get('chatwoot_connection');
+        if (! $connection instanceof ChatwootConnection) {
             return response()->json(['message' => 'Webhook connection not found.'], 404);
-        }
-
-        if (! $this->hasValidSignature($request, $connection)) {
-            return response()->json(['message' => 'Invalid webhook signature.'], 401);
         }
 
         /** @var array<string, mixed> $payload */
@@ -68,24 +60,6 @@ class ChatwootWebhookController extends Controller
             'status' => 'queued',
             'event_id' => $event->id,
         ], 202);
-    }
-
-    private function hasValidSignature(Request $request, ChatwootConnection $connection): bool
-    {
-        $secret = (string) $connection->webhook_secret;
-        $signature = (string) $request->header('X-Chatwoot-Signature');
-
-        if ($secret === '') {
-            return filled($connection->agent_bot_id) && filled($connection->api_access_token);
-        }
-
-        if ($signature === '') {
-            return false;
-        }
-
-        $expectedSignature = hash_hmac('sha256', $request->getContent(), $secret);
-
-        return hash_equals($expectedSignature, $signature);
     }
 
     /**
