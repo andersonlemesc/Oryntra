@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Chatwoot;
 
+use App\Actions\Invitations\SendUserInvitation;
 use App\Models\ChatwootPlatformConnection;
 use App\Models\User;
 use App\Models\Workspace;
@@ -48,7 +49,11 @@ class SyncChatwootAccountsJob implements ShouldQueue
             'workspaces_upserted' => 0,
             'users_upserted' => 0,
             'members_upserted' => 0,
+            'invites_sent' => 0,
         ];
+
+        /** @var array<int, User> $newUsers */
+        $newUsers = [];
 
         try {
             $accounts = $client->listAccounts();
@@ -85,17 +90,38 @@ class SyncChatwootAccountsJob implements ShouldQueue
                         continue;
                     }
 
-                    $user = $this->upsertUser($userData);
+                    $wasNew = false;
+                    $user = $this->upsertUser($userData, $wasNew);
                     if (! $user) {
                         continue;
                     }
                     $summary['users_upserted']++;
+
+                    if ($wasNew) {
+                        $newUsers[$user->id] = $user;
+                    }
 
                     $role = $this->mapRole((string) ($accountUser['role'] ?? 'agent'));
                     $workspace->users()->syncWithoutDetaching([
                         $user->id => ['role' => $role],
                     ]);
                     $summary['members_upserted']++;
+                }
+            }
+
+            if (config('invitations.send_on_sync') && $newUsers !== []) {
+                $action = app(SendUserInvitation::class);
+                foreach ($newUsers as $newUser) {
+                    try {
+                        $action->execute($newUser, source: 'chatwoot_sync');
+                        $summary['invites_sent']++;
+                    } catch (Throwable $invitationError) {
+                        Log::error('SyncChatwoot: invitation dispatch failed', [
+                            'user_id' => $newUser->id,
+                            'email' => $newUser->email,
+                            'error' => $invitationError->getMessage(),
+                        ]);
+                    }
                 }
             }
 
@@ -148,7 +174,7 @@ class SyncChatwootAccountsJob implements ShouldQueue
     /**
      * @param  array<string, mixed>  $userData  Payload de /platform/api/v1/users/{id}
      */
-    private function upsertUser(array $userData): ?User
+    private function upsertUser(array $userData, bool &$wasNew = false): ?User
     {
         $email = is_string($userData['email'] ?? null) ? mb_strtolower((string) $userData['email']) : null;
         if (! $email) {
@@ -164,8 +190,12 @@ class SyncChatwootAccountsJob implements ShouldQueue
         if ($user) {
             // Existing user: sync only links workspace membership; never overwrites
             // personal data (name, password, is_super_admin).
+            $wasNew = false;
+
             return $user;
         }
+
+        $wasNew = true;
 
         return User::create([
             'name' => $name,

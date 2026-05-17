@@ -73,6 +73,44 @@ class ChatwootPlatformClient
         return $this->http()->get('/platform/api/v1/accounts')->successful();
     }
 
+    public function deleteAgentBot(int $agentBotId): void
+    {
+        $response = $this->http()->delete("/platform/api/v1/agent_bots/{$agentBotId}");
+
+        if ($response->status() === 404) {
+            return;
+        }
+
+        if ($response->failed()) {
+            throw new RuntimeException("Chatwoot deleteAgentBot({$agentBotId}) failed: HTTP {$response->status()}");
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function createAgentBot(int $accountId, string $name, string $outgoingUrl): array
+    {
+        $response = $this->http()->post('/platform/api/v1/agent_bots', [
+            'name' => $name,
+            'description' => 'Agente Oryntra provisionado automaticamente.',
+            'outgoing_url' => $outgoingUrl,
+            'account_id' => $accountId,
+        ]);
+
+        if ($response->failed()) {
+            throw new RuntimeException("Chatwoot createAgentBot({$accountId}) failed: HTTP {$response->status()}");
+        }
+
+        $data = $response->json();
+
+        if (! is_array($data)) {
+            throw new RuntimeException("Chatwoot createAgentBot({$accountId}) returned invalid response");
+        }
+
+        return $data;
+    }
+
     private function http(): PendingRequest
     {
         if (! $this->connection->isConfigured()) {

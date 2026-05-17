@@ -79,6 +79,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_super_admin' => 'boolean',
+            'last_invitation_sent_at' => 'datetime',
         ];
     }
 }

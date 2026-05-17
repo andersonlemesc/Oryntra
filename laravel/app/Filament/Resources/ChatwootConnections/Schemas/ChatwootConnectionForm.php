@@ -3,10 +3,10 @@
 namespace App\Filament\Resources\ChatwootConnections\Schemas;
 
 use App\Enums\ChatwootConnectionStatus;
+use App\Models\ChatwootConnection;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Str;
 
 class ChatwootConnectionForm
 {
@@ -17,31 +17,33 @@ class ChatwootConnectionForm
                 TextInput::make('name')
                     ->label('Nome')
                     ->required()
+                    ->disabled(fn (string $operation): bool => $operation === 'edit')
+                    ->dehydrated(fn (string $operation): bool => $operation === 'create')
                     ->maxLength(255),
-                TextInput::make('base_url')
-                    ->label('URL base')
-                    ->url()
-                    ->required()
-                    ->maxLength(2048)
-                    ->dehydrateStateUsing(fn (string $state): string => Str::of($state)->trim()->rtrim('/')->toString()),
-                TextInput::make('account_id')
-                    ->label('Account ID')
-                    ->integer()
-                    ->minValue(1)
-                    ->required(),
-                TextInput::make('api_access_token')
-                    ->label('API access token')
-                    ->password()
-                    ->revealable()
-                    ->required(fn (string $operation): bool => $operation === 'create')
-                    ->dehydrated(fn (?string $state): bool => filled($state))
-                    ->maxLength(4096),
-                TextInput::make('webhook_secret')
+                TextInput::make('agent_bot_id')
+                    ->label('Agent Bot')
+                    ->disabled()
+                    ->dehydrated(false)
+                    ->visible(fn (string $operation): bool => $operation === 'edit'),
+                TextInput::make('agent_bot_outgoing_url')
+                    ->label('Webhook do Agent Bot')
+                    ->disabled()
+                    ->dehydrated(false)
+                    ->visible(fn (string $operation): bool => $operation === 'edit'),
+                TextInput::make('webhook_secret_status')
                     ->label('Webhook secret')
-                    ->password()
-                    ->revealable()
-                    ->dehydrated(fn (?string $state): bool => filled($state))
-                    ->maxLength(4096),
+                    ->default(fn (?ChatwootConnection $record): string => filled($record?->webhook_secret)
+                        ? 'Configurado'
+                        : 'Não configurado')
+                    ->disabled()
+                    ->dehydrated(false)
+                    ->visible(fn (string $operation): bool => $operation === 'edit'),
+                TextInput::make('provisioning_error')
+                    ->label('Erro de provisionamento')
+                    ->disabled()
+                    ->dehydrated(false)
+                    ->visible(fn (string $operation, ?ChatwootConnection $record): bool => $operation === 'edit'
+                        && filled($record?->provisioning_error)),
                 Select::make('status')
                     ->label('Status')
                     ->options(self::statusOptions())

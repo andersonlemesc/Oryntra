@@ -3,11 +3,13 @@
 namespace App\Models;
 
 use App\Enums\ChatwootConnectionStatus;
+use App\Jobs\Chatwoot\DeleteChatwootAgentBotJob;
 use Database\Factories\ChatwootConnectionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 #[Fillable([
@@ -16,9 +18,14 @@ use Illuminate\Support\Str;
     'name',
     'base_url',
     'account_id',
+    'agent_bot_id',
+    'agent_bot_outgoing_url',
     'api_access_token',
     'webhook_secret',
     'status',
+    'provisioned_at',
+    'provisioning_started_at',
+    'provisioning_error',
 ])]
 class ChatwootConnection extends Model
 {
@@ -40,6 +47,12 @@ class ChatwootConnection extends Model
                 $connection->connection_uuid = (string) Str::uuid();
             }
         });
+
+        self::deleting(function (ChatwootConnection $connection): void {
+            if (filled($connection->agent_bot_id)) {
+                DeleteChatwootAgentBotJob::dispatch((int) $connection->agent_bot_id)->afterCommit();
+            }
+        });
     }
 
     /**
@@ -48,6 +61,14 @@ class ChatwootConnection extends Model
     public function workspace(): BelongsTo
     {
         return $this->belongsTo(Workspace::class);
+    }
+
+    /**
+     * @return HasMany<ChatwootWebhookEvent, $this>
+     */
+    public function webhookEvents(): HasMany
+    {
+        return $this->hasMany(ChatwootWebhookEvent::class);
     }
 
     /**
@@ -69,6 +90,8 @@ class ChatwootConnection extends Model
             'api_access_token' => 'encrypted',
             'webhook_secret' => 'encrypted',
             'status' => ChatwootConnectionStatus::class,
+            'provisioned_at' => 'datetime',
+            'provisioning_started_at' => 'datetime',
         ];
     }
 }

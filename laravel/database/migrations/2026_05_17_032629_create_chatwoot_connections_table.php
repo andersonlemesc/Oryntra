@@ -19,7 +19,7 @@ return new class extends Migration
             $table->text('name');
             $table->text('base_url');
             $table->unsignedBigInteger('account_id');
-            $table->text('api_access_token');
+            $table->text('api_access_token')->nullable();
             $table->text('webhook_secret')->nullable();
             $table->text('status')->default('active');
             $table->timestamps();
