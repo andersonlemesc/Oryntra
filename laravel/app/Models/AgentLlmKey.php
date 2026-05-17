@@ -45,6 +45,22 @@ class AgentLlmKey extends Model
     }
 
     /**
+     * @return HasMany<Agent, $this>
+     */
+    public function supervisedAgents(): HasMany
+    {
+        return $this->hasMany(Agent::class, 'supervisor_llm_key_id');
+    }
+
+    /**
+     * @return HasMany<AgentSpecialist, $this>
+     */
+    public function specialists(): HasMany
+    {
+        return $this->hasMany(AgentSpecialist::class, 'llm_key_id');
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
