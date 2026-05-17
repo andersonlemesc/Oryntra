@@ -38,7 +38,7 @@ FROM python:3.12-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    TZ=America/Sao_Paulo \
+    TZ=UTC \
     PATH="/app/.venv/bin:$PATH" \
     VIRTUAL_ENV=/app/.venv
 
