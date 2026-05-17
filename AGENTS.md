@@ -72,9 +72,6 @@ docker compose exec agent-python mypy src/
 - `DB::transaction()` em operações multi-tabela
 - Eloquent > queries cruas. Evitar facade `DB::` exceto em jobs específicos
 - Eager load relations pra evitar N+1
-- Datas: armazenar **UTC no banco** (Laravel default). Usar `now()` ou `Carbon::now()` sem hardcode de timezone — respeita `config('app.timezone')` do env
-- Display ao usuário: converter pra timezone do `$user->timezone` ou `$workspace->timezone` no momento da renderização
-- Nunca hardcoded timezone em código de negócio (projeto open-source — roda em qualquer país)
 
 ### Python
 - Black-compatible (ruff format)
