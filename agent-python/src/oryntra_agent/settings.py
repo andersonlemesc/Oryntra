@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     internal_api_token: str = ""
     postgres_url: str = "postgresql://oryntra:oryntra_dev_pw@postgres:5432/oryntra"
+    langgraph_checkpointer: str = "memory"
     log_level: str = "INFO"
 
 

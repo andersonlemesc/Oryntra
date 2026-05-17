@@ -1,0 +1,40 @@
+{
+  "name": "langgraph-agents-skill",
+  "version": "2.0.0",
+  "category": "Infrastructure",
+  "description": "Multi-agent systems with LangGraph: supervisor, swarm, handoff, router, functional API, Deep Agents, MCP integration, guardrails, testing, observability, deployment",
+  "requires": [
+    "langchain",
+    "langgraph",
+    "langgraph-supervisor",
+    "langgraph-swarm",
+    "langchain-mcp-adapters"
+  ],
+  "depends_on": [],
+  "integrates_with": [
+    "openrouter-skill",
+    "groq-inference-skill",
+    "workflow-orchestrator-skill"
+  ],
+  "activation_triggers": [
+    "LangGraph agent",
+    "multi-agent",
+    "supervisor pattern",
+    "functional API",
+    "deep agents",
+    "MCP tools",
+    "guardrails",
+    "durable execution",
+    "time travel",
+    "agent handoff",
+    "swarm",
+    "StateGraph",
+    "checkpointer",
+    "interrupt",
+    "agent testing",
+    "LangSmith",
+    "observability",
+    "LangGraph deploy",
+    "create_react_agent"
+  ]
+}

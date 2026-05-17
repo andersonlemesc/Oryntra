@@ -1,6 +1,48 @@
 {
   "version": 1,
   "skills": {
+    "langgraph": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/langgraph/SKILL.md",
+      "computedHash": "4a2ab8a8444cae1ef3e714c37725e693e64c9cdad63c2fc72406e3f6cb5b7c5f"
+    },
+    "langgraph-agents": {
+      "source": "scientiacapital/skills",
+      "sourceType": "github",
+      "skillPath": "active/langgraph-agents-skill/SKILL.md",
+      "computedHash": "23e45c4e0a3f0ad20caffb4f5d2417038d46762e471df5581f92b6dda2762bd1"
+    },
+    "langgraph-architecture": {
+      "source": "existential-birds/beagle",
+      "sourceType": "github",
+      "skillPath": "plugins/beagle-ai/skills/langgraph-architecture/SKILL.md",
+      "computedHash": "571f8980f2cda5456630139e8acb42de68b466f884c6b4b458ada23cf2f52fec"
+    },
+    "langgraph-docs": {
+      "source": "langchain-ai/deepagents",
+      "sourceType": "github",
+      "skillPath": "libs/cli/examples/skills/langgraph-docs/SKILL.md",
+      "computedHash": "623b8c10cbb70f70ea875d1b0901f0fb0e174a837c2d6d10707627a46ae30631"
+    },
+    "langgraph-human-in-the-loop": {
+      "source": "langchain-ai/langchain-skills",
+      "sourceType": "github",
+      "skillPath": "config/skills/langgraph-human-in-the-loop/SKILL.md",
+      "computedHash": "0e81f1ef881b4c82bdcb5bece6309558f9e53681022f8347f869abc403b48637"
+    },
+    "langgraph-implementation": {
+      "source": "existential-birds/beagle",
+      "sourceType": "github",
+      "skillPath": "plugins/beagle-ai/skills/langgraph-implementation/SKILL.md",
+      "computedHash": "d0410ae8f30a07741ffc0ce74d1a8b94c81a90d4171db2cc4f32663f618df8be"
+    },
+    "langgraph-persistence": {
+      "source": "langchain-ai/langchain-skills",
+      "sourceType": "github",
+      "skillPath": "config/skills/langgraph-persistence/SKILL.md",
+      "computedHash": "1fd77ec0740a3b5318818cf4ea44214c41fae81a7dbd946111f5266aabf0c5c7"
+    },
     "laravel-blade": {
       "source": "fusengine/agents",
       "sourceType": "github",

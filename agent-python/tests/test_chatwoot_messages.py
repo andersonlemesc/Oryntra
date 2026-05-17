@@ -71,6 +71,16 @@ def test_chatwoot_messages_accepts_supervisor_specialists(monkeypatch) -> None:
     monkeypatch.setattr(auth.settings, "internal_api_token", "ci-token")
     payload = valid_payload()
     payload["agent_mode"] = "supervisor"
+    payload["messages"] = [
+        {
+            "id": "123",
+            "content": "preciso de ajuda do suporte",
+            "created_at": "2026-05-17T20:00:00Z",
+            "message_type": "incoming",
+            "content_type": "text",
+            "attachments": [],
+        }
+    ]
     payload["supervisor"] = {
         "prompt": "Route to the best specialist.",
         "llm_key_id": 11,
