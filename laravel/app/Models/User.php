@@ -48,13 +48,24 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function getTenants(Panel $panel): Collection
     {
+        if ($this->isSuperAdmin()) {
+            return Workspace::query()->orderBy('name')->get();
+        }
+
         return $this->workspaces;
     }
 
     public function canAccessTenant(Model $tenant): bool
     {
-        return $tenant instanceof Workspace
-            && $this->workspaces()->whereKey($tenant->getKey())->exists();
+        if (! $tenant instanceof Workspace) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->workspaces()->whereKey($tenant->getKey())->exists();
     }
 
     /**
