@@ -1,0 +1,482 @@
+# Context Engineering for LangGraph Agents
+
+Advanced patterns for memory persistence, context management, and state optimization in multi-agent workflows.
+
+## Three Types of Context
+
+Understanding when and where to inject context is critical for agent performance.
+
+### 1. Model Context (System Prompts)
+
+Information the LLM sees in its system message:
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain_core.prompts import ChatPromptTemplate
+
+# Static system prompt
+static_prompt = ChatPromptTemplate.from_messages([
+    ("system", """You are a senior software engineer.
+    - Follow best practices
+    - Write clean, testable code
+    - Explain your reasoning"""),
+    ("placeholder", "{messages}")
+])
+
+# Dynamic system prompt based on state
+def get_dynamic_prompt(state: State) -> ChatPromptTemplate:
+    user_expertise = state.get("user_expertise", "beginner")
+
+    expertise_context = {
+        "beginner": "Explain concepts simply. Provide examples.",
+        "intermediate": "Be concise. Assume basic knowledge.",
+        "expert": "Skip basics. Focus on edge cases and optimization."
+    }
+
+    return ChatPromptTemplate.from_messages([
+        ("system", f"""You are a coding assistant.
+        User expertise: {user_expertise}
+        {expertise_context[user_expertise]}"""),
+        ("placeholder", "{messages}")
+    ])
+```
+
+### 2. Tool Context (Tool Descriptions & Results)
+
+Information embedded in tool definitions and returned results:
+
+```python
+from langchain_core.tools import tool
+
+# Context in tool description
+@tool
+def search_codebase(query: str) -> str:
+    """Search the codebase for relevant code.
+
+    IMPORTANT: This searches the CURRENT project only.
+    - Use specific function/class names when known
+    - Use file extensions to narrow scope: "*.py", "*.ts"
+    - Returns max 10 results sorted by relevance
+
+    Args:
+        query: Search query (supports regex)
+    """
+    # Implementation
+    pass
+
+# Context in tool results
+@tool
+def get_user_profile(user_id: str) -> dict:
+    """Get user profile information."""
+    profile = db.get_user(user_id)
+
+    # Inject context into result
+    return {
+        "profile": profile,
+        "_context": {
+            "data_freshness": "real-time",
+            "editable_fields": ["name", "email", "preferences"],
+            "read_only_fields": ["id", "created_at", "subscription_tier"]
+        }
+    }
+```
+
+### 3. Life-cycle Context (State Evolution)
+
+Information that flows through the workflow and evolves:
+
+```python
+class AgentState(TypedDict, total=False):
+    messages: Annotated[list, add_messages]
+
+    # Life-cycle context
+    workflow_phase: str  # "research" | "planning" | "execution" | "review"
+    decisions_made: list[dict]  # Track key decisions
+    constraints_discovered: list[str]  # Accumulate constraints
+    progress: dict  # {"completed": 3, "total": 10}
+
+def update_lifecycle_context(state: State) -> State:
+    """Update life-cycle context as workflow progresses."""
+    return {
+        "workflow_phase": determine_phase(state),
+        "decisions_made": state["decisions_made"] + [current_decision],
+        "progress": calculate_progress(state)
+    }
+```
+
+### Context Injection Patterns
+
+```python
+def create_context_aware_node(node_name: str):
+    """Factory for nodes that inject appropriate context."""
+
+    def node(state: State) -> dict:
+        # Model context - system prompt
+        system_prompt = get_dynamic_prompt(state, node_name)
+
+        # Tool context - filter to relevant tools
+        relevant_tools = filter_tools_for_phase(state["workflow_phase"])
+
+        # Life-cycle context - what's happened so far
+        context_summary = summarize_lifecycle(state)
+
+        # Combine into prompt
+        full_prompt = f"""{system_prompt}
+
+        Current phase: {state['workflow_phase']}
+        Previous decisions: {context_summary}
+        """
+
+        # Execute with full context
+        response = model.invoke(full_prompt, tools=relevant_tools)
+        return {"messages": [response]}
+
+    return node
+```
+
+## Memory Persistence Patterns
+
+### Importance-Based Retention
+
+```python
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, Any, List
+
+@dataclass
+class MemoryEntry:
+    """Memory with importance scoring for selective retention."""
+    key: str
+    content: Dict[str, Any]
+    importance_score: float = 0.5  # 0.0-1.0
+    access_count: int = 0
+    last_accessed: datetime = field(default_factory=datetime.now)
+
+    def update_importance(self, agent_feedback: float):
+        """Adjust importance based on agent usage."""
+        self.access_count += 1
+        self.importance_score = (
+            0.7 * self.importance_score + 0.3 * agent_feedback
+        )
+
+class MemoryManager:
+    """TTL-aware memory with automatic compaction."""
+
+    def __init__(self, max_entries: int = 100):
+        self.memories: Dict[str, MemoryEntry] = {}
+        self.max_entries = max_entries
+
+    def store(self, key: str, content: Dict[str, Any], importance: float = 0.5):
+        """Store memory with importance score."""
+        self.memories[key] = MemoryEntry(key, content, importance)
+        self._compact_if_needed()
+
+    def _compact_if_needed(self):
+        """Remove low-importance memories when limit reached."""
+        if len(self.memories) > self.max_entries:
+            # Sort by importance × recency
+            sorted_keys = sorted(
+                self.memories.keys(),
+                key=lambda k: (
+                    self.memories[k].importance_score *
+                    (1 / max(self.memories[k].access_count, 1))
+                )
+            )
+            # Remove bottom 20%
+            for key in sorted_keys[:self.max_entries // 5]:
+                del self.memories[key]
+```
+
+### Redis Checkpointer Integration
+
+```python
+from langgraph.checkpoint.redis import RedisSaver  # pip install langgraph-checkpoint-redis
+import redis
+
+# Production-grade persistence
+redis_client = redis.Redis(
+    host='localhost',
+    port=6379,
+    db=0,
+    decode_responses=True
+)
+
+checkpointer = RedisSaver(redis_client)
+
+# Thread-specific memory with TTL
+def save_conversation_state(thread_id: str, state: Dict, ttl: int = 3600):
+    """Save state with automatic expiry."""
+    redis_client.setex(
+        f"conversation:{thread_id}",
+        ttl,
+        json.dumps(state)
+    )
+```
+
+## Context Compaction Strategies
+
+### Summarization Pipeline
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic()
+
+def compact_conversation_history(messages: List[Dict], max_tokens: int = 1000):
+    """Summarize conversation when context limit approached."""
+
+    # Preserve first and last N messages
+    critical_start = messages[:2]
+    critical_end = messages[-3:]
+    middle = messages[2:-3]
+
+    if len(middle) == 0:
+        return messages
+
+    # Summarize middle section
+    summary_prompt = f"""Summarize this conversation segment concisely:
+
+{middle}
+
+Focus on: decisions made, key data points, unresolved issues."""
+
+    summary = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=500,
+        messages=[{"role": "user", "content": summary_prompt}]
+    )
+
+    return critical_start + [
+        {"role": "system", "content": f"[Summary]: {summary.content[0].text}"}
+    ] + critical_end
+```
+
+### Token Budget Management
+
+```python
+def estimate_tokens(text: str) -> int:
+    """Rough token estimation (4 chars ≈ 1 token)."""
+    return len(text) // 4
+
+def trim_to_budget(state: Dict, max_tokens: int = 8000) -> Dict:
+    """Ensure state fits within token budget."""
+    current = estimate_tokens(str(state))
+
+    if current <= max_tokens:
+        return state
+
+    # Priority: current_task > pending > metadata > completed
+    trimmed = {
+        "current_task": state["current_task"],
+        "pending": state["pending"][:5],  # Keep next 5 tasks
+        "completed": state["completed"][-3:]  # Keep last 3
+    }
+
+    return trimmed
+```
+
+## Anthropic Context Engineering Best Practices
+
+Principles from Anthropic's production agent engineering:
+
+### 1. Right Altitude Principle
+
+Match context detail to the agent's current needs:
+- **Too high**: "Process data" — agent lacks specifics
+- **Too low**: Full database schema dump — wastes tokens
+- **Right**: "Query the users table for active subscriptions created after 2024-01-01"
+
+### 2. Structured Note-Taking
+
+Have agents write structured notes to persist key findings:
+
+```python
+@tool
+def save_finding(category: str, finding: str, confidence: float) -> str:
+    """Save a research finding for later synthesis."""
+    store.put(
+        ("findings", thread_id, category),
+        str(uuid4()),
+        {"finding": finding, "confidence": confidence}
+    )
+    return f"Saved finding in {category}"
+```
+
+### 3. Tool Result Clearing
+
+For long-running agents, clear verbose tool results to reclaim context:
+
+```python
+from langchain_core.messages import RemoveMessage
+
+def context_cleanup_node(state: State) -> dict:
+    """Remove verbose tool results older than 10 messages."""
+    messages = state["messages"]
+    to_remove = []
+    for msg in messages[:-10]:
+        if hasattr(msg, "type") and msg.type == "tool":
+            if len(str(msg.content)) > 500:
+                to_remove.append(RemoveMessage(id=msg.id))
+    return {"messages": to_remove}
+```
+
+### 4. Multi-Context-Window Workflows
+
+For complex tasks, split across multiple agent invocations:
+- **Research agent**: Gathers data, writes to store
+- **Analysis agent**: Reads store, produces insights
+- **Synthesis agent**: Reads insights, produces final output
+
+Each agent gets a fresh context window with only relevant data.
+
+## Message History Trimming
+
+### Built-in Trimming
+
+```python
+from langchain_core.messages import trim_messages
+
+# Keep last N tokens
+trimmed = trim_messages(
+    messages,
+    strategy="last",
+    max_tokens=4000,
+    token_counter=ChatAnthropic(model="claude-sonnet-4-6"),
+    include_system=True,  # Always keep system message
+    start_on="human"  # Ensure first kept message is from human
+)
+```
+
+### Targeted Message Removal
+
+```python
+from langchain_core.messages import RemoveMessage
+
+def remove_old_messages(state: State) -> dict:
+    """Keep system + last 20 messages."""
+    messages = state["messages"]
+    if len(messages) > 20:
+        to_remove = [RemoveMessage(id=m.id) for m in messages[1:-20]]
+        return {"messages": to_remove}
+    return {}
+```
+
+## Just-in-Time Context Loading
+
+### Task-Specific Templates
+
+```python
+CONTEXT_TEMPLATES = {
+    "lead_qualification": """
+You are qualifying leads. Focus on:
+- Company size and industry
+- Budget signals
+- Decision maker identification
+""",
+    "data_enrichment": """
+You are enriching contact data. Prioritize:
+- Email validation
+- LinkedIn profile matching
+- Company domain verification
+""",
+    "outreach_sequence": """
+You are crafting outreach sequences. Consider:
+- Personalization data available
+- Engagement history
+- Timezone and send time optimization
+"""
+}
+
+def load_context_for_node(node_name: str, base_state: Dict) -> str:
+    """Inject only relevant context for current node."""
+    template = CONTEXT_TEMPLATES.get(node_name, "")
+    context = f"{template}\n\nCurrent data: {base_state.get('current_record', {})}"
+    return context
+```
+
+### Lazy Loading Pattern
+
+Load and cache context per node on demand — avoids loading all context upfront:
+
+```python
+class ContextLoader:
+    def __init__(self):
+        self._cache = {}
+
+    def get_context(self, node: str, state: Dict) -> str:
+        cache_key = f"{node}:{state.get('record_id')}"
+        if cache_key not in self._cache:
+            self._cache[cache_key] = self._load_from_source(node, state)
+        return self._cache[cache_key]
+
+    def _load_from_source(self, node: str, state: Dict) -> str:
+        # In production: query vector DB, fetch from API, etc.
+        return CONTEXT_TEMPLATES.get(node, "")
+```
+
+## Sub-Agent Context Isolation
+
+### State Scoping
+
+```python
+def create_sub_agent_context(parent_state: Dict, scope: List[str]) -> Dict:
+    """Create isolated state for sub-agent with only needed fields."""
+    return {key: parent_state[key] for key in scope if key in parent_state}
+
+# Example: Research sub-agent only needs query and budget
+research_context = create_sub_agent_context(
+    parent_state,
+    scope=["search_query", "max_results", "research_depth"]
+)
+
+# Writer sub-agent gets research output but not search details
+writer_context = create_sub_agent_context(
+    parent_state,
+    scope=["research_findings", "tone", "target_audience"]
+)
+```
+
+### Cross-Agent Communication
+
+```python
+from typing_extensions import TypedDict
+
+class SharedMemory(TypedDict):
+    """Explicitly defined shared state."""
+    project_id: str
+    current_phase: str
+    critical_findings: List[str]
+
+class AgentPrivateState(TypedDict):
+    """Agent-specific state not shared."""
+    internal_reasoning: str
+    api_credentials: Dict
+    retry_count: int
+
+def merge_agent_results(shared: SharedMemory, private: AgentPrivateState) -> Dict:
+    """Combine shared and private state safely."""
+    return {
+        **shared,
+        "agent_metadata": {
+            "retry_count": private["retry_count"]
+        }
+        # Private credentials never exposed
+    }
+```
+
+## Best Practices
+
+1. **Memory Retention**: Use importance scoring + access patterns, not just recency
+2. **Token Budgets**: Always reserve 20% for system prompts and output
+3. **Context Loading**: Load just-in-time per node, not all upfront
+4. **Sub-Agent Isolation**: Share only required fields, never entire state
+5. **Compaction Triggers**: Compact at 70% capacity, not 100%
+6. **TTL Strategy**: Short (1h) for sessions, long (24h) for project state
+
+## Production Checklist
+
+- [ ] Memory has expiration/compaction strategy
+- [ ] Context fits within model's window (100k for Claude)
+- [ ] Sub-agents can't access parent's sensitive data
+- [ ] State is JSON-serializable for checkpointing
+- [ ] Critical information never gets compacted away
