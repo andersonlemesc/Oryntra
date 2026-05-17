@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Enums\AgentLlmProvider;
+use App\Enums\AgentMode;
 use App\Enums\AgentResponseMode;
 use App\Enums\AgentStatus;
 use App\Models\Agent;
@@ -26,6 +27,7 @@ class AgentFactory extends Factory
             'name' => fake()->unique()->company() . ' Agent',
             'description' => fake()->sentence(),
             'status' => AgentStatus::Inactive,
+            'mode' => AgentMode::Single,
             'locale' => 'en',
             'timezone' => 'UTC',
             'response_mode' => AgentResponseMode::Automatic,
@@ -36,6 +38,8 @@ class AgentFactory extends Factory
             'system_prompt' => 'You are a helpful assistant.',
             'behavior_prompt' => null,
             'fallback_message' => null,
+            'supervisor_prompt' => null,
+            'supervisor_llm_model' => null,
             'debounce_config' => [
                 'enabled' => true,
                 'window_seconds' => 8,
@@ -77,5 +81,14 @@ class AgentFactory extends Factory
     public function active(): self
     {
         return $this->state(fn (): array => ['status' => AgentStatus::Active]);
+    }
+
+    public function supervisor(): self
+    {
+        return $this->state(fn (): array => [
+            'mode' => AgentMode::Supervisor,
+            'supervisor_prompt' => 'Route the conversation to the best specialist.',
+            'supervisor_llm_model' => 'gpt-4.1-nano',
+        ]);
     }
 }

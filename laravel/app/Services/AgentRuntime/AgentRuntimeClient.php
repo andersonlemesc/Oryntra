@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\AgentRuntime;
 
+use App\Enums\AgentMode;
+use App\Enums\AgentSpecialistStatus;
+use App\Models\Agent;
 use App\Models\AgentRun;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
@@ -51,7 +54,21 @@ class AgentRuntimeClient
      */
     private function payload(AgentRun $run): array
     {
+        $run->loadMissing([
+            'agent',
+            'agent.specialists' => fn ($query) => $query
+                ->where('workspace_id', $run->workspace_id)
+                ->where('status', AgentSpecialistStatus::Active->value)
+                ->orderBy('priority')
+                ->orderBy('id'),
+        ]);
+
         $input = $run->getAttribute('input');
+        $agent = $run->agent;
+
+        if (! $agent instanceof Agent) {
+            throw new RuntimeException('Agent runtime cannot run without a resolved agent.');
+        }
 
         if (! is_array($input)) {
             $input = [];
@@ -62,8 +79,29 @@ class AgentRuntimeClient
         return [
             'workspace_id' => $run->workspace_id,
             'agent_id' => $run->agent_id,
-            'agent_mode' => 'single',
+            'agent_mode' => $agent->mode instanceof AgentMode ? $agent->mode->value : AgentMode::Single->value,
             'thread_id' => $run->thread_id ?: $run->buildThreadId(),
+            'supervisor' => [
+                'prompt' => $agent->supervisor_prompt,
+                'llm_key_id' => $agent->supervisor_llm_key_id,
+                'llm_model' => $agent->supervisor_llm_model,
+            ],
+            'specialists' => $agent->specialists
+                ->map(fn ($specialist): array => [
+                    'id' => $specialist->id,
+                    'name' => $specialist->name,
+                    'description' => $specialist->description,
+                    'role_prompt' => $specialist->role_prompt,
+                    'llm_key_id' => $specialist->llm_key_id,
+                    'llm_model' => $specialist->llm_model,
+                    'llm_temperature' => $specialist->llm_temperature,
+                    'tools' => $specialist->tools_allowlist,
+                    'intent_keywords' => $specialist->intent_keywords,
+                    'confidence_threshold' => $specialist->confidence_threshold,
+                    'fallback_specialist_id' => $specialist->fallback_specialist_id,
+                ])
+                ->values()
+                ->all(),
             'messages' => array_values($this->arrayInput($input, 'messages')),
             'contact' => $this->arrayInput($input, 'contact'),
             'inbox' => $this->arrayInput($input, 'inbox'),

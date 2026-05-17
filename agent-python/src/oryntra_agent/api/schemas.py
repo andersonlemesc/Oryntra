@@ -15,6 +15,30 @@ class ChatwootMessage(BaseModel):
     attachments: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class SupervisorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prompt: str | None = None
+    llm_key_id: int | None = None
+    llm_model: str | None = None
+
+
+class SpecialistConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    name: str
+    description: str | None = None
+    role_prompt: str
+    llm_key_id: int | None = None
+    llm_model: str | None = None
+    llm_temperature: float = Field(ge=0, le=2)
+    tools: list[str] = Field(default_factory=list)
+    intent_keywords: list[str] = Field(default_factory=list)
+    confidence_threshold: float = Field(ge=0, le=1)
+    fallback_specialist_id: int | None = None
+
+
 class ChatwootRuntimeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -22,6 +46,8 @@ class ChatwootRuntimeRequest(BaseModel):
     agent_id: int
     agent_mode: Literal["single", "supervisor"] = "single"
     thread_id: str
+    supervisor: SupervisorConfig = Field(default_factory=SupervisorConfig)
+    specialists: list[SpecialistConfig] = Field(default_factory=list)
     messages: list[ChatwootMessage] = Field(default_factory=list)
     contact: dict[str, Any] = Field(default_factory=dict)
     inbox: dict[str, Any] = Field(default_factory=dict)

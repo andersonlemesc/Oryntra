@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Agents\Schemas;
 
 use App\Enums\AgentLlmKeyStatus;
 use App\Enums\AgentLlmProvider;
+use App\Enums\AgentMode;
 use App\Enums\AgentResponseMode;
 use App\Enums\AgentStatus;
 use App\Models\AgentLlmKey;
@@ -36,6 +37,12 @@ class AgentForm
                             ->options(self::statusOptions())
                             ->default(AgentStatus::Inactive->value)
                             ->required(),
+                        Select::make('mode')
+                            ->label('Modo')
+                            ->options(self::modeOptions())
+                            ->default(AgentMode::Single->value)
+                            ->live()
+                            ->required(),
                         Textarea::make('description')
                             ->label('Descricao')
                             ->columnSpanFull()
@@ -56,6 +63,26 @@ class AgentForm
                             ->default(AgentResponseMode::Automatic->value)
                             ->required(),
                     ]),
+
+                Section::make('Supervisor')
+                    ->columns(2)
+                    ->collapsible()
+                    ->schema([
+                        Select::make('supervisor_llm_key_id')
+                            ->label('Chave LLM do supervisor')
+                            ->options(fn (): array => self::llmKeyOptions(null))
+                            ->searchable()
+                            ->nullable(),
+                        TextInput::make('supervisor_llm_model')
+                            ->label('Modelo do supervisor')
+                            ->maxLength(128)
+                            ->helperText('Use um modelo barato/rapido para classificacao.'),
+                        Textarea::make('supervisor_prompt')
+                            ->label('Prompt do supervisor')
+                            ->rows(4)
+                            ->columnSpanFull(),
+                    ])
+                    ->visible(fn (callable $get): bool => $get('mode') === AgentMode::Supervisor->value),
 
                 Section::make('LLM')
                     ->columns(2)
@@ -211,6 +238,16 @@ class AgentForm
     {
         return collect(AgentStatus::cases())
             ->mapWithKeys(fn (AgentStatus $s): array => [$s->value => $s->label()])
+            ->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function modeOptions(): array
+    {
+        return collect(AgentMode::cases())
+            ->mapWithKeys(fn (AgentMode $m): array => [$m->value => $m->label()])
             ->all();
     }
 

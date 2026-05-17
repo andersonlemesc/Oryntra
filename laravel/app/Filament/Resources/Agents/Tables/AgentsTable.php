@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Agents\Tables;
 
+use App\Enums\AgentMode;
 use App\Enums\AgentResponseMode;
 use App\Enums\AgentStatus;
 use Filament\Actions\BulkActionGroup;
@@ -33,10 +34,17 @@ class AgentsTable
                         : 'gray')
                     ->sortable(),
                 TextColumn::make('response_mode')
-                    ->label('Modo')
+                    ->label('Resposta')
                     ->formatStateUsing(fn (AgentResponseMode|string $state): string => $state instanceof AgentResponseMode
                         ? $state->label()
                         : AgentResponseMode::from($state)->label())
+                    ->toggleable(),
+                TextColumn::make('mode')
+                    ->label('Modo')
+                    ->badge()
+                    ->formatStateUsing(fn (AgentMode|string $state): string => $state instanceof AgentMode
+                        ? $state->label()
+                        : AgentMode::from($state)->label())
                     ->toggleable(),
                 TextColumn::make('llm_provider')
                     ->label('Provider')

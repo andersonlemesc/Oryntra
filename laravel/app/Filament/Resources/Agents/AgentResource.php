@@ -8,6 +8,7 @@ use App\Filament\Resources\Agents\Pages\CreateAgent;
 use App\Filament\Resources\Agents\Pages\EditAgent;
 use App\Filament\Resources\Agents\Pages\ListAgents;
 use App\Filament\Resources\Agents\RelationManagers\ChatwootBindingsRelationManager;
+use App\Filament\Resources\Agents\RelationManagers\SpecialistsRelationManager;
 use App\Filament\Resources\Agents\Schemas\AgentForm;
 use App\Filament\Resources\Agents\Tables\AgentsTable;
 use App\Models\Agent;
@@ -48,6 +49,7 @@ class AgentResource extends Resource
     {
         return [
             ChatwootBindingsRelationManager::class,
+            SpecialistsRelationManager::class,
         ];
     }
 
