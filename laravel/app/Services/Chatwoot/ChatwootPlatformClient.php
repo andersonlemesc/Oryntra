@@ -46,11 +46,18 @@ class ChatwootPlatformClient
     }
 
     /**
-     * @return array<string, mixed>
+     * Returns user data, or null when the Platform App lacks permission
+     * (HTTP 401/403/404 — user not in this Platform App's permissibles).
+     *
+     * @return array<string, mixed>|null
      */
-    public function getUser(int $userId): array
+    public function getUser(int $userId): ?array
     {
         $response = $this->http()->get("/platform/api/v1/users/{$userId}");
+
+        if (in_array($response->status(), [401, 403, 404], true)) {
+            return null;
+        }
 
         if ($response->failed()) {
             throw new RuntimeException("Chatwoot getUser({$userId}) failed: HTTP {$response->status()}");
@@ -58,7 +65,7 @@ class ChatwootPlatformClient
 
         $data = $response->json();
 
-        return is_array($data) ? $data : [];
+        return is_array($data) ? $data : null;
     }
 
     public function testConnection(): bool

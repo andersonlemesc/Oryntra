@@ -98,6 +98,12 @@ return [
 
     'waits' => [
         'redis:default' => 60,
+        'redis:emails' => 60,
+        'redis:chatwoot-sync' => 300,
+        'redis:chatwoot-webhooks' => 30,
+        'redis:chatwoot-send' => 60,
+        'redis:agent' => 120,
+        'redis:documents' => 600,
     ],
 
     /*
@@ -197,34 +203,111 @@ return [
     */
 
     'defaults' => [
-        'supervisor-1' => [
+        'default-supervisor' => [
             'connection' => 'redis',
             'queue' => ['default'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
-            'maxProcesses' => 1,
+            'maxProcesses' => 2,
             'maxTime' => 0,
             'maxJobs' => 0,
             'memory' => 128,
-            'tries' => 1,
+            'tries' => 3,
             'timeout' => 60,
             'nice' => 0,
+        ],
+
+        'emails-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['emails'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 2,
+            'memory' => 128,
+            'tries' => 3,
+            'timeout' => 60,
+            'backoff' => 30,
+        ],
+
+        'chatwoot-sync-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['chatwoot-sync'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 1,
+            'memory' => 256,
+            'tries' => 1,
+            'timeout' => 600,
+        ],
+
+        'chatwoot-webhooks-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['chatwoot-webhooks'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 4,
+            'memory' => 128,
+            'tries' => 3,
+            'timeout' => 30,
+            'backoff' => 5,
+        ],
+
+        'chatwoot-send-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['chatwoot-send'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 2,
+            'memory' => 128,
+            'tries' => 5,
+            'timeout' => 60,
+            'backoff' => [10, 30, 90, 300],
+        ],
+
+        'agent-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['agent'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 2,
+            'memory' => 256,
+            'tries' => 2,
+            'timeout' => 120,
+            'backoff' => 15,
+        ],
+
+        'documents-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['documents'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 1,
+            'memory' => 512,
+            'tries' => 2,
+            'timeout' => 1200,
+            'backoff' => 60,
         ],
     ],
 
     'environments' => [
         'production' => [
-            'supervisor-1' => [
-                'maxProcesses' => 10,
-                'balanceMaxShift' => 1,
-                'balanceCooldown' => 3,
-            ],
+            'default-supervisor' => ['maxProcesses' => 10],
+            'emails-supervisor' => ['maxProcesses' => 4],
+            'chatwoot-sync-supervisor' => ['maxProcesses' => 1],
+            'chatwoot-webhooks-supervisor' => ['maxProcesses' => 8],
+            'chatwoot-send-supervisor' => ['maxProcesses' => 4],
+            'agent-supervisor' => ['maxProcesses' => 6],
+            'documents-supervisor' => ['maxProcesses' => 2],
         ],
 
         'local' => [
-            'supervisor-1' => [
-                'maxProcesses' => 3,
-            ],
+            'default-supervisor' => ['maxProcesses' => 2],
+            'emails-supervisor' => ['maxProcesses' => 1],
+            'chatwoot-sync-supervisor' => ['maxProcesses' => 1],
+            'chatwoot-webhooks-supervisor' => ['maxProcesses' => 2],
+            'chatwoot-send-supervisor' => ['maxProcesses' => 1],
+            'agent-supervisor' => ['maxProcesses' => 1],
+            'documents-supervisor' => ['maxProcesses' => 1],
         ],
     ],
 

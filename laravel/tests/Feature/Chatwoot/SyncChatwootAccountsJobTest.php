@@ -37,11 +37,20 @@ it('upserts workspaces and users from platform API responses', function () {
             ['id' => 2, 'name' => 'Empresa B'],
         ], 200),
         'https://chatwoot.test/platform/api/v1/accounts/1/account_users' => Http::response([
-            ['user_id' => 10, 'role' => 'administrator', 'user' => ['email' => 'ada@empresa-a.com', 'name' => 'Ada Lovelace']],
-            ['user_id' => 11, 'role' => 'agent', 'user' => ['email' => 'bob@empresa-a.com', 'name' => 'Bob']],
+            ['id' => 1, 'user_id' => 10, 'account_id' => 1, 'role' => 'administrator'],
+            ['id' => 2, 'user_id' => 11, 'account_id' => 1, 'role' => 'agent'],
         ], 200),
         'https://chatwoot.test/platform/api/v1/accounts/2/account_users' => Http::response([
-            ['user_id' => 20, 'role' => 'administrator', 'user' => ['email' => 'carol@empresa-b.com', 'name' => 'Carol']],
+            ['id' => 3, 'user_id' => 20, 'account_id' => 2, 'role' => 'administrator'],
+        ], 200),
+        'https://chatwoot.test/platform/api/v1/users/10' => Http::response([
+            'id' => 10, 'email' => 'ada@empresa-a.com', 'name' => 'Ada Lovelace',
+        ], 200),
+        'https://chatwoot.test/platform/api/v1/users/11' => Http::response([
+            'id' => 11, 'email' => 'bob@empresa-a.com', 'name' => 'Bob',
+        ], 200),
+        'https://chatwoot.test/platform/api/v1/users/20' => Http::response([
+            'id' => 20, 'email' => 'carol@empresa-b.com', 'name' => 'Carol',
         ], 200),
     ]);
 
@@ -110,4 +119,73 @@ it('does not duplicate workspaces on re-sync', function () {
     (new SyncChatwootAccountsJob)->handle();
 
     expect(Workspace::where('chatwoot_account_id', 1)->count())->toBe(1);
+});
+
+it('does not overwrite name/is_super_admin of existing user matched by email', function () {
+    $existing = User::create([
+        'name' => 'Anderson Customized',
+        'email' => 'anderson@oryntra.test',
+        'password' => bcrypt('secret-original'),
+        'is_super_admin' => true,
+    ]);
+
+    Http::fake([
+        'https://chatwoot.test/platform/api/v1/accounts' => Http::response([
+            ['id' => 7, 'name' => 'Account 7'],
+        ], 200),
+        'https://chatwoot.test/platform/api/v1/accounts/7/account_users' => Http::response([
+            ['id' => 1, 'user_id' => 70, 'account_id' => 7, 'role' => 'administrator'],
+        ], 200),
+        'https://chatwoot.test/platform/api/v1/users/70' => Http::response([
+            'id' => 70, 'email' => 'anderson@oryntra.test', 'name' => 'Anderson Lemes',
+        ], 200),
+    ]);
+
+    (new SyncChatwootAccountsJob)->handle();
+
+    $fresh = $existing->fresh();
+    assert($fresh instanceof User);
+
+    expect(User::where('email', 'anderson@oryntra.test')->count())->toBe(1)
+        ->and($fresh->name)->toBe('Anderson Customized')
+        ->and($fresh->isSuperAdmin())->toBeTrue();
+
+    $workspace = Workspace::where('chatwoot_account_id', 7)->first();
+    assert($workspace instanceof Workspace);
+
+    expect(DB::table('workspace_members')->where([
+        'workspace_id' => $workspace->id,
+        'user_id' => $existing->id,
+        'role' => 'admin',
+    ])->exists())->toBeTrue();
+});
+
+it('skips users that are not permissible (HTTP 403 on getUser)', function () {
+    Http::fake([
+        'https://chatwoot.test/platform/api/v1/accounts' => Http::response([
+            ['id' => 1, 'name' => 'Mixed Account'],
+        ], 200),
+        'https://chatwoot.test/platform/api/v1/accounts/1/account_users' => Http::response([
+            ['id' => 1, 'user_id' => 100, 'account_id' => 1, 'role' => 'administrator'],
+            ['id' => 2, 'user_id' => 200, 'account_id' => 1, 'role' => 'agent'],
+        ], 200),
+        'https://chatwoot.test/platform/api/v1/users/100' => Http::response(
+            ['error' => 'Non permissible resource'], 403
+        ),
+        'https://chatwoot.test/platform/api/v1/users/200' => Http::response([
+            'id' => 200, 'email' => 'visible@test.com', 'name' => 'Visible User',
+        ], 200),
+    ]);
+
+    (new SyncChatwootAccountsJob)->handle();
+
+    $workspace = Workspace::where('chatwoot_account_id', 1)->first();
+    assert($workspace instanceof Workspace);
+
+    expect(User::where('email', 'visible@test.com')->exists())->toBeTrue()
+        ->and($workspace->users()->count())->toBe(1);
+
+    $connection = ChatwootPlatformConnection::current();
+    expect($connection->last_sync_summary['users_upserted'] ?? null)->toBe(1)
+        ->and($connection->last_sync_summary['users_skipped'] ?? null)->toBe(1);
 });

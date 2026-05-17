@@ -27,7 +27,10 @@ class SyncChatwootAccountsJob implements ShouldQueue
 
     public int $timeout = 600;
 
-    public function __construct(public bool $syncUsers = true) {}
+    public function __construct(public bool $syncUsers = true)
+    {
+        $this->onQueue('chatwoot-sync');
+    }
 
     public function handle(): void
     {
@@ -66,7 +69,23 @@ class SyncChatwootAccountsJob implements ShouldQueue
 
                 $accountUsers = $client->listAccountUsers($accountId);
                 foreach ($accountUsers as $accountUser) {
-                    $user = $this->upsertUserFromAccountUser($accountUser);
+                    $userId = (int) ($accountUser['user_id'] ?? 0);
+                    if ($userId <= 0) {
+                        continue;
+                    }
+
+                    $userData = $client->getUser($userId);
+                    if ($userData === null) {
+                        $summary['users_skipped'] = ($summary['users_skipped'] ?? 0) + 1;
+                        Log::warning('SyncChatwoot: user skipped (not permissible)', [
+                            'user_id' => $userId,
+                            'account_id' => $accountId,
+                        ]);
+
+                        continue;
+                    }
+
+                    $user = $this->upsertUser($userData);
                     if (! $user) {
                         continue;
                     }
@@ -127,26 +146,24 @@ class SyncChatwootAccountsJob implements ShouldQueue
     }
 
     /**
-     * @param  array<string, mixed>  $accountUser
+     * @param  array<string, mixed>  $userData  Payload de /platform/api/v1/users/{id}
      */
-    private function upsertUserFromAccountUser(array $accountUser): ?User
+    private function upsertUser(array $userData): ?User
     {
-        $email = $this->extractEmail($accountUser);
+        $email = is_string($userData['email'] ?? null) ? mb_strtolower((string) $userData['email']) : null;
         if (! $email) {
             return null;
         }
 
-        $name = (string) ($accountUser['user']['name']
-            ?? $accountUser['name']
+        $name = (string) ($userData['name']
+            ?? $userData['available_name']
             ?? Str::before($email, '@'));
 
         $user = User::query()->where('email', $email)->first();
 
         if ($user) {
-            if ($user->name !== $name) {
-                $user->forceFill(['name' => $name])->save();
-            }
-
+            // Existing user: sync only links workspace membership; never overwrites
+            // personal data (name, password, is_super_admin).
             return $user;
         }
 
@@ -156,16 +173,6 @@ class SyncChatwootAccountsJob implements ShouldQueue
             'password' => bcrypt(Str::random(40)),
             'is_super_admin' => false,
         ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $accountUser
-     */
-    private function extractEmail(array $accountUser): ?string
-    {
-        $email = $accountUser['user']['email'] ?? $accountUser['email'] ?? null;
-
-        return is_string($email) && $email !== '' ? mb_strtolower($email) : null;
     }
 
     private function mapRole(string $chatwootRole): string
