@@ -1,5 +1,8 @@
+from types import SimpleNamespace
+
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
+from pydantic import SecretStr
 
 from oryntra_agent import settings as settings_module
 from oryntra_agent.agent import supervisor
@@ -100,6 +103,56 @@ def test_supervisor_uses_llm_choice_interface_when_available(monkeypatch) -> Non
     assert response.status == "completed"
     assert response.specialist_id == 6
     assert response.trace[1].output["reason"] == "llm_choice"
+
+
+def test_supervisor_does_not_checkpoint_llm_api_key() -> None:
+    payload = supervisor_payload()
+    payload.supervisor.llm_provider = "local"
+    payload.supervisor.llm_model = "local-router"
+    payload.supervisor.llm_api_key = SecretStr("sk-secret")
+
+    run_chatwoot_runtime(payload)
+    state = get_runtime_graph().get_state(runtime_config(payload)).values
+
+    assert "llm_api_key" not in state["payload"]["supervisor"]
+
+
+def test_specialist_does_not_checkpoint_llm_api_key() -> None:
+    payload = supervisor_payload()
+    payload.specialists[0].llm_provider = "local"
+    payload.specialists[0].llm_model = "local-specialist"
+    payload.specialists[0].llm_api_key = SecretStr("sk-specialist-secret")
+
+    run_chatwoot_runtime(payload)
+    state = get_runtime_graph().get_state(runtime_config(payload)).values
+
+    assert "llm_api_key" not in state["payload"]["specialists"][0]
+
+
+def test_specialist_can_generate_response_with_llm(monkeypatch) -> None:
+    payload = supervisor_payload()
+    payload.specialists[0].llm_provider = "openai"
+    payload.specialists[0].llm_model = "gpt-4.1-nano"
+    payload.specialists[0].llm_api_key = SecretStr("sk-specialist-test")
+
+    class FakeChatModel:
+        def invoke(self, messages):
+            assert messages[0][0] == "system"
+            assert "Answer support questions." in messages[0][1]
+
+            return SimpleNamespace(content="Resposta real simulada.")
+
+    monkeypatch.setattr(
+        supervisor,
+        "chat_model_for_credential",
+        lambda credential, temperature: FakeChatModel(),
+    )
+
+    response = run_chatwoot_runtime(payload)
+
+    assert response.status == "completed"
+    assert response.response.content == "Resposta real simulada."
+    assert response.trace[2].output["source"] == "llm"
 
 
 def test_supervisor_waits_when_llm_choice_is_below_threshold(monkeypatch) -> None:

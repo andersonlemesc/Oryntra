@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 
 class ChatwootMessage(BaseModel):
@@ -20,7 +20,9 @@ class SupervisorConfig(BaseModel):
 
     prompt: str | None = None
     llm_key_id: int | None = None
+    llm_provider: Literal["openai", "anthropic", "gemini", "local"] | None = None
     llm_model: str | None = None
+    llm_api_key: SecretStr | None = Field(default=None, exclude=True)
 
 
 class SpecialistConfig(BaseModel):
@@ -31,7 +33,9 @@ class SpecialistConfig(BaseModel):
     description: str | None = None
     role_prompt: str
     llm_key_id: int | None = None
+    llm_provider: Literal["openai", "anthropic", "gemini", "local"] | None = None
     llm_model: str | None = None
+    llm_api_key: SecretStr | None = Field(default=None, exclude=True)
     llm_temperature: float = Field(ge=0, le=2)
     tools: list[str] = Field(default_factory=list)
     intent_keywords: list[str] = Field(default_factory=list)

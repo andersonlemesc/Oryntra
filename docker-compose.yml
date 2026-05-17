@@ -116,7 +116,7 @@ services:
     environment:
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-replace_me_with_long_random_string}
       POSTGRES_URL: ${POSTGRES_URL:-postgresql://oryntra:oryntra_dev_pw@postgres:5432/oryntra}
-      LANGGRAPH_CHECKPOINTER: ${LANGGRAPH_CHECKPOINTER:-memory}
+      LANGGRAPH_CHECKPOINTER: ${LANGGRAPH_CHECKPOINTER:-postgres}
     expose:
       - "8000"
     depends_on:

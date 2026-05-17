@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Enums\AgentLlmProvider;
 use App\Models\Agent;
+use App\Models\AgentLlmKey;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
 use App\Models\ChatwootConnection;
@@ -43,8 +45,15 @@ it('sends supervisor config and active specialists to runtime', function () {
 
     $workspace = Workspace::factory()->create();
     $connection = ChatwootConnection::factory()->for($workspace)->create();
+    $supervisorLlmKey = AgentLlmKey::factory()->provider(AgentLlmProvider::OpenAI)->for($workspace)->create([
+        'api_key' => 'sk-supervisor-test',
+    ]);
+    $specialistLlmKey = AgentLlmKey::factory()->provider(AgentLlmProvider::OpenAI)->for($workspace)->create([
+        'api_key' => 'sk-specialist-test',
+    ]);
     $agent = Agent::factory()->supervisor()->for($workspace)->create([
         'supervisor_prompt' => 'Route to the best specialist.',
+        'supervisor_llm_key_id' => $supervisorLlmKey->id,
         'supervisor_llm_model' => 'gpt-4.1-nano',
     ]);
 
@@ -52,6 +61,8 @@ it('sends supervisor config and active specialists to runtime', function () {
         'workspace_id' => $workspace->id,
         'name' => 'Suporte',
         'intent_keywords' => ['ajuda'],
+        'llm_key_id' => $specialistLlmKey->id,
+        'llm_model' => 'gpt-4.1-mini',
         'priority' => 10,
     ]);
 
@@ -84,9 +95,16 @@ it('sends supervisor config and active specialists to runtime', function () {
     Http::assertSent(function (Request $request) {
         return $request['agent_mode'] === 'supervisor'
             && $request['supervisor']['prompt'] === 'Route to the best specialist.'
+            && $request['supervisor']['llm_key_id'] !== null
+            && $request['supervisor']['llm_provider'] === 'openai'
             && $request['supervisor']['llm_model'] === 'gpt-4.1-nano'
+            && $request['supervisor']['llm_api_key'] === 'sk-supervisor-test'
             && count($request['specialists']) === 1
             && $request['specialists'][0]['name'] === 'Suporte'
+            && $request['specialists'][0]['llm_key_id'] !== null
+            && $request['specialists'][0]['llm_provider'] === 'openai'
+            && $request['specialists'][0]['llm_model'] === 'gpt-4.1-mini'
+            && $request['specialists'][0]['llm_api_key'] === 'sk-specialist-test'
             && $request['specialists'][0]['intent_keywords'] === ['ajuda'];
     });
 });
