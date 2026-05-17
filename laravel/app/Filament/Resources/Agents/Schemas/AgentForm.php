@@ -17,6 +17,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 class AgentForm
@@ -42,6 +43,7 @@ class AgentForm
                             ->options(self::modeOptions())
                             ->default(AgentMode::Single->value)
                             ->live()
+                            ->helperText('Use Supervisor para rotear conversas entre especialistas configurados dentro deste agente.')
                             ->required(),
                         Textarea::make('description')
                             ->label('Descricao')
@@ -65,6 +67,7 @@ class AgentForm
                     ]),
 
                 Section::make('Supervisor')
+                    ->description('Configura o roteador que escolhe qual especialista atende cada conversa.')
                     ->columns(2)
                     ->collapsible()
                     ->schema([
@@ -72,19 +75,23 @@ class AgentForm
                             ->label('Chave LLM do supervisor')
                             ->options(fn (): array => self::llmKeyOptions(null))
                             ->searchable()
-                            ->nullable(),
+                            ->required(fn (Get $get): bool => $get('mode') === AgentMode::Supervisor->value),
                         TextInput::make('supervisor_llm_model')
                             ->label('Modelo do supervisor')
+                            ->required(fn (Get $get): bool => $get('mode') === AgentMode::Supervisor->value)
                             ->maxLength(128)
                             ->helperText('Use um modelo barato/rapido para classificacao.'),
                         Textarea::make('supervisor_prompt')
                             ->label('Prompt do supervisor')
+                            ->required(fn (Get $get): bool => $get('mode') === AgentMode::Supervisor->value)
                             ->rows(4)
-                            ->columnSpanFull(),
+                            ->columnSpanFull()
+                            ->helperText('Instrua como escolher entre os especialistas. As respostas finais ficam com os especialistas.'),
                     ])
-                    ->visible(fn (callable $get): bool => $get('mode') === AgentMode::Supervisor->value),
+                    ->visible(fn (Get $get): bool => $get('mode') === AgentMode::Supervisor->value),
 
-                Section::make('LLM')
+                Section::make('LLM do agente unico')
+                    ->description('Usado quando este agente responde diretamente sem especialistas.')
                     ->columns(2)
                     ->schema([
                         Select::make('llm_provider')
@@ -111,7 +118,8 @@ class AgentForm
                             ->label('Max tokens')
                             ->numeric()
                             ->minValue(1),
-                    ]),
+                    ])
+                    ->visible(fn (Get $get): bool => $get('mode') !== AgentMode::Supervisor->value),
 
                 Section::make('Prompts')
                     ->collapsible()
