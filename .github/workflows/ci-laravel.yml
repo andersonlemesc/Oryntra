@@ -1,0 +1,106 @@
+name: CI Laravel
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'laravel/**'
+      - 'docker/laravel/**'
+      - '.github/workflows/ci-laravel.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'laravel/**'
+      - 'docker/laravel/**'
+      - '.github/workflows/ci-laravel.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: oryntra_test
+          POSTGRES_USER: oryntra
+          POSTGRES_PASSWORD: oryntra_test_pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, pgsql, intl, bcmath, redis, zip, gd, pcntl, sockets
+          coverage: pcov
+          tools: composer:v2
+
+      - name: Cache composer
+        uses: actions/cache@v4
+        with:
+          path: laravel/vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('laravel/composer.lock') }}
+
+      - name: Install dependencies
+        working-directory: laravel
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Copy env
+        working-directory: laravel
+        run: |
+          cp .env .env.backup 2>/dev/null || true
+          cat > .env <<EOF
+          APP_NAME=Oryntra
+          APP_ENV=testing
+          APP_KEY=
+          APP_DEBUG=true
+          DB_CONNECTION=pgsql
+          DB_HOST=localhost
+          DB_PORT=5432
+          DB_DATABASE=oryntra_test
+          DB_USERNAME=oryntra
+          DB_PASSWORD=oryntra_test_pw
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          CACHE_STORE=redis
+          SESSION_DRIVER=redis
+          QUEUE_CONNECTION=redis
+          MAIL_MAILER=array
+          INTERNAL_API_TOKEN=ci_test_token
+          EOF
+          php artisan key:generate
+
+      - name: Pint (format check)
+        working-directory: laravel
+        run: ./vendor/bin/pint --test
+
+      - name: Larastan (static analysis)
+        working-directory: laravel
+        run: ./vendor/bin/phpstan analyse --no-progress
+
+      - name: Migrate
+        working-directory: laravel
+        run: php artisan migrate --force
+
+      - name: Pest (tests + coverage)
+        working-directory: laravel
+        run: ./vendor/bin/pest --coverage --min=60

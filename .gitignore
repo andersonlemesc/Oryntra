@@ -1,0 +1,83 @@
+# Env
+.env
+.env.*
+!.env.example
+
+# Laravel
+/laravel/vendor/
+/laravel/node_modules/
+/laravel/public/build/
+/laravel/public/hot
+/laravel/public/storage
+/laravel/storage/*.key
+/laravel/storage/app/private/
+/laravel/storage/app/public/
+/laravel/storage/framework/cache/
+/laravel/storage/framework/sessions/
+/laravel/storage/framework/testing/
+/laravel/storage/framework/views/
+/laravel/storage/logs/*.log
+/laravel/storage/pail/
+/laravel/storage/debugbar/
+/laravel/storage/clockwork/
+/laravel/bootstrap/cache/*.php
+/laravel/.phpunit.cache/
+/laravel/.phpunit.result.cache
+/laravel/coverage/
+/laravel/.env.backup
+/laravel/.env.production
+/laravel/auth.json
+/laravel/npm-debug.log
+/laravel/yarn-error.log
+/laravel/Homestead.json
+/laravel/Homestead.yaml
+
+# Python
+/agent-python/.venv/
+/agent-python/venv/
+/agent-python/__pycache__/
+/agent-python/**/__pycache__/
+/agent-python/**/*.pyc
+/agent-python/.pytest_cache/
+/agent-python/.ruff_cache/
+/agent-python/.mypy_cache/
+/agent-python/htmlcov/
+/agent-python/.coverage
+/agent-python/coverage.xml
+/agent-python/dist/
+/agent-python/build/
+/agent-python/*.egg-info/
+
+# Docker
+docker-compose.override.yml
+.docker-volumes/
+
+# IDEs / agents
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+.history/
+
+# Claude Code (global skills/rules synced into project — keep CLAUDE.md/AGENTS.md at root)
+/.claude/skills/
+/.claude/rules/
+/.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets / credentials
+*.pem
+*.key
+!docker/**/*.key.example
+secrets/
+credentials/
+
+# Build artifacts
+*.log
+*.tmp
+*.bak

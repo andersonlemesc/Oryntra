@@ -1,0 +1,30 @@
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[lint]
+select = [
+    "E", "F", "W",        # pycodestyle, pyflakes
+    "I",                  # isort
+    "B",                  # bugbear
+    "UP",                 # pyupgrade
+    "ASYNC",              # async/await
+    "S",                  # bandit (security)
+    "RET",                # return
+    "SIM",                # simplify
+    "TID",                # tidy imports
+    "ARG",                # unused args
+    "PTH",                # use pathlib
+    "RUF",                # ruff specifics
+]
+ignore = [
+    "E501",               # line length (Black handles)
+    "S101",               # assert allowed in tests
+    "B008",               # FastAPI Depends() pattern
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["S101", "ARG"]
+
+[format]
+quote-style = "double"

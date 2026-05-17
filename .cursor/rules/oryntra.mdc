@@ -1,0 +1,38 @@
+---
+description: Regras Oryntra — sempre aplicadas
+alwaysApply: true
+---
+
+# Oryntra — Regras do projeto
+
+Ler **AGENTS.md** na raiz pra contexto completo. Resumo curto:
+
+## Stack
+Laravel 13 + PHP 8.3 + Filament 3 + Fortify + Horizon + Reverb + Postgres+pgvector + Redis + MinIO. Python 3.12 + FastAPI + LangGraph privado.
+
+## Críticas
+1. `workspace_id` em **toda** query de negócio
+2. Python (`agent-python:8000`) **nunca exposto** publicamente
+3. Tokens criptografados (`encrypted` cast)
+4. Idempotência por `chatwoot_message_id`
+5. Lock por `conversation_id`
+6. BYOK — workspace traz própria chave LLM
+7. Embeddings só no Python
+8. `thread_id` LangGraph: `workspace:X:account:Y:conversation:Z`
+
+## Convenções rápidas
+- PHP: PSR-12, return types, `config()` fora de config files
+- Filament Resources em `app/Filament/Resources/`
+- Tenancy via `HasTenants` trait
+- Datas: `Carbon::now('America/Sao_Paulo')`
+- Python: type hints (mypy strict), Pydantic em payloads
+- Testes: Pest + pytest, coverage 60% mínimo
+- Git: branches `feature/*`, conventional commits, PR sempre
+
+## Comandos
+```bash
+docker compose exec laravel-app php artisan ...
+docker compose exec laravel-app ./vendor/bin/pest
+docker compose exec laravel-app ./vendor/bin/pint
+docker compose exec agent-python pytest
+```

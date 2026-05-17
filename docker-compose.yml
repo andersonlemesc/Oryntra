@@ -1,0 +1,181 @@
+name: oryntra
+
+networks:
+  oryntra-net:
+    driver: bridge
+
+volumes:
+  oryntra-postgres-data:
+  oryntra-redis-data:
+  oryntra-minio-data:
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: oryntra-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./laravel:/var/www/html/laravel:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - laravel-app
+    networks:
+      - oryntra-net
+
+  laravel-app:
+    build:
+      context: ./docker/laravel
+      args:
+        WWWUSER: ${WWWUSER:-1000}
+        WWWGROUP: ${WWWGROUP:-1000}
+    image: oryntra/laravel:dev
+    container_name: oryntra-laravel-app
+    restart: unless-stopped
+    volumes:
+      - ./laravel:/var/www/html/laravel
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+    working_dir: /var/www/html/laravel
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - oryntra-net
+
+  laravel-horizon:
+    image: oryntra/laravel:dev
+    container_name: oryntra-laravel-horizon
+    restart: unless-stopped
+    volumes:
+      - ./laravel:/var/www/html/laravel
+    working_dir: /var/www/html/laravel
+    command: ["php", "artisan", "horizon"]
+    depends_on:
+      laravel-app:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - oryntra-net
+
+  laravel-scheduler:
+    image: oryntra/laravel:dev
+    container_name: oryntra-laravel-scheduler
+    restart: unless-stopped
+    volumes:
+      - ./laravel:/var/www/html/laravel
+    working_dir: /var/www/html/laravel
+    command: ["php", "artisan", "schedule:work"]
+    depends_on:
+      laravel-app:
+        condition: service_started
+    networks:
+      - oryntra-net
+
+  laravel-reverb:
+    image: oryntra/laravel:dev
+    container_name: oryntra-laravel-reverb
+    restart: unless-stopped
+    volumes:
+      - ./laravel:/var/www/html/laravel
+    working_dir: /var/www/html/laravel
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
+    ports:
+      - "8081:8081"
+    depends_on:
+      laravel-app:
+        condition: service_started
+    networks:
+      - oryntra-net
+
+  agent-python:
+    build:
+      context: ./agent-python
+      dockerfile: ../docker/agent-python/Dockerfile
+    image: oryntra/agent-python:dev
+    container_name: oryntra-agent-python
+    restart: unless-stopped
+    volumes:
+      - ./agent-python/src:/app/src
+    environment:
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
+      POSTGRES_URL: ${POSTGRES_URL}
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - oryntra-net
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: oryntra-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-oryntra}
+      POSTGRES_USER: ${DB_USERNAME:-oryntra}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-oryntra_dev_pw}
+    ports:
+      - "5432:5432"
+    volumes:
+      - oryntra-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-oryntra} -d ${DB_DATABASE:-oryntra}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - oryntra-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: oryntra-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - oryntra-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - oryntra-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: oryntra-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-oryntra_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-oryntra_minio_pw}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - oryntra-minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - oryntra-net
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: oryntra-mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    networks:
+      - oryntra-net

@@ -1,0 +1,28 @@
+---
+description: Padrões de testes
+alwaysApply: false
+---
+
+# Testes Oryntra
+
+## Laravel (Pest)
+- Toda feature/bug fix tem teste
+- `php artisan make:test --pest --no-interaction NomeTest`
+- Mock Chatwoot via `Http::fake()`
+- Factories pra setup; checar states existentes antes de criar manual
+- Coverage mínimo: `./vendor/bin/pest --coverage --min=60`
+
+## Python (pytest)
+- `pytest tests/` com `--cov=src --cov-fail-under=60`
+- Mock HTTP via `httpx_mock`
+- Async tests com `pytest-asyncio`
+- Fixtures pra DB/Redis em `tests/conftest.py`
+
+## Contract tests (Laravel ↔ Python)
+- `tests/Contract/` em Laravel + `tests/contract/` em Python
+- Validam payloads de request/response consistentes
+- Rodam em `ci-contract.yml` com stack mínima docker
+
+## Browser/E2E
+- Adiar pra Fase 6+
+- Avaliar Pest 4 browser plugin ou Dusk

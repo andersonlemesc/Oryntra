@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "laravel-blade": {
+      "source": "fusengine/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/laravel-expert/skills/laravel-blade/SKILL.md",
+      "computedHash": "29092eb97085c441af361ae8cda96a9ba95f9c2906c21d6fcb22f6ba41b90ea3"
+    },
+    "laravel-filament": {
+      "source": "ulpi-io/skills",
+      "sourceType": "github",
+      "skillPath": "laravel-filament/SKILL.md",
+      "computedHash": "892a85ebc36eb4af265fcdf1d8e4312d1de4299edf5aeb2d5193c91e2c93cc98"
+    },
+    "laravel:blade-components-and-layouts": {
+      "source": "jpcaparas/superpowers-laravel",
+      "sourceType": "github",
+      "skillPath": "skills/blade-components-and-layouts/SKILL.md",
+      "computedHash": "dc94f49434f700143160faceba0ab25f9aaeb57f955119c756ff9cccccd072d7"
+    },
+    "postgres": {
+      "source": "planetscale/database-skills",
+      "sourceType": "github",
+      "skillPath": "skills/postgres/SKILL.md",
+      "computedHash": "2acf9fae4fcdb6c392923708b67234828f8a9f10b10dfa5d228eaab6e9108245"
+    },
+    "postgresql-optimization": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/postgresql-optimization/SKILL.md",
+      "computedHash": "8022448de70ba9a485e3b5bce34c5bbc644f93eb39b68431c9f7dabcf03aeb09"
+    }
+  }
+}

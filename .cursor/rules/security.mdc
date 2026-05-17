@@ -1,0 +1,32 @@
+---
+description: Regras de segurança — críticas
+alwaysApply: true
+---
+
+# Segurança Oryntra
+
+## Tenancy
+- `workspace_id` em **toda** query, model, scope. Sem exceção.
+- Filament tenancy automatiza, mas confirmar em jobs/services manuais
+- RAG: filtrar `document_chunks` por `workspace_id` antes de retornar
+
+## Tokens e secrets
+- Chaves Chatwoot, LLM (BYOK), recovery codes → cast `encrypted`
+- Nunca logar tokens (mesmo em debug)
+- `.env` jamais commitado (.gitignore cuida)
+- `INTERNAL_API_TOKEN` rotacionável via env
+
+## Webhooks
+- Validar assinatura HMAC do Chatwoot via `secret` da tabela `webhooks`
+- Idempotência por `chatwoot_message_id` (unique index)
+- Rate limit por `connection_uuid`
+
+## Python privado
+- Endpoint público só em Laravel. Python só atrás de `agent-python:8000` interno
+- Toda chamada Python exige header `X-Internal-Token`
+- Em produção: considerar mTLS adicional
+
+## Auth Filament
+- 2FA obrigatório pra roles `super_admin` e `workspace_admin`
+- Password confirmation antes de: trocar email, criar API key, deletar workspace
+- Recovery codes só visíveis uma vez (gerar e exibir, depois só revogar/regenerar)
