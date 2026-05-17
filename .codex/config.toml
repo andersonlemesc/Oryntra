@@ -1,0 +1,4 @@
+[mcp_servers.laravel-boost]
+command = "wsl.exe"
+args = ["/home/anderson/.config/herd-lite/bin/php", "/home/anderson/Oryntra/laravel/artisan", "boost:mcp"]
+cwd = "/home/anderson/Oryntra/laravel"
