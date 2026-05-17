@@ -23,6 +23,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'processed_at',
     'failed_at',
     'failure_reason',
+    'ignored_reason',
+    'failed_reason',
 ])]
 class ChatwootWebhookEvent extends Model
 {

@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Chatwoot\ClassifyChatwootWebhookEvent;
 use App\Jobs\Chatwoot\ProcessChatwootWebhookEventJob;
 use App\Models\ChatwootConnection;
 use App\Models\ChatwootWebhookEvent;
@@ -56,6 +57,23 @@ it('rejects webhook requests with invalid signature', function () {
 
     expect(ChatwootWebhookEvent::count())->toBe(0);
     Queue::assertNothingPushed();
+});
+
+it('accepts Chatwoot signatures with sha256 prefix', function () {
+    Queue::fake();
+    $connection = ChatwootConnection::factory()->create([
+        'account_id' => 123,
+        'webhook_secret' => 'webhook-secret',
+    ]);
+    $payload = chatwootWebhookPayload(messageId: 987, conversationId: 654, accountId: 123);
+    $signature = hash_hmac('sha256', json_encode($payload, JSON_THROW_ON_ERROR), 'webhook-secret');
+
+    postJson(chatwootWebhookUrl($connection), $payload, [
+        'X-Chatwoot-Signature' => "sha256={$signature}",
+    ])->assertAccepted();
+
+    expect(ChatwootWebhookEvent::count())->toBe(1);
+    Queue::assertPushed(ProcessChatwootWebhookEventJob::class, 1);
 });
 
 it('accepts unsigned webhooks for a provisioned Chatwoot agent bot connection', function () {
@@ -117,13 +135,79 @@ it('processes queued webhook events under a conversation lock', function () {
         'processed_at' => null,
     ]);
 
-    (new ProcessChatwootWebhookEventJob($event->id))->handle();
+    (new ProcessChatwootWebhookEventJob($event->id))->handle(app(ClassifyChatwootWebhookEvent::class));
 
     $event->refresh();
 
     expect($event->status)->toBe('processed')
         ->and($event->processing_started_at)->not->toBeNull()
         ->and($event->processed_at)->not->toBeNull();
+});
+
+it('ignores outgoing Chatwoot messages so Oryntra does not reply to agents', function () {
+    $event = ChatwootWebhookEvent::factory()->create([
+        'event_name' => 'message_created',
+        'conversation_id' => 654,
+        'chatwoot_message_id' => '987',
+        'status' => 'queued',
+        'payload' => chatwootRealMessagePayload(messageType: 'outgoing', senderType: 'user'),
+    ]);
+
+    (new ProcessChatwootWebhookEventJob($event->id))->handle(app(ClassifyChatwootWebhookEvent::class));
+
+    $event->refresh();
+
+    expect($event->status)->toBe('ignored')
+        ->and($event->ignored_reason)->toBe('not_incoming_message')
+        ->and($event->processed_at)->not->toBeNull();
+});
+
+it('ignores private Chatwoot messages', function () {
+    $event = ChatwootWebhookEvent::factory()->create([
+        'event_name' => 'message_created',
+        'conversation_id' => 654,
+        'chatwoot_message_id' => '987',
+        'status' => 'queued',
+        'payload' => chatwootRealMessagePayload(private: true),
+    ]);
+
+    (new ProcessChatwootWebhookEventJob($event->id))->handle(app(ClassifyChatwootWebhookEvent::class));
+
+    $event->refresh();
+
+    expect($event->status)->toBe('ignored')
+        ->and($event->ignored_reason)->toBe('private_message');
+});
+
+it('processes incoming Chatwoot media messages with captions', function () {
+    $event = ChatwootWebhookEvent::factory()->create([
+        'event_name' => 'message_created',
+        'conversation_id' => 654,
+        'chatwoot_message_id' => '987',
+        'status' => 'queued',
+        'payload' => chatwootRealMessagePayload(
+            content: 'Imagem com legenda',
+            attachments: [[
+                'id' => 6,
+                'file_type' => 'image',
+                'content_type' => 'image/jpeg',
+                'data_url' => 'http://localhost:3000/rails/active_storage/blobs/redirect/example',
+                'thumb_url' => 'http://localhost:3000/rails/active_storage/representations/redirect/example',
+            ]],
+        ),
+    ]);
+
+    $classification = app(ClassifyChatwootWebhookEvent::class)->execute($event);
+    (new ProcessChatwootWebhookEventJob($event->id))->handle(app(ClassifyChatwootWebhookEvent::class));
+
+    $event->refresh();
+
+    expect($classification['should_process'])->toBeTrue()
+        ->and($classification['normalized']['content'])->toBe('Imagem com legenda')
+        ->and($classification['normalized']['attachments'])->toHaveCount(1)
+        ->and($classification['normalized']['attachments'][0]['file_type'])->toBe('image')
+        ->and($event->status)->toBe('processed')
+        ->and($event->ignored_reason)->toBeNull();
 });
 
 function chatwootWebhookUrl(ChatwootConnection $connection): string
@@ -148,6 +232,49 @@ function chatwootWebhookPayload(int $messageId = 987, int $conversationId = 654,
             'id' => $conversationId,
         ],
         'message_type' => 0,
+    ];
+}
+
+/**
+ * @param  array<int, array<string, mixed>>  $attachments
+ * @return array<string, mixed>
+ */
+function chatwootRealMessagePayload(
+    string $messageType = 'incoming',
+    string $senderType = 'Contact',
+    bool $private = false,
+    ?string $content = 'Oi',
+    array $attachments = [],
+): array {
+    return [
+        'id' => 987,
+        'event' => 'message_created',
+        'inbox' => [
+            'id' => 1,
+            'name' => 'Oryndra',
+        ],
+        'sender' => [
+            'id' => 4,
+            'name' => 'Iaah02',
+            'type' => $senderType,
+        ],
+        'account' => [
+            'id' => 123,
+            'name' => 'Empresa A',
+        ],
+        'content' => $content,
+        'private' => $private,
+        'source_id' => null,
+        'created_at' => '2026-05-17T17:55:21.000Z',
+        'attachments' => $attachments,
+        'content_type' => 'text',
+        'conversation' => [
+            'id' => 654,
+            'inbox_id' => 1,
+        ],
+        'message_type' => $messageType,
+        'content_attributes' => [],
+        'additional_attributes' => [],
     ];
 }
 

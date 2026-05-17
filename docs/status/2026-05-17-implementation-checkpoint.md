@@ -280,3 +280,198 @@ Proximo passo recomendado atualizado:
    - definir senha
    - confirmar login no Filament
 2. Depois seguir para webhook receiver Chatwoot.
+
+## Atualizacao - 2026-05-17 16:45 -03
+
+Foi implementada, testada e mergeada localmente em `develop` a fase de conexao Chatwoot baseada em Agent Bot + webhook receiver.
+
+Commits locais:
+
+- `857cd67 feat: provision Chatwoot agent bot connections`
+- `58d2f91 merge: chatwoot agent bot webhooks`
+
+Estado Git:
+
+- Branch atual: `develop`
+- `develop` esta 2 commits a frente de `origin/develop`
+- Branch temporaria `feature/chatwoot-agent-bot-webhooks` foi removida localmente apos merge
+- Worktree limpo no momento do merge
+
+### Webhook receiver Chatwoot
+
+Implementado:
+
+- Rota publica `POST /api/webhooks/chatwoot/{connectionUuid}`
+- Arquivo `routes/api.php` registrado no bootstrap da aplicacao
+- Controller `ChatwootWebhookController`
+- Resolucao da conexao por `connection_uuid`
+- Rejeicao de conexao inexistente ou inativa
+- Validacao opcional de assinatura:
+  - se `webhook_secret` estiver salvo, exige header `X-Chatwoot-Signature`
+  - se `webhook_secret` estiver vazio, aceita pelo UUID da URL
+- Validacao de `account_id` do payload contra `chatwoot_connections.account_id`
+- Persistencia do payload bruto em `chatwoot_webhook_events`
+- `workspace_id` salvo no evento recebido
+- Idempotencia por `chatwoot_connection_id + chatwoot_message_id`
+- Job `ProcessChatwootWebhookEventJob` na fila `chatwoot-webhooks`
+- Lock por conversa via `Cache::lock`
+- Campo `payload` convertido para `jsonb` no Postgres
+
+Arquivos principais:
+
+- `laravel/routes/api.php`
+- `laravel/bootstrap/app.php`
+- `laravel/app/Http/Controllers/ChatwootWebhookController.php`
+- `laravel/app/Models/ChatwootWebhookEvent.php`
+- `laravel/app/Jobs/Chatwoot/ProcessChatwootWebhookEventJob.php`
+- `laravel/database/migrations/2026_05_17_154246_create_chatwoot_webhook_events_table.php`
+- `laravel/database/migrations/2026_05_17_154533_alter_chatwoot_webhook_events_payload_to_jsonb.php`
+- `laravel/tests/Feature/Chatwoot/ChatwootWebhookReceiverTest.php`
+
+### Provisionamento de Agent Bot
+
+Fluxo definido:
+
+- Usuario cria uma conexao Chatwoot no workspace atual.
+- Usuario nao informa `account_id`, token nem webhook secret.
+- `account_id` vem do `workspaces.chatwoot_account_id`, criado pelo sync Platform.
+- Oryntra usa o Platform Token configurado para criar um Agent Bot no Chatwoot.
+- Chatwoot retorna `access_token` do bot.
+- Oryntra salva esse token criptografado em `chatwoot_connections.api_access_token`.
+- Esse token sera usado futuramente para responder mensagens pela Application API.
+- O Agent Bot envia eventos para a URL de webhook gerada pelo Oryntra.
+
+Implementado:
+
+- Config `config/chatwoot.php`
+- Env `CHATWOOT_WEBHOOK_BASE_URL`
+- Action `ProvisionChatwootAgentBot`
+- Job `ProvisionChatwootAgentBotJob` na fila `chatwoot-sync`
+- Metodo `ChatwootPlatformClient::createAgentBot()`
+- Campos em `chatwoot_connections`:
+  - `agent_bot_id`
+  - `agent_bot_outgoing_url`
+  - `provisioned_at`
+  - `provisioning_started_at`
+  - `provisioning_error`
+- `api_access_token` agora pode ser nullable enquanto o bot esta sendo provisionado.
+- Criacao de segunda conexao para a mesma conta/workspace e bloqueada.
+- Provisionamento e idempotente: conexao ja provisionada nao cria outro bot.
+
+Arquivos principais:
+
+- `laravel/config/chatwoot.php`
+- `laravel/app/Actions/Chatwoot/ProvisionChatwootAgentBot.php`
+- `laravel/app/Jobs/Chatwoot/ProvisionChatwootAgentBotJob.php`
+- `laravel/app/Services/Chatwoot/ChatwootPlatformClient.php`
+- `laravel/database/migrations/2026_05_17_160442_add_agent_bot_fields_to_chatwoot_connections_table.php`
+- `laravel/tests/Feature/Chatwoot/ProvisionChatwootAgentBotTest.php`
+
+### Exclusao de conexao
+
+Implementado:
+
+- Ao excluir `ChatwootConnection`, o model dispara `DeleteChatwootAgentBotJob`.
+- O job remove o Agent Bot no Chatwoot via Platform API:
+  - `DELETE /platform/api/v1/agent_bots/{id}`
+- `404` e tratado como sucesso idempotente, pois o bot ja pode ter sido removido.
+- O disparo pelo evento `deleting` cobre exclusao pela tela de edicao e bulk delete.
+
+Arquivos principais:
+
+- `laravel/app/Actions/Chatwoot/DeleteChatwootAgentBot.php`
+- `laravel/app/Jobs/Chatwoot/DeleteChatwootAgentBotJob.php`
+- `laravel/app/Models/ChatwootConnection.php`
+- `laravel/tests/Feature/Chatwoot/DeleteChatwootAgentBotTest.php`
+
+### UI Filament da conexao
+
+A tela de conexoes foi ajustada para refletir o fluxo real:
+
+- Na criacao, usuario informa apenas `name` e `status`.
+- `base_url`, `account_id`, tokens e webhook URL sao derivados pelo backend.
+- Na edicao, apenas `status` e persistido.
+- `name` fica somente leitura na edicao para evitar divergencia com o nome do Agent Bot no Chatwoot.
+- `agent_bot_id`, webhook URL e status de `webhook_secret` sao informativos.
+- Campo `Erro de provisionamento` so aparece quando ha erro salvo.
+
+Arquivos principais:
+
+- `laravel/app/Filament/Resources/ChatwootConnections/Pages/CreateChatwootConnection.php`
+- `laravel/app/Filament/Resources/ChatwootConnections/Pages/EditChatwootConnection.php`
+- `laravel/app/Filament/Resources/ChatwootConnections/Schemas/ChatwootConnectionForm.php`
+- `laravel/app/Filament/Resources/ChatwootConnections/Tables/ChatwootConnectionsTable.php`
+
+### Validacao pratica com Chatwoot
+
+Foi testado manualmente:
+
+- Criacao de conexao pelo Oryntra
+- Criacao de Agent Bot no Chatwoot via Platform API
+- URL gerada no Chatwoot apontando para Oryntra:
+  - `http://host.docker.internal:8080/api/webhooks/chatwoot/{connection_uuid}`
+- Token de acesso do Agent Bot salvo no Oryntra e criptografado no banco
+- Token local bate com o token retornado pela Platform API
+- Criacao de bot temporario confirmou que a Platform API retorna:
+  - `id`
+  - `name`
+  - `description`
+  - `outgoing_url`
+  - `account_id`
+  - `access_token`
+- A Platform API nao retorna `webhook_secret`.
+
+Decisao atual:
+
+- `webhook_secret` permanece opcional.
+- Se o Chatwoot nao expuser o secret via API, o Oryntra aceita webhook pelo `connection_uuid`.
+- Isso e suficiente para MVP/dev, pois o UUID na URL tem alta entropia.
+- Em hardening futuro, transformar a validacao em middleware e/ou permitir configuracao manual do secret por super admin.
+
+Estado runtime consultado:
+
+- Conexao ativa:
+  - workspace: `andersonlemes`
+  - connection id: `2`
+  - agent_bot_id: `2`
+  - token salvo: sim
+  - secret salvo: nao
+  - status: `active`
+  - erro de provisionamento: `null`
+- `chatwoot_webhook_events`: 0
+- Jobs pendentes: 0
+- Failed jobs: 1 antigo de sync (`2026-05-17 14:57:54`, antes desta fase)
+
+### Verificacoes executadas
+
+Comandos executados antes do commit/merge:
+
+```bash
+docker compose exec laravel-app ./vendor/bin/pint --dirty --format agent
+docker compose exec laravel-app php artisan test --compact
+docker compose exec laravel-app ./vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+```
+
+Resultado:
+
+- 58 testes passaram
+- 181 assertions
+- PHPStan sem erros
+- Pint passou
+
+### Proximo passo recomendado
+
+1. Disparar um evento real do Chatwoot para confirmar entrada em `chatwoot_webhook_events`.
+2. Transformar a validacao/resolucao do webhook em middleware.
+3. Implementar o processamento real do evento:
+   - ignorar mensagens outbound/bot
+   - filtrar apenas eventos uteis
+   - manter lock por `conversation_id`
+4. Definir contrato Laravel -> Python:
+   - workspace
+   - account
+   - conversation
+   - message
+   - thread_id LangGraph
+5. Implementar chamada interna para `agent-python`.
+6. Implementar resposta ao Chatwoot usando o token do Agent Bot.

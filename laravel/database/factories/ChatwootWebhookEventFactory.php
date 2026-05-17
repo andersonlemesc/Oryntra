@@ -32,6 +32,11 @@ class ChatwootWebhookEventFactory extends Factory
             'chatwoot_message_id' => (string) fake()->unique()->numberBetween(1, 999999),
             'payload' => [
                 'event' => 'message_created',
+                'message_type' => 'incoming',
+                'private' => false,
+                'sender' => [
+                    'type' => 'Contact',
+                ],
             ],
             'signature' => fake()->sha256(),
             'status' => 'queued',
