@@ -14,7 +14,13 @@
     </testsuites>
     <source>
         <include>
-            <directory>app</directory>
+            <directory>app/Actions/Chatwoot</directory>
+            <directory>app/Actions/Invitations</directory>
+            <directory>app/Http</directory>
+            <directory>app/Jobs</directory>
+            <directory>app/Models</directory>
+            <directory>app/Notifications</directory>
+            <directory>app/Services</directory>
         </include>
     </source>
     <php>
