@@ -108,7 +108,9 @@ def test_supervisor_waits_when_llm_choice_is_below_threshold(monkeypatch) -> Non
     monkeypatch.setattr(
         supervisor,
         "choose_specialist_with_llm",
-        lambda payload: SpecialistChoice(specialist_id=6, confidence=0.4, reason="llm_low_confidence"),
+        lambda payload: SpecialistChoice(
+            specialist_id=6, confidence=0.4, reason="llm_low_confidence"
+        ),
     )
 
     response = run_chatwoot_runtime(payload)

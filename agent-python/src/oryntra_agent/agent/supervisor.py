@@ -103,7 +103,9 @@ def route_node(state: SupervisorState) -> SupervisorState:
     selected_specialist, confidence, reason = choose_specialist(payload)
 
     return {
-        "selected_specialist": selected_specialist.model_dump(mode="json") if selected_specialist is not None else None,
+        "selected_specialist": selected_specialist.model_dump(mode="json")
+        if selected_specialist is not None
+        else None,
         "confidence": confidence,
         "reason": reason,
         "turn_count": turn_count,
@@ -122,7 +124,11 @@ def respond_node(state: SupervisorState) -> SupervisorState:
     turn_count = state.get("turn_count", 1)
 
     if payload.agent_mode != "supervisor":
-        return {"response": single_agent_response(payload, turn_count=turn_count).model_dump(mode="json")}
+        return {
+            "response": single_agent_response(payload, turn_count=turn_count).model_dump(
+                mode="json"
+            )
+        }
 
     if selected_specialist is None:
         return {
@@ -145,7 +151,9 @@ def respond_node(state: SupervisorState) -> SupervisorState:
     }
 
 
-def single_agent_response(payload: ChatwootRuntimeRequest, turn_count: int) -> ChatwootRuntimeResponse:
+def single_agent_response(
+    payload: ChatwootRuntimeRequest, turn_count: int
+) -> ChatwootRuntimeResponse:
     message_count = len(payload.messages)
 
     return ChatwootRuntimeResponse(
@@ -238,7 +246,9 @@ def routed_specialist_response(
     )
 
 
-def choose_specialist(payload: ChatwootRuntimeRequest) -> tuple[SpecialistConfig | None, float, str]:
+def choose_specialist(
+    payload: ChatwootRuntimeRequest,
+) -> tuple[SpecialistConfig | None, float, str]:
     llm_choice = choose_specialist_with_llm(payload)
 
     if llm_choice is not None:
@@ -256,13 +266,17 @@ def choose_specialist_with_llm(_payload: ChatwootRuntimeRequest) -> SpecialistCh
     return None
 
 
-def choose_specialist_deterministically(payload: ChatwootRuntimeRequest) -> tuple[SpecialistConfig | None, float, str]:
+def choose_specialist_deterministically(
+    payload: ChatwootRuntimeRequest,
+) -> tuple[SpecialistConfig | None, float, str]:
     message_text = " ".join(message.content or "" for message in payload.messages).casefold()
     best_specialist: SpecialistConfig | None = None
     best_matches = 0
 
     for specialist in payload.specialists:
-        matches = sum(1 for keyword in specialist.intent_keywords if keyword.casefold() in message_text)
+        matches = sum(
+            1 for keyword in specialist.intent_keywords if keyword.casefold() in message_text
+        )
 
         if matches > best_matches:
             best_specialist = specialist
@@ -279,7 +293,9 @@ def choose_specialist_deterministically(payload: ChatwootRuntimeRequest) -> tupl
     return best_specialist, confidence, "keyword_match"
 
 
-def specialist_by_choice(payload: ChatwootRuntimeRequest, choice: SpecialistChoice) -> SpecialistConfig | None:
+def specialist_by_choice(
+    payload: ChatwootRuntimeRequest, choice: SpecialistChoice
+) -> SpecialistConfig | None:
     if choice.specialist_id is None:
         return None
 

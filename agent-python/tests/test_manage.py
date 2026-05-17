@@ -92,7 +92,11 @@ def test_main_smoke_supervisor_prints_json(monkeypatch, capsys) -> None:
         lambda thread_id: {"status": "completed", "specialist_id": 5, "turn_count": 1},
     )
 
-    result = manage.main(["smoke-supervisor", "--thread-id", "workspace:1:account:1:conversation:custom"])
+    result = manage.main(
+        ["smoke-supervisor", "--thread-id", "workspace:1:account:1:conversation:custom"]
+    )
 
     assert result == 0
-    assert capsys.readouterr().out == '{"specialist_id": 5, "status": "completed", "turn_count": 1}\n'
+    assert (
+        capsys.readouterr().out == '{"specialist_id": 5, "status": "completed", "turn_count": 1}\n'
+    )
