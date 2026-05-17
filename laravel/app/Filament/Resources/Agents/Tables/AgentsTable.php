@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Agents\Tables;
 
+use App\Enums\AgentLlmProvider;
 use App\Enums\AgentMode;
 use App\Enums\AgentResponseMode;
 use App\Enums\AgentStatus;
+use App\Models\Agent;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -46,11 +48,15 @@ class AgentsTable
                         ? $state->label()
                         : AgentMode::from($state)->label())
                     ->toggleable(),
-                TextColumn::make('llm_provider')
-                    ->label('Provider')
+                TextColumn::make('runtime_provider')
+                    ->label('Provider runtime')
+                    ->getStateUsing(fn (Agent $record): ?string => self::runtimeProvider($record))
+                    ->placeholder('-')
                     ->toggleable(),
-                TextColumn::make('llm_model')
-                    ->label('Modelo')
+                TextColumn::make('runtime_model')
+                    ->label('Modelo runtime')
+                    ->getStateUsing(fn (Agent $record): ?string => self::runtimeModel($record))
+                    ->placeholder('-')
                     ->toggleable(),
                 TextColumn::make('updated_at')
                     ->label('Atualizado em')
@@ -69,5 +75,37 @@ class AgentsTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    private static function runtimeProvider(Agent $agent): ?string
+    {
+        if (self::isSupervisor($agent)) {
+            return self::providerValue($agent->supervisorLlmKey?->provider);
+        }
+
+        return self::providerValue($agent->llm_provider);
+    }
+
+    private static function runtimeModel(Agent $agent): ?string
+    {
+        if (self::isSupervisor($agent)) {
+            return $agent->supervisor_llm_model;
+        }
+
+        return $agent->llm_model;
+    }
+
+    private static function isSupervisor(Agent $agent): bool
+    {
+        $mode = $agent->mode;
+
+        return $mode instanceof AgentMode
+            ? $mode === AgentMode::Supervisor
+            : $mode === AgentMode::Supervisor->value;
+    }
+
+    private static function providerValue(AgentLlmProvider|string|null $provider): ?string
+    {
+        return $provider instanceof AgentLlmProvider ? $provider->value : $provider;
     }
 }

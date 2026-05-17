@@ -34,6 +34,7 @@ class SpecialistsRelationManager extends RelationManager
         return $schema
             ->components([
                 Section::make()
+                    ->heading('Identidade')
                     ->columns(2)
                     ->schema([
                         TextInput::make('name')
@@ -53,17 +54,27 @@ class SpecialistsRelationManager extends RelationManager
                             ->label('Prompt do papel')
                             ->required()
                             ->rows(5)
-                            ->columnSpanFull(),
+                            ->columnSpanFull()
+                            ->helperText('Defina a responsabilidade deste especialista. O supervisor usa isso para rotear e o LLM usa para responder.'),
                         TagsInput::make('intent_keywords')
                             ->label('Palavras-chave de intencao')
-                            ->separator(','),
+                            ->required()
+                            ->separator(',')
+                            ->helperText('Ajuda o roteamento deterministico quando o supervisor LLM nao estiver disponivel.'),
+                    ]),
+
+                Section::make('LLM')
+                    ->description('Credenciais e modelo usados para gerar a resposta final deste especialista.')
+                    ->columns(2)
+                    ->schema([
                         Select::make('llm_key_id')
                             ->label('Chave LLM')
                             ->options(fn (): array => self::llmKeyOptions())
                             ->searchable()
-                            ->nullable(),
+                            ->required(),
                         TextInput::make('llm_model')
                             ->label('Modelo')
+                            ->required()
                             ->maxLength(128),
                         TextInput::make('llm_temperature')
                             ->label('Temperature')
@@ -72,6 +83,11 @@ class SpecialistsRelationManager extends RelationManager
                             ->maxValue(2)
                             ->step(0.01)
                             ->default(0.2),
+                    ]),
+
+                Section::make('Roteamento e ferramentas')
+                    ->columns(2)
+                    ->schema([
                         TagsInput::make('tools_allowlist')
                             ->label('Tools permitidas')
                             ->separator(','),
@@ -83,6 +99,8 @@ class SpecialistsRelationManager extends RelationManager
                         TextInput::make('confidence_threshold')
                             ->label('Threshold confianca')
                             ->numeric()
+                            ->minValue(0)
+                            ->maxValue(1)
                             ->step(0.01)
                             ->default(0.6)
                             ->required(),
@@ -110,12 +128,22 @@ class SpecialistsRelationManager extends RelationManager
                 TextColumn::make('priority')
                     ->label('Prioridade')
                     ->sortable(),
+                TextColumn::make('llmKey.name')
+                    ->label('Chave LLM')
+                    ->placeholder('-')
+                    ->toggleable(),
                 TextColumn::make('llm_model')
                     ->label('Modelo')
                     ->placeholder('-'),
+                TextColumn::make('confidence_threshold')
+                    ->label('Threshold')
+                    ->numeric(decimalPlaces: 2)
+                    ->sortable()
+                    ->toggleable(),
             ])
             ->headerActions([
                 CreateAction::make()
+                    ->label('Adicionar especialista')
                     ->mutateFormDataUsing(function (array $data): array {
                         $tenant = Filament::getTenant();
                         $data['workspace_id'] = $tenant?->getKey();
