@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Jobs\Chatwoot\SyncChatwootAccountsJob;
 use App\Models\ChatwootPlatformConnection;
 use App\Models\User;

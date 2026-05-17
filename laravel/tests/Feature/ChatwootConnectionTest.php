@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\ChatwootConnectionStatus;
 use App\Models\ChatwootConnection;
 use App\Models\Workspace;

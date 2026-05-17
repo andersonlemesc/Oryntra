@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Jobs\Chatwoot;
 
 use App\Actions\Invitations\SendUserInvitation;
@@ -172,7 +174,7 @@ class SyncChatwootAccountsJob implements ShouldQueue
     }
 
     /**
-     * @param  array<string, mixed>  $userData  Payload de /platform/api/v1/users/{id}
+     * @param array<string, mixed> $userData Payload de /platform/api/v1/users/{id}
      */
     private function upsertUser(array $userData, bool &$wasNew = false): ?User
     {

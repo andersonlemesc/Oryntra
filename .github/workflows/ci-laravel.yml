@@ -98,7 +98,7 @@ jobs:
 
       - name: Larastan (static analysis)
         working-directory: laravel
-        run: ./vendor/bin/phpstan analyse --no-progress
+        run: ./vendor/bin/phpstan analyse --memory-limit=1G --no-progress
 
       - name: Migrate
         working-directory: laravel

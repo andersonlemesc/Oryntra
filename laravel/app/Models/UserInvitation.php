@@ -1,22 +1,25 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
- * @property int $id
- * @property int $user_id
- * @property string $token
- * @property string $email_sent_to
- * @property \Illuminate\Support\Carbon $expires_at
- * @property \Illuminate\Support\Carbon|null $accepted_at
- * @property int|null $invited_by_user_id
- * @property string $source
+ * @property int         $id
+ * @property int         $user_id
+ * @property string      $token
+ * @property string      $email_sent_to
+ * @property Carbon      $expires_at
+ * @property Carbon|null $accepted_at
+ * @property int|null    $invited_by_user_id
+ * @property string      $source
  */
 #[Fillable([
     'user_id',
@@ -71,7 +74,7 @@ class UserInvitation extends Model
     }
 
     /**
-     * @param  Builder<UserInvitation>  $query
+     * @param Builder<UserInvitation> $query
      */
     public function scopePending(Builder $query): void
     {

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Jobs\Chatwoot\ProcessChatwootWebhookEventJob;
@@ -63,7 +65,7 @@ class ChatwootWebhookController extends Controller
     }
 
     /**
-     * @param  array<string, mixed>  $payload
+     * @param array<string, mixed> $payload
      */
     private function extractConversationId(array $payload, string $eventName): ?int
     {
@@ -84,7 +86,7 @@ class ChatwootWebhookController extends Controller
     }
 
     /**
-     * @param  array<string, mixed>  $payload
+     * @param array<string, mixed> $payload
      */
     private function extractMessageId(array $payload, string $eventName): ?string
     {

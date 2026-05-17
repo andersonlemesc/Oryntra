@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     /*
      | TTL em horas pra invitations. Default 7 dias (168h).

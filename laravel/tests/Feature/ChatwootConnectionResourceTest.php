@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Filament\Resources\ChatwootConnections\ChatwootConnectionResource;
 use App\Filament\Resources\ChatwootConnections\Pages\ListChatwootConnections;
 use App\Models\ChatwootConnection;
@@ -8,9 +10,10 @@ use App\Models\Workspace;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
-use Tests\TestCase;
 
 use function Pest\Laravel\actingAs;
+
+use Tests\TestCase;
 
 uses(TestCase::class);
 uses(RefreshDatabase::class);

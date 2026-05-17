@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Actions\Chatwoot\ProvisionChatwootAgentBot;
 use App\Jobs\Chatwoot\ProvisionChatwootAgentBotJob;
 use App\Models\ChatwootConnection;

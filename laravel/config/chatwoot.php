@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     /*
      | Public base URL that Chatwoot containers can call for webhooks.

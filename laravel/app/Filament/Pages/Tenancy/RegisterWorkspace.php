@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Pages\Tenancy;
 
 use App\Models\Workspace;
@@ -35,7 +37,7 @@ class RegisterWorkspace extends RegisterTenant
     }
 
     /**
-     * @param  array{name: string}  $data
+     * @param array{name: string} $data
      */
     protected function handleRegistration(array $data): Model
     {

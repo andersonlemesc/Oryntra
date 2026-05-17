@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Actions\Fortify;
 
 use App\Models\User;
@@ -18,7 +20,7 @@ class CreateNewUser implements CreatesNewUsers
      *
      * First registered user becomes super_admin (mirrors Chatwoot install flow).
      *
-     * @param  array<string, string>  $input
+     * @param array<string, string> $input
      *
      * @throws ValidationException
      */

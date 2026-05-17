@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Actions\Chatwoot\DeleteChatwootAgentBot;
 use App\Jobs\Chatwoot\DeleteChatwootAgentBotJob;
 use App\Models\ChatwootConnection;

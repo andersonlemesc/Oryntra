@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
 use App\Enums\ChatwootConnectionStatus;
@@ -23,11 +25,11 @@ class ChatwootConnectionFactory extends Factory
         return [
             'workspace_id' => Workspace::factory(),
             'connection_uuid' => fake()->uuid(),
-            'name' => fake()->company().' Chatwoot',
+            'name' => fake()->company() . ' Chatwoot',
             'base_url' => 'https://chatwoot.example.com',
             'account_id' => fake()->unique()->numberBetween(1, 999999),
             'agent_bot_id' => fake()->unique()->numberBetween(1, 999999),
-            'agent_bot_outgoing_url' => 'https://oryntra.example.com/api/webhooks/chatwoot/'.fake()->uuid(),
+            'agent_bot_outgoing_url' => 'https://oryntra.example.com/api/webhooks/chatwoot/' . fake()->uuid(),
             'api_access_token' => Str::random(40),
             'webhook_secret' => Str::random(48),
             'provisioned_at' => now(),

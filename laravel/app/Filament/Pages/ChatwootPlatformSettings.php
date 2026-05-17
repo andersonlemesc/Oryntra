@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Pages;
 
 use App\Jobs\Chatwoot\SyncChatwootAccountsJob;
@@ -15,7 +17,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * @property-read \Filament\Schemas\Schema $form
+ * @property-read Schema $form
  */
 class ChatwootPlatformSettings extends Page implements HasForms
 {

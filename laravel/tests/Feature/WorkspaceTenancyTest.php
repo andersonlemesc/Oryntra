@@ -1,16 +1,19 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Filament\Pages\Tenancy\RegisterWorkspace;
 use App\Models\User;
 use App\Models\Workspace;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
-use Tests\TestCase;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Laravel\get;
+
+use Tests\TestCase;
 
 uses(TestCase::class);
 uses(RefreshDatabase::class);
@@ -79,11 +82,11 @@ it('creates a workspace from tenant registration', function () {
 });
 
 /**
- * @param  array{name: string}  $data
+ * @param array{name: string} $data
  */
 function invokeRegisterWorkspaceHandler(array $data): Workspace
 {
-    $page = new RegisterWorkspace();
+    $page = new RegisterWorkspace;
     $method = new ReflectionMethod(RegisterWorkspace::class, 'handleRegistration');
     $method->setAccessible(true);
 

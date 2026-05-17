@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\ChatwootConnections\Pages;
 
 use App\Filament\Resources\ChatwootConnections\ChatwootConnectionResource;
@@ -11,7 +13,7 @@ class EditChatwootConnection extends EditRecord
     protected static string $resource = ChatwootConnectionResource::class;
 
     /**
-     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed> $data
      * @return array<string, mixed>
      */
     protected function mutateFormDataBeforeSave(array $data): array

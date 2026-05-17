@@ -1,5 +1,8 @@
 <?php
 
+declare(strict_types=1);
+
+use App\Actions\Fortify\CreateNewUser;
 use App\Models\User;
 use App\Models\Workspace;
 use Filament\Facades\Filament;
@@ -43,7 +46,7 @@ it('non-super_admin only sees its own workspaces', function () {
 });
 
 it('first registered user becomes super_admin', function () {
-    $action = app(\App\Actions\Fortify\CreateNewUser::class);
+    $action = app(CreateNewUser::class);
 
     $first = $action->create([
         'name' => 'Anderson',

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Actions\Chatwoot;
 
 use App\Models\ChatwootConnection;
@@ -65,7 +67,7 @@ class ProvisionChatwootAgentBot
             'connectionUuid' => $connection->connection_uuid,
         ], absolute: false);
 
-        return $baseUrl.$path;
+        return $baseUrl . $path;
     }
 
     private function integerValue(mixed $value): ?int

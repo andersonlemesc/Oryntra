@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\ChatwootPlatformConnection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -35,7 +37,7 @@ it('encrypts the platform token in storage', function () {
         'platform_token' => 'super-secret-token',
     ]);
 
-    $rawToken = \DB::table('chatwoot_platform_connections')->value('platform_token');
+    $rawToken = DB::table('chatwoot_platform_connections')->value('platform_token');
 
     expect($rawToken)
         ->not->toBe('super-secret-token')

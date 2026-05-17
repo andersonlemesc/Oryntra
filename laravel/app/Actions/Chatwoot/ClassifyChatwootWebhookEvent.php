@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Actions\Chatwoot;
 
 use App\Models\ChatwootWebhookEvent;
@@ -76,7 +78,7 @@ class ClassifyChatwootWebhookEvent
     }
 
     /**
-     * @param  array<int, mixed>  $attachments
+     * @param  array<int, mixed>                $attachments
      * @return array<int, array<string, mixed>>
      */
     private function attachments(array $attachments): array
@@ -95,7 +97,7 @@ class ClassifyChatwootWebhookEvent
     }
 
     /**
-     * @param  array<string, mixed>  $normalized
+     * @param array<string, mixed> $normalized
      * @return array{
      *     should_process: false,
      *     ignored_reason: string,
