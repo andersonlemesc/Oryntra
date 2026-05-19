@@ -32,6 +32,12 @@ class AgentSpecialistFactory extends Factory
             'llm_model' => 'gpt-4.1-mini',
             'llm_temperature' => 0.2,
             'tools_allowlist' => [],
+            'handoff_config' => [
+                'enabled' => false,
+                'default_priority' => 'normal',
+                'customer_message' => 'Vou transferir voce para um atendente.',
+                'rules' => [],
+            ],
             'priority' => 100,
             'confidence_threshold' => 0.6,
             'status' => AgentSpecialistStatus::Active,

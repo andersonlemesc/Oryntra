@@ -20,6 +20,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'ignore_assigned_conversations',
     'ignore_label_names',
     'handoff_label_name',
+    'handoff_team_id',
+    'handoff_team_name',
+    'handoff_agent_id',
+    'handoff_agent_name',
+    'handoff_private_note_template',
+    'handoff_assign_strategy',
 ])]
 class AgentChatwootBinding extends Model
 {
@@ -60,6 +66,8 @@ class AgentChatwootBinding extends Model
             'inbox_ids' => 'array',
             'ignore_assigned_conversations' => 'boolean',
             'ignore_label_names' => 'array',
+            'handoff_team_id' => 'integer',
+            'handoff_agent_id' => 'integer',
         ];
     }
 }

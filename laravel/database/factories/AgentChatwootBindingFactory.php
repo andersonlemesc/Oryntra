@@ -32,6 +32,12 @@ class AgentChatwootBindingFactory extends Factory
             'ignore_assigned_conversations' => false,
             'ignore_label_names' => [],
             'handoff_label_name' => null,
+            'handoff_team_id' => null,
+            'handoff_team_name' => null,
+            'handoff_agent_id' => null,
+            'handoff_agent_name' => null,
+            'handoff_private_note_template' => null,
+            'handoff_assign_strategy' => 'none',
         ];
     }
 

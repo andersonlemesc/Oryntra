@@ -110,6 +110,7 @@ class AgentRuntimeClient
                         'llm_api_key' => $specialistCredential['api_key'],
                         'llm_temperature' => $specialist->llm_temperature,
                         'tools' => $specialist->tools_allowlist,
+                        'handoff_config' => $specialist->handoff_config,
                         'intent_keywords' => $specialist->intent_keywords,
                         'confidence_threshold' => $specialist->confidence_threshold,
                         'fallback_specialist_id' => $specialist->fallback_specialist_id,
@@ -122,7 +123,7 @@ class AgentRuntimeClient
             'inbox' => $this->objectInput($input, 'inbox'),
             'guard_config' => $this->objectInput($input, 'guard_config'),
             'media_config' => $this->objectInput($input, 'media_config'),
-            'runtime_config' => $this->objectInput($input, 'runtime_config'),
+            'runtime_config' => $this->runtimeConfig($run, $input),
         ];
     }
 
@@ -192,6 +193,22 @@ class AgentRuntimeClient
 
         /** @var array<string, mixed> $value */
         return $value;
+    }
+
+    /**
+     * @param  array<string, mixed> $input
+     * @return array<string, mixed>
+     */
+    private function runtimeConfig(AgentRun $run, array $input): array
+    {
+        $value = $input['runtime_config'] ?? [];
+        $runtimeConfig = is_array($value) ? $value : [];
+
+        return [
+            ...$runtimeConfig,
+            'agent_run_id' => $run->id,
+            'conversation_id' => $run->conversation_id,
+        ];
     }
 
     /**

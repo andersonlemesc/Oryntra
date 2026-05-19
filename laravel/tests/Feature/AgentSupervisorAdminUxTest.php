@@ -10,8 +10,10 @@ use App\Enums\AgentSpecialistStatus;
 use App\Enums\AgentStatus;
 use App\Filament\Resources\Agents\Pages\CreateAgent;
 use App\Filament\Resources\Agents\Pages\EditAgent;
+use App\Filament\Resources\Agents\RelationManagers\ChatwootBindingsRelationManager;
 use App\Filament\Resources\Agents\RelationManagers\SpecialistsRelationManager;
 use App\Models\Agent;
+use App\Models\AgentChatwootBinding;
 use App\Models\AgentLlmKey;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
@@ -148,6 +150,21 @@ it('creates specialists scoped to the current Filament tenant', function () {
             'llm_model' => 'gpt-4.1-nano',
             'llm_temperature' => 0.2,
             'tools_allowlist' => [],
+            'handoff_config' => [
+                'enabled' => true,
+                'default_priority' => 'high',
+                'customer_message' => 'Vou transferir voce para um atendente.',
+                'rules' => [
+                    [
+                        'name' => 'Pedido humano',
+                        'enabled' => true,
+                        'keywords' => ['humano', 'atendente'],
+                        'priority' => 'high',
+                        'reason' => 'Cliente pediu atendimento humano.',
+                        'customer_message' => null,
+                    ],
+                ],
+            ],
             'priority' => 10,
             'confidence_threshold' => 0.6,
         ])
@@ -159,6 +176,60 @@ it('creates specialists scoped to the current Filament tenant', function () {
         'name' => 'Suporte',
         'llm_key_id' => $llmKey->id,
         'llm_model' => 'gpt-4.1-nano',
+    ]);
+
+    $specialist = AgentSpecialist::query()
+        ->where('agent_id', $agent->id)
+        ->where('name', 'Suporte')
+        ->firstOrFail();
+    $handoffConfig = $specialist->getAttribute('handoff_config');
+
+    assert(is_array($handoffConfig));
+
+    expect($specialist->tools_allowlist)->toContain('request_human_handoff')
+        ->and($handoffConfig['enabled'])->toBeTrue()
+        ->and($handoffConfig['rules'][0]['keywords'])->toBe(['humano', 'atendente']);
+});
+
+it('configures Chatwoot handoff destination on the binding relation manager', function () {
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+    $agent = Agent::factory()->supervisor()->for($workspace)->create();
+    $connection = ChatwootConnection::factory()->for($workspace)->create();
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(ChatwootBindingsRelationManager::class, [
+        'ownerRecord' => $agent,
+        'pageClass' => EditAgent::class,
+    ])
+        ->callAction(TestAction::make(CreateAction::class)->table(), [
+            'chatwoot_connection_id' => $connection->id,
+            'status' => 'active',
+            'inbox_ids' => [],
+            'ignore_assigned_conversations' => false,
+            'ignore_label_names' => [],
+            'handoff_label_name' => 'human_handoff',
+            'handoff_assign_strategy' => 'team_then_agent',
+            'handoff_team_id' => 12,
+            'handoff_team_name' => 'Suporte',
+            'handoff_agent_id' => 34,
+            'handoff_agent_name' => 'Ada',
+            'handoff_private_note_template' => 'Motivo: {reason}',
+        ])
+        ->assertHasNoFormErrors();
+
+    assertDatabaseHas(AgentChatwootBinding::class, [
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $connection->id,
+        'handoff_label_name' => 'human_handoff',
+        'handoff_assign_strategy' => 'team_then_agent',
+        'handoff_team_id' => 12,
+        'handoff_team_name' => 'Suporte',
+        'handoff_agent_id' => 34,
+        'handoff_agent_name' => 'Ada',
+        'handoff_private_note_template' => 'Motivo: {reason}',
     ]);
 });
 
@@ -228,6 +299,7 @@ it('sends admin-configured supervisor and specialist credentials to the runtime 
             && $body->specialists[0]->llm_api_key === 'sk-admin-configured'
             && $body->specialists[0]->llm_provider === 'openai'
             && $body->specialists[0]->llm_model === 'gpt-4.1-nano'
+            && isset($body->specialists[0]->handoff_config)
             && $body->contact instanceof stdClass
             && $body->inbox instanceof stdClass
             && $body->guard_config instanceof stdClass

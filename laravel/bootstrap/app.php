@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Middleware\BlockRegisterAfterBootstrap;
 use App\Http\Middleware\ResolveChatwootWebhookConnection;
+use App\Http\Middleware\VerifyInternalRuntimeToken;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'chatwoot.webhook' => ResolveChatwootWebhookConnection::class,
+            'internal.runtime' => VerifyInternalRuntimeToken::class,
         ]);
 
         $middleware->web(append: [
