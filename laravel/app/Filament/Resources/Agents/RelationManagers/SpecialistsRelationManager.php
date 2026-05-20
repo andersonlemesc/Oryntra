@@ -23,6 +23,8 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -37,140 +39,184 @@ class SpecialistsRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                Section::make()
-                    ->heading('Identidade')
-                    ->columns(2)
-                    ->schema([
-                        TextInput::make('name')
-                            ->label('Nome')
-                            ->required()
-                            ->maxLength(255),
-                        Select::make('status')
-                            ->label('Status')
-                            ->options(self::statusOptions())
-                            ->default(AgentSpecialistStatus::Active->value)
-                            ->required(),
-                        Textarea::make('description')
-                            ->label('Descricao')
-                            ->rows(2)
-                            ->columnSpanFull(),
-                        Textarea::make('role_prompt')
-                            ->label('Prompt do papel')
-                            ->required()
-                            ->rows(5)
-                            ->columnSpanFull()
-                            ->helperText('Defina a responsabilidade deste especialista. O supervisor usa isso para rotear e o LLM usa para responder.')
-                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Instrucao em texto que define o "papel" do especialista. Exemplo: "Voce e especialista em vendas. Tire duvidas sobre precos, planos e prazos. Nunca fale de suporte tecnico."'),
-                        TagsInput::make('intent_keywords')
-                            ->label('Palavras-chave de intencao')
-                            ->required()
-                            ->separator(',')
-                            ->helperText('Ajuda o roteamento deterministico quando o supervisor LLM nao estiver disponivel.')
-                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Lista de palavras que o cliente pode usar para indicar essa intencao. Ex.: para Vendas use "preco, comprar, cotacao, plano". Funciona como fallback se o supervisor LLM falhar.'),
-                    ]),
-
-                Section::make('LLM')
-                    ->description('Credenciais e modelo usados para gerar a resposta final deste especialista.')
-                    ->columns(2)
-                    ->schema([
-                        Select::make('llm_key_id')
-                            ->label('Chave LLM')
-                            ->options(fn (): array => self::llmKeyOptions())
-                            ->searchable()
-                            ->required(),
-                        TextInput::make('llm_model')
-                            ->label('Modelo')
-                            ->required()
-                            ->maxLength(128),
-                        TextInput::make('llm_temperature')
-                            ->label('Temperature')
-                            ->numeric()
-                            ->minValue(0)
-                            ->maxValue(2)
-                            ->step(0.01)
-                            ->default(0.2),
-                    ]),
-
-                Section::make('Roteamento e ferramentas')
-                    ->columns(2)
-                    ->schema([
-                        TagsInput::make('tools_allowlist')
-                            ->label('Tools permitidas')
-                            ->suggestions(fn (): array => app(NativeToolRegistry::class)->options())
-                            ->separator(',')
-                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Lista das ferramentas que este especialista pode chamar (enviar mensagem, transferir para humano, atribuir time, etc.). Sem isso, o especialista so consegue responder em texto.'),
-                        TextInput::make('priority')
-                            ->label('Prioridade')
-                            ->numeric()
-                            ->default(100)
-                            ->required()
-                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Em caso de empate de intencao, o especialista com menor numero atende primeiro. Use 100 como padrao e ajuste somente se precisar forcar ordem.'),
-                        TextInput::make('confidence_threshold')
-                            ->label('Threshold confianca')
-                            ->numeric()
-                            ->minValue(0)
-                            ->maxValue(1)
-                            ->step(0.01)
-                            ->default(0.6)
-                            ->required()
-                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Confianca minima (0 a 1) para o supervisor rotear esta conversa para o especialista. 0.6 = so envia se tiver 60%+ de certeza de que e esta intencao.'),
-                    ]),
-
-                Section::make('Transferencia humana')
-                    ->description('Regras explicitas para pausar a automacao e transferir a conversa para atendimento humano.')
-                    ->columns(2)
-                    ->schema([
-                        Toggle::make('handoff_config.enabled')
-                            ->label('Permitir transferencia humana')
-                            ->live()
-                            ->default(false)
-                            ->helperText('Quando habilitado, a tool request_human_handoff sera adicionada automaticamente ao especialista.')
-                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Permite que este especialista escale a conversa para um atendente humano em situacoes definidas nas regras abaixo (ou quando a IA achar que nao consegue resolver).'),
-                        Select::make('handoff_config.default_priority')
-                            ->label('Prioridade padrao')
-                            ->options(self::handoffPriorityOptions())
-                            ->default('normal')
-                            ->required(),
-                        Textarea::make('handoff_config.customer_message')
-                            ->label('Mensagem ao cliente')
-                            ->rows(2)
-                            ->default('Vou transferir voce para um atendente.')
-                            ->columnSpanFull(),
-                        Repeater::make('handoff_config.rules')
-                            ->label('Situacoes de transferencia')
+                Tabs::make('specialist')
+                    ->columnSpanFull()
+                    ->persistTabInQueryString()
+                    ->tabs([
+                        Tab::make('Identidade')
+                            ->icon('heroicon-o-identification')
                             ->schema([
-                                TextInput::make('name')
-                                    ->label('Nome')
-                                    ->required()
-                                    ->maxLength(120),
-                                Toggle::make('enabled')
-                                    ->label('Ativa')
-                                    ->default(true),
-                                TagsInput::make('keywords')
-                                    ->label('Palavras-chave')
-                                    ->separator(',')
-                                    ->required()
-                                    ->helperText('Ex: humano, atendente, cancelar, reembolso.'),
-                                Select::make('priority')
-                                    ->label('Prioridade')
-                                    ->options(self::handoffPriorityOptions())
-                                    ->default('normal')
-                                    ->required(),
-                                Textarea::make('reason')
-                                    ->label('Motivo interno')
-                                    ->rows(2)
-                                    ->required()
-                                    ->columnSpanFull(),
-                                Textarea::make('customer_message')
-                                    ->label('Mensagem especifica ao cliente')
-                                    ->rows(2)
-                                    ->columnSpanFull(),
-                            ])
-                            ->columns(2)
-                            ->defaultItems(0)
-                            ->columnSpanFull(),
+                                Section::make()
+                                    ->columns(2)
+                                    ->schema([
+                                        TextInput::make('name')
+                                            ->label('Nome')
+                                            ->required()
+                                            ->maxLength(255),
+                                        Select::make('status')
+                                            ->label('Status')
+                                            ->options(self::statusOptions())
+                                            ->default(AgentSpecialistStatus::Active->value)
+                                            ->required(),
+                                        Textarea::make('description')
+                                            ->label('Descricao')
+                                            ->rows(2)
+                                            ->columnSpanFull(),
+                                        Textarea::make('role_prompt')
+                                            ->label('Prompt do papel')
+                                            ->required()
+                                            ->rows(5)
+                                            ->columnSpanFull()
+                                            ->helperText('Defina a responsabilidade deste especialista. O supervisor usa isso para rotear e o LLM usa para responder.')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Instrucao em texto que define o "papel" do especialista. Exemplo: "Voce e especialista em vendas. Tire duvidas sobre precos, planos e prazos. Nunca fale de suporte tecnico."'),
+                                        TagsInput::make('intent_keywords')
+                                            ->label('Palavras-chave de intencao')
+                                            ->required()
+                                            ->separator(',')
+                                            ->helperText('Ajuda o roteamento deterministico quando o supervisor LLM nao estiver disponivel.')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Lista de palavras que o cliente pode usar para indicar essa intencao. Ex.: para Vendas use "preco, comprar, cotacao, plano". Funciona como fallback se o supervisor LLM falhar.'),
+                                    ]),
+                            ]),
+
+                        Tab::make('Modelo')
+                            ->icon('heroicon-o-cpu-chip')
+                            ->schema([
+                                Section::make('LLM')
+                                    ->description('Credenciais e modelo usados para gerar a resposta final deste especialista.')
+                                    ->columns(2)
+                                    ->schema([
+                                        Select::make('llm_key_id')
+                                            ->label('Chave LLM')
+                                            ->options(fn (): array => self::llmKeyOptions())
+                                            ->searchable()
+                                            ->required(),
+                                        TextInput::make('llm_model')
+                                            ->label('Modelo')
+                                            ->required()
+                                            ->maxLength(128),
+                                        TextInput::make('llm_temperature')
+                                            ->label('Temperature')
+                                            ->numeric()
+                                            ->minValue(0)
+                                            ->maxValue(2)
+                                            ->step(0.01)
+                                            ->default(0.2),
+                                    ]),
+                            ]),
+
+                        Tab::make('Roteamento')
+                            ->icon('heroicon-o-arrows-right-left')
+                            ->schema([
+                                Section::make('Roteamento e ferramentas')
+                                    ->columns(2)
+                                    ->schema([
+                                        TagsInput::make('tools_allowlist')
+                                            ->label('Tools permitidas')
+                                            ->suggestions(fn (): array => app(NativeToolRegistry::class)->options())
+                                            ->separator(',')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Lista das ferramentas que este especialista pode chamar (enviar mensagem, transferir para humano, atribuir time, etc.). Sem isso, o especialista so consegue responder em texto.'),
+                                        TextInput::make('priority')
+                                            ->label('Prioridade')
+                                            ->numeric()
+                                            ->default(100)
+                                            ->required()
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Em caso de empate de intencao, o especialista com menor numero atende primeiro. Use 100 como padrao e ajuste somente se precisar forcar ordem.'),
+                                        TextInput::make('confidence_threshold')
+                                            ->label('Threshold confianca')
+                                            ->numeric()
+                                            ->minValue(0)
+                                            ->maxValue(1)
+                                            ->step(0.01)
+                                            ->default(0.6)
+                                            ->required()
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Confianca minima (0 a 1) para o supervisor rotear esta conversa para o especialista. 0.6 = so envia se tiver 60%+ de certeza de que e esta intencao.'),
+                                    ]),
+                            ]),
+
+                        Tab::make('Transferencia humana')
+                            ->icon('heroicon-o-arrow-uturn-right')
+                            ->schema([
+                                Section::make('Configuracao')
+                                    ->description('Regras explicitas para pausar a automacao e transferir a conversa para atendimento humano.')
+                                    ->columns(2)
+                                    ->schema([
+                                        Toggle::make('handoff_config.enabled')
+                                            ->label('Permitir transferencia humana')
+                                            ->live()
+                                            ->default(false)
+                                            ->helperText('Quando habilitado, a tool request_human_handoff sera adicionada automaticamente ao especialista.')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Permite que este especialista escale a conversa para um atendente humano em situacoes definidas nas regras abaixo (ou quando a IA achar que nao consegue resolver).'),
+                                        Select::make('handoff_config.default_priority')
+                                            ->label('Prioridade padrao')
+                                            ->options(self::handoffPriorityOptions())
+                                            ->default('normal')
+                                            ->required(),
+                                        Textarea::make('handoff_config.customer_message')
+                                            ->label('Mensagem ao cliente')
+                                            ->rows(2)
+                                            ->default('Vou transferir voce para um atendente.')
+                                            ->columnSpanFull(),
+                                    ]),
+
+                                Section::make('Situacoes de transferencia')
+                                    ->description('Cada regra dispara um handoff quando o cliente menciona palavras-chave especificas.')
+                                    ->schema([
+                                        Repeater::make('handoff_config.rules')
+                                            ->hiddenLabel()
+                                            ->collapsible()
+                                            ->collapsed()
+                                            ->itemLabel(fn (array $state): string => self::ruleItemLabel($state))
+                                            ->addActionLabel('Adicionar regra')
+                                            ->schema([
+                                                TextInput::make('name')
+                                                    ->label('Nome')
+                                                    ->required()
+                                                    ->maxLength(120),
+                                                Toggle::make('enabled')
+                                                    ->label('Ativa')
+                                                    ->default(true),
+                                                TagsInput::make('keywords')
+                                                    ->label('Palavras-chave')
+                                                    ->separator(',')
+                                                    ->required()
+                                                    ->helperText('Ex: humano, atendente, cancelar, reembolso.'),
+                                                Select::make('priority')
+                                                    ->label('Prioridade')
+                                                    ->options(self::handoffPriorityOptions())
+                                                    ->default('normal')
+                                                    ->required(),
+                                                Textarea::make('reason')
+                                                    ->label('Motivo interno')
+                                                    ->rows(2)
+                                                    ->required()
+                                                    ->columnSpanFull(),
+                                                Textarea::make('customer_message')
+                                                    ->label('Mensagem especifica ao cliente')
+                                                    ->rows(2)
+                                                    ->columnSpanFull()
+                                                    ->helperText('Opcional. Sobrescreve a mensagem geral so para esta situacao.'),
+                                            ])
+                                            ->columns(2)
+                                            ->defaultItems(0)
+                                            ->columnSpanFull(),
+                                    ]),
+                            ]),
                     ]),
             ]);
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private static function ruleItemLabel(array $state): string
+    {
+        $name = $state['name'] ?? null;
+
+        if (! is_string($name) || trim($name) === '') {
+            return 'Nova regra';
+        }
+
+        return $name;
     }
 
     public function table(Table $table): Table
