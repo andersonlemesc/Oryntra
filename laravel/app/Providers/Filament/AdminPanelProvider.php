@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Tenancy\RegisterWorkspace;
+use App\Filament\Widgets\AgentRunStatsOverview;
+use App\Filament\Widgets\RecentFailedRunsTable;
+use App\Filament\Widgets\RunsThroughputChart;
+use App\Filament\Widgets\WaitingHumanRunsTable;
 use App\Models\Workspace;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
@@ -46,6 +50,10 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
                 AccountWidget::class,
+                AgentRunStatsOverview::class,
+                WaitingHumanRunsTable::class,
+                RunsThroughputChart::class,
+                RecentFailedRunsTable::class,
                 FilamentInfoWidget::class,
             ])
             ->middleware([
