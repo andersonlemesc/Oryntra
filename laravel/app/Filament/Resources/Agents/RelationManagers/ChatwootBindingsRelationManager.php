@@ -35,14 +35,16 @@ class ChatwootBindingsRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                Section::make()
+                Section::make('Conexao')
+                    ->description('Qual conta Chatwoot este agente atende e quais conversas ele ignora.')
                     ->columns(2)
                     ->schema([
                         Select::make('chatwoot_connection_id')
                             ->label('Conexao Chatwoot')
                             ->options(fn (): array => self::workspaceConnectionOptions())
                             ->searchable()
-                            ->required(),
+                            ->required()
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Conta Chatwoot cadastrada em Conexoes. Define onde o agente recebe mensagens e envia respostas.'),
                         Select::make('status')
                             ->label('Status')
                             ->options(self::statusOptions())
@@ -52,37 +54,51 @@ class ChatwootBindingsRelationManager extends RelationManager
                             ->label('Inboxes (IDs)')
                             ->helperText('Vazio = todas as inboxes')
                             ->placeholder('1, 2, 3')
-                            ->separator(','),
+                            ->separator(',')
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'IDs numericos das inboxes Chatwoot (canais como WhatsApp, web chat, etc.) onde este agente atua. Vazio = atende todas.'),
                         Toggle::make('ignore_assigned_conversations')
-                            ->label('Ignorar conversas ja atribuidas a humano'),
+                            ->label('Ignorar conversas ja atribuidas a humano')
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Quando ativo, se a conversa ja tem atendente humano atribuido, a IA nao responde. Evita conflito IA x atendente.'),
                         TagsInput::make('ignore_label_names')
                             ->label('Labels ignoradas')
                             ->placeholder('spam, fora-horario')
-                            ->separator(','),
-                        TextInput::make('handoff_label_name')
-                            ->label('Label de handoff')
-                            ->maxLength(255),
+                            ->separator(',')
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Conversas marcadas com qualquer uma dessas labels no Chatwoot sao ignoradas pela IA.'),
+                    ]),
+
+                Section::make('Destino do handoff')
+                    ->description('Para onde a conversa vai quando a IA transferir para humano.')
+                    ->columns(2)
+                    ->schema([
                         Select::make('handoff_assign_strategy')
-                            ->label('Destino do handoff')
+                            ->label('Estrategia')
                             ->options(self::handoffAssignStrategyOptions())
                             ->default('none')
                             ->live()
                             ->required()
                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Para quem o Chatwoot atribui a conversa quando a IA transferir. "Time" = roteia para um time inteiro (ex: Suporte N1). "Atendente" = atendente especifico. "Time e atendente" = ambos.'),
+                        TextInput::make('handoff_label_name')
+                            ->label('Label de handoff')
+                            ->maxLength(255)
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Label aplicada na conversa do Chatwoot ao transferir. Util para filtrar conversas em handoff nos relatorios. Ex: "ia-handoff".'),
                         TextInput::make('handoff_team_id')
                             ->label('ID do time Chatwoot')
                             ->numeric()
-                            ->visible(fn (Get $get): bool => in_array($get('handoff_assign_strategy'), ['team', 'team_then_agent'], true)),
+                            ->visible(fn (Get $get): bool => in_array($get('handoff_assign_strategy'), ['team', 'team_then_agent'], true))
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'ID numerico do time no Chatwoot (visivel na URL ao abrir o time). Ex: 12.'),
                         TextInput::make('handoff_team_name')
                             ->label('Nome do time')
-                            ->visible(fn (Get $get): bool => in_array($get('handoff_assign_strategy'), ['team', 'team_then_agent'], true)),
+                            ->visible(fn (Get $get): bool => in_array($get('handoff_assign_strategy'), ['team', 'team_then_agent'], true))
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Nome amigavel do time. Aparece nos logs e telas do painel. Nao afeta a atribuicao no Chatwoot.'),
                         TextInput::make('handoff_agent_id')
                             ->label('ID do atendente Chatwoot')
                             ->numeric()
-                            ->visible(fn (Get $get): bool => in_array($get('handoff_assign_strategy'), ['agent', 'team_then_agent'], true)),
+                            ->visible(fn (Get $get): bool => in_array($get('handoff_assign_strategy'), ['agent', 'team_then_agent'], true))
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'ID numerico do atendente no Chatwoot (visivel no perfil do usuario). Ex: 34.'),
                         TextInput::make('handoff_agent_name')
                             ->label('Nome do atendente')
-                            ->visible(fn (Get $get): bool => in_array($get('handoff_assign_strategy'), ['agent', 'team_then_agent'], true)),
+                            ->visible(fn (Get $get): bool => in_array($get('handoff_assign_strategy'), ['agent', 'team_then_agent'], true))
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Nome amigavel do atendente. Aparece nos logs e telas do painel.'),
                         Textarea::make('handoff_private_note_template')
                             ->label('Nota interna para atendente')
                             ->rows(4)
