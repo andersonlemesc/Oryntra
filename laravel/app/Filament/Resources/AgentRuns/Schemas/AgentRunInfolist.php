@@ -7,6 +7,7 @@ namespace App\Filament\Resources\AgentRuns\Schemas;
 use App\Enums\AgentRunStatus;
 use App\Models\AgentRun;
 use Carbon\CarbonInterface;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -143,6 +144,32 @@ class AgentRunInfolist
                                     ]),
                             ]),
 
+                        Tab::make('Trace')
+                            ->icon('heroicon-o-bars-arrow-down')
+                            ->schema([
+                                Section::make('Timeline da execucao')
+                                    ->description('Sequencia de chamadas LLM, ferramentas e decisoes do agente para esta conversa.')
+                                    ->schema([
+                                        RepeatableEntry::make('trace_steps')
+                                            ->hiddenLabel()
+                                            ->state(fn (AgentRun $record): array => self::traceSteps($record))
+                                            ->columnSpanFull()
+                                            ->schema([
+                                                TextEntry::make('step')->label('#'),
+                                                TextEntry::make('type')
+                                                    ->label('Tipo')
+                                                    ->badge()
+                                                    ->formatStateUsing(fn (string $state): string => self::stepTypeLabel($state))
+                                                    ->color(fn (string $state): string => self::stepTypeColor($state)),
+                                                TextEntry::make('tool')->label('Ferramenta')->placeholder('-'),
+                                                TextEntry::make('specialist_id')->label('Especialista')->placeholder('-'),
+                                                TextEntry::make('latency_ms')->label('Latencia (ms)')->placeholder('-'),
+                                                TextEntry::make('ts')->label('Timestamp')->placeholder('-'),
+                                            ])
+                                            ->columns(3),
+                                    ]),
+                            ]),
+
                         Tab::make('Trace bruto')
                             ->icon('heroicon-o-code-bracket-square')
                             ->schema([
@@ -210,6 +237,54 @@ class AgentRunInfolist
         $encoded = json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         return $encoded === false ? '-' : $encoded;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function traceSteps(AgentRun $record): array
+    {
+        $trace = data_get($record->output, 'trace');
+
+        if (! is_array($trace)) {
+            return [];
+        }
+
+        $steps = [];
+        foreach ($trace as $item) {
+            if (is_array($item)) {
+                /** @var array<string, mixed> $item */
+                $steps[] = $item;
+            }
+        }
+
+        return $steps;
+    }
+
+    private static function stepTypeLabel(string $type): string
+    {
+        return match ($type) {
+            'supervisor_route' => 'Roteamento',
+            'llm_call' => 'LLM',
+            'tool_call' => 'Chamada de tool',
+            'tool_result' => 'Resultado de tool',
+            'specialist_response' => 'Resposta',
+            'handoff' => 'Handoff',
+            default => $type,
+        };
+    }
+
+    private static function stepTypeColor(string $type): string
+    {
+        return match ($type) {
+            'supervisor_route' => 'info',
+            'llm_call' => 'primary',
+            'tool_call' => 'warning',
+            'tool_result' => 'success',
+            'specialist_response' => 'success',
+            'handoff' => 'danger',
+            default => 'gray',
+        };
     }
 
     private static function duration(AgentRun $record): string

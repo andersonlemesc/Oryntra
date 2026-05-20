@@ -51,6 +51,51 @@ it('filters runs by the waiting_human toggle filter', function () {
         ->assertCanNotSeeTableRecords([$completedRun]);
 });
 
+it('renders the trace timeline tab with multiple step types', function () {
+    [$user, $workspace] = createUserWithWorkspaceForAgentRuns();
+    $run = AgentRun::factory()->for($workspace)->create([
+        'status' => AgentRunStatus::Completed,
+        'started_at' => now()->subMinute(),
+        'output' => [
+            'response' => ['content' => 'resposta final'],
+            'trace' => [
+                [
+                    'step' => 1,
+                    'type' => 'supervisor_route',
+                    'specialist_id' => 5,
+                    'tool' => null,
+                    'input' => ['intent' => 'vendas'],
+                    'output' => ['specialist_id' => 5],
+                    'tokens' => ['input' => 30, 'output' => 5],
+                    'latency_ms' => 220,
+                    'ts' => now()->subMinute()->toISOString(),
+                ],
+                [
+                    'step' => 2,
+                    'type' => 'tool_call',
+                    'specialist_id' => 5,
+                    'tool' => 'chatwoot_send_message',
+                    'input' => ['conversation_id' => 99],
+                    'output' => [],
+                    'tokens' => ['input' => 0, 'output' => 0],
+                    'latency_ms' => 80,
+                    'ts' => now()->subMinute()->addSecond()->toISOString(),
+                ],
+            ],
+        ],
+    ]);
+
+    actingAs($user);
+    bootFilamentTenantForAgentRuns($workspace);
+
+    Livewire::test(ViewAgentRun::class, ['record' => $run->getRouteKey()])
+        ->assertSuccessful()
+        ->assertSee('Roteamento')
+        ->assertSee('Chamada de tool')
+        ->assertSee('chatwoot_send_message')
+        ->assertSee('220');
+});
+
 it('renders the view page with handoff payload and side-effect badges', function () {
     [$user, $workspace] = createUserWithWorkspaceForAgentRuns();
     $run = AgentRun::factory()->for($workspace)->create([
