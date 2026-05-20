@@ -8,8 +8,11 @@ class ChatwootMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str | None = None
+    chatwoot_message_id: str | None = None
+    webhook_event_id: int | None = None
     content: str | None = None
     created_at: datetime | None = None
+    received_at: datetime | None = None
     message_type: str | None = None
     content_type: str | None = None
     attachments: list[dict[str, Any]] = Field(default_factory=list)

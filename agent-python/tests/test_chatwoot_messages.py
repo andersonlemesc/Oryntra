@@ -1,7 +1,18 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from oryntra_agent import auth
+from oryntra_agent import settings as settings_module
+from oryntra_agent.agent import supervisor
+from oryntra_agent.agent.supervisor import get_runtime_graph
 from oryntra_agent.main import app
+
+
+@pytest.fixture(autouse=True)
+def clear_runtime_graph_cache() -> None:
+    get_runtime_graph.cache_clear()
+    settings_module.settings.langgraph_checkpointer = "memory"
+    supervisor._postgres_checkpointer_context = None
 
 
 def valid_payload() -> dict[str, object]:
@@ -13,8 +24,11 @@ def valid_payload() -> dict[str, object]:
         "messages": [
             {
                 "id": "123",
+                "chatwoot_message_id": "123",
+                "webhook_event_id": 385,
                 "content": "oi",
                 "created_at": "2026-05-17T20:00:00Z",
+                "received_at": "2026-05-17T20:00:01Z",
                 "message_type": "incoming",
                 "content_type": "text",
                 "attachments": [],
