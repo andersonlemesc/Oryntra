@@ -67,7 +67,8 @@ class ChatwootBindingsRelationManager extends RelationManager
                             ->options(self::handoffAssignStrategyOptions())
                             ->default('none')
                             ->live()
-                            ->required(),
+                            ->required()
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Para quem o Chatwoot atribui a conversa quando a IA transferir. "Time" = roteia para um time inteiro (ex: Suporte N1). "Atendente" = atendente especifico. "Time e atendente" = ambos.'),
                         TextInput::make('handoff_team_id')
                             ->label('ID do time Chatwoot')
                             ->numeric()
@@ -86,7 +87,8 @@ class ChatwootBindingsRelationManager extends RelationManager
                             ->label('Nota interna para atendente')
                             ->rows(4)
                             ->helperText('Use {reason}, {priority}, {specialist_id}, {conversation_id} e {customer_message}.')
-                            ->columnSpanFull(),
+                            ->columnSpanFull()
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Mensagem privada (so o atendente ve, o cliente nao) anexada na conversa do Chatwoot quando o handoff acontece. Use as variaveis entre chaves para personalizar.'),
                     ]),
             ]);
     }

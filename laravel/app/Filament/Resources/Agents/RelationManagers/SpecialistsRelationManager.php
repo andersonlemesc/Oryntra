@@ -59,12 +59,14 @@ class SpecialistsRelationManager extends RelationManager
                             ->required()
                             ->rows(5)
                             ->columnSpanFull()
-                            ->helperText('Defina a responsabilidade deste especialista. O supervisor usa isso para rotear e o LLM usa para responder.'),
+                            ->helperText('Defina a responsabilidade deste especialista. O supervisor usa isso para rotear e o LLM usa para responder.')
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Instrucao em texto que define o "papel" do especialista. Exemplo: "Voce e especialista em vendas. Tire duvidas sobre precos, planos e prazos. Nunca fale de suporte tecnico."'),
                         TagsInput::make('intent_keywords')
                             ->label('Palavras-chave de intencao')
                             ->required()
                             ->separator(',')
-                            ->helperText('Ajuda o roteamento deterministico quando o supervisor LLM nao estiver disponivel.'),
+                            ->helperText('Ajuda o roteamento deterministico quando o supervisor LLM nao estiver disponivel.')
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Lista de palavras que o cliente pode usar para indicar essa intencao. Ex.: para Vendas use "preco, comprar, cotacao, plano". Funciona como fallback se o supervisor LLM falhar.'),
                     ]),
 
                 Section::make('LLM')
@@ -95,12 +97,14 @@ class SpecialistsRelationManager extends RelationManager
                         TagsInput::make('tools_allowlist')
                             ->label('Tools permitidas')
                             ->suggestions(fn (): array => app(NativeToolRegistry::class)->options())
-                            ->separator(','),
+                            ->separator(',')
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Lista das ferramentas que este especialista pode chamar (enviar mensagem, transferir para humano, atribuir time, etc.). Sem isso, o especialista so consegue responder em texto.'),
                         TextInput::make('priority')
                             ->label('Prioridade')
                             ->numeric()
                             ->default(100)
-                            ->required(),
+                            ->required()
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Em caso de empate de intencao, o especialista com menor numero atende primeiro. Use 100 como padrao e ajuste somente se precisar forcar ordem.'),
                         TextInput::make('confidence_threshold')
                             ->label('Threshold confianca')
                             ->numeric()
@@ -108,7 +112,8 @@ class SpecialistsRelationManager extends RelationManager
                             ->maxValue(1)
                             ->step(0.01)
                             ->default(0.6)
-                            ->required(),
+                            ->required()
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Confianca minima (0 a 1) para o supervisor rotear esta conversa para o especialista. 0.6 = so envia se tiver 60%+ de certeza de que e esta intencao.'),
                     ]),
 
                 Section::make('Transferencia humana')
@@ -119,7 +124,8 @@ class SpecialistsRelationManager extends RelationManager
                             ->label('Permitir transferencia humana')
                             ->live()
                             ->default(false)
-                            ->helperText('Quando habilitado, a tool request_human_handoff sera adicionada automaticamente ao especialista.'),
+                            ->helperText('Quando habilitado, a tool request_human_handoff sera adicionada automaticamente ao especialista.')
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Permite que este especialista escale a conversa para um atendente humano em situacoes definidas nas regras abaixo (ou quando a IA achar que nao consegue resolver).'),
                         Select::make('handoff_config.default_priority')
                             ->label('Prioridade padrao')
                             ->options(self::handoffPriorityOptions())

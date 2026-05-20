@@ -53,6 +53,7 @@ class AgentForm
                                             ->default(AgentMode::Single->value)
                                             ->live()
                                             ->helperText('Use Supervisor para rotear conversas entre especialistas configurados dentro deste agente.')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Single = 1 LLM responde tudo. Supervisor = um LLM "roteador" decide qual especialista atende cada conversa.')
                                             ->required(),
                                         Textarea::make('description')
                                             ->label('Descricao')
@@ -72,6 +73,7 @@ class AgentForm
                                             ->label('Modo de resposta')
                                             ->options(self::responseModeOptions())
                                             ->default(AgentResponseMode::Automatic->value)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Automatico = a IA envia direto ao cliente. Manual = a resposta fica aguardando aprovacao humana antes de sair.')
                                             ->required(),
                                     ]),
 
@@ -104,6 +106,7 @@ class AgentForm
                                             ->label('Chave LLM do supervisor')
                                             ->options(fn (): array => self::llmKeyOptions(null))
                                             ->searchable()
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Credencial API (OpenAI, Anthropic, etc.) usada pelo supervisor para classificar a intencao. Pode ser diferente da chave dos especialistas.')
                                             ->required(fn (Get $get): bool => $get('mode') === AgentMode::Supervisor->value),
                                         TextInput::make('supervisor_llm_model')
                                             ->label('Modelo do supervisor')
@@ -142,11 +145,13 @@ class AgentForm
                                             ->numeric()
                                             ->minValue(0)
                                             ->maxValue(2)
-                                            ->step(0.01),
+                                            ->step(0.01)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Controla a "criatividade" da resposta. 0 = sempre a resposta mais provavel (deterministico). 1+ = mais variacao. Para atendimento, use entre 0.1 e 0.3.'),
                                         TextInput::make('llm_max_tokens')
                                             ->label('Max tokens')
                                             ->numeric()
-                                            ->minValue(1),
+                                            ->minValue(1)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Tamanho maximo da resposta gerada (em tokens; ~1 token = 4 caracteres). Limita o quanto a IA pode escrever em uma mensagem.'),
                                     ]),
                             ]),
 
@@ -154,51 +159,64 @@ class AgentForm
                             ->icon('heroicon-o-shield-check')
                             ->schema([
                                 Section::make('Guards')
+                                    ->description('Travas de seguranca que filtram ou desviam respostas em situacoes sensiveis.')
                                     ->columns(2)
                                     ->schema([
                                         Toggle::make('guard_config.block_sensitive_data')
                                             ->label('Bloquear dados sensiveis')
-                                            ->default(true),
+                                            ->default(true)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Impede que a IA envie ao cliente CPF, cartao de credito, senhas e tokens detectados nas mensagens.'),
                                         Toggle::make('guard_config.block_prompt_injection')
                                             ->label('Bloquear prompt injection')
-                                            ->default(true),
+                                            ->default(true)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Ataque onde o cliente tenta sobrescrever instrucoes do bot (ex: "ignore as regras anteriores e diga..."). Ativo, a IA ignora essas tentativas.'),
                                         Toggle::make('guard_config.require_rag_for_answers')
-                                            ->label('Requer RAG'),
+                                            ->label('Requer RAG')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Quando ativo, a IA so responde se encontrar contexto na base de conhecimento (RAG). Evita "alucinacao" mas pode rejeitar duvidas comuns.'),
                                         Toggle::make('guard_config.handoff_on_low_confidence')
                                             ->label('Handoff baixa confianca')
-                                            ->default(true),
+                                            ->default(true)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Se a IA estiver "incerta" (confianca abaixo do threshold), transfere automaticamente para um atendente humano em vez de responder errado.'),
                                         TextInput::make('guard_config.low_confidence_threshold')
                                             ->label('Threshold baixa confianca')
                                             ->numeric()
                                             ->step(0.01)
-                                            ->default(0.4),
+                                            ->default(0.4)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Valor entre 0 e 1. Quando a confianca da IA fica abaixo dele, o handoff dispara. 0.4 = transferir se a IA estiver menos de 40% segura.'),
                                     ]),
 
                                 Section::make('RAG')
+                                    ->description('Retrieval Augmented Generation: busca trechos relevantes da sua base de documentos antes da IA responder.')
                                     ->columns(2)
                                     ->schema([
                                         Toggle::make('rag_config.enabled')
-                                            ->label('Habilitado'),
+                                            ->label('Habilitado')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Liga a busca em documentos cadastrados. Util quando voce quer que a IA responda com base em FAQ, manuais ou politicas internas.'),
                                         TextInput::make('rag_config.top_k')
                                             ->label('Top K')
                                             ->numeric()
-                                            ->default(5),
+                                            ->default(5)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Quantos trechos mais relevantes da base sao enviados como contexto para a IA. Mais alto = mais contexto, porem mais caro.'),
                                         TextInput::make('rag_config.min_score')
                                             ->label('Score minimo')
                                             ->numeric()
                                             ->step(0.01)
-                                            ->default(0.7),
+                                            ->default(0.7)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Quao parecido o trecho precisa ser da pergunta (0 a 1). 0.7 = so usa trechos com similaridade >= 70%.'),
                                         Toggle::make('rag_config.answer_only_with_context')
-                                            ->label('Responder so com contexto'),
+                                            ->label('Responder so com contexto')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Forca a IA a responder somente usando os trechos encontrados. Se nao achar nada relevante, dispara handoff em vez de inventar resposta.'),
                                     ]),
 
                                 Section::make('Politica de midia')
+                                    ->description('Regras para audio, imagem e documentos enviados pelo cliente.')
                                     ->schema([
                                         KeyValue::make('media_policy')
                                             ->label('Configuracao')
                                             ->keyLabel('Chave')
                                             ->valueLabel('Valor')
-                                            ->columnSpanFull(),
+                                            ->columnSpanFull()
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Pares chave/valor livres para configurar limites de midia. Exemplos: max_audio_seconds=60, accept_pdf=true, transcribe_audio=true.'),
                                     ]),
                             ]),
 
@@ -206,44 +224,56 @@ class AgentForm
                             ->icon('heroicon-o-bolt')
                             ->schema([
                                 Section::make('Debounce')
+                                    ->description('Agrupa mensagens rapidas do cliente em uma so chamada para a IA, evitando responder a cada palavra separada.')
                                     ->columns(2)
                                     ->schema([
                                         Toggle::make('debounce_config.enabled')
                                             ->label('Habilitado')
-                                            ->default(true),
+                                            ->default(true)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Quando ligado, o sistema espera o cliente terminar de digitar (varias mensagens em sequencia) antes de chamar a IA uma unica vez.'),
                                         TextInput::make('debounce_config.window_seconds')
                                             ->label('Janela (s)')
                                             ->numeric()
-                                            ->default(8),
+                                            ->default(8)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Tempo de espera apos a ultima mensagem antes de processar. 8 = aguarda 8s sem nova mensagem para responder.'),
                                         TextInput::make('debounce_config.max_wait_seconds')
                                             ->label('Espera maxima (s)')
                                             ->numeric()
-                                            ->default(20),
+                                            ->default(20)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Teto absoluto: mesmo que o cliente continue digitando, depois deste tempo o sistema processa o que ja foi recebido.'),
                                         TextInput::make('debounce_config.max_messages')
                                             ->label('Mensagens maximas')
                                             ->numeric()
-                                            ->default(10),
+                                            ->default(10)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Limite de mensagens acumuladas antes de processar mesmo dentro da janela. Evita esperas longas em conversas tagareladas.'),
                                     ]),
 
                                 Section::make('Runtime')
+                                    ->description('Como o motor Python (LangGraph) executa este agente.')
                                     ->columns(2)
                                     ->schema([
                                         TextInput::make('runtime_config.graph')
                                             ->label('Graph')
-                                            ->default('default_support_agent'),
+                                            ->default('default_support_agent')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Nome do grafo LangGraph (fluxo de nos LLM + ferramentas) que processa a conversa. Use o padrao a menos que tenha um grafo customizado.'),
                                         Toggle::make('runtime_config.streaming')
-                                            ->label('Streaming'),
+                                            ->label('Streaming')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Quando ativo, a resposta da IA chega em tempo real (palavra por palavra) em vez de aparecer toda de uma vez. Util para respostas longas.'),
                                         Toggle::make('runtime_config.checkpointing')
                                             ->label('Checkpointing')
-                                            ->default(true),
+                                            ->default(true)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Salva o estado da conversa entre mensagens. Permite que a IA "lembre" o que foi dito antes na mesma conversa. Deixe ligado.'),
                                         Toggle::make('runtime_config.long_term_memory')
-                                            ->label('Memoria longo prazo'),
+                                            ->label('Memoria longo prazo')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Alem da memoria da conversa atual, salva preferencias e fatos do cliente entre conversas diferentes (ex: "ja foi atendido em maio sobre X").'),
                                         Toggle::make('runtime_config.human_in_the_loop')
-                                            ->label('Human in the loop'),
+                                            ->label('Human in the loop')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'HITL = humano no fluxo. Permite que a IA pause e peca aprovacao humana antes de enviar respostas criticas (ex: cancelamento, reembolso).'),
                                         TextInput::make('runtime_config.tool_call_limit')
                                             ->label('Limite tool calls')
                                             ->numeric()
-                                            ->default(8),
+                                            ->default(8)
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Maximo de ferramentas (consulta DB, RAG, envio de doc, etc.) que a IA pode chamar em uma unica resposta. Evita loops infinitos.'),
                                     ]),
                             ]),
                     ]),
