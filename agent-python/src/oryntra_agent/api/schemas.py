@@ -25,6 +25,30 @@ class SupervisorConfig(BaseModel):
     llm_api_key: SecretStr | None = Field(default=None, exclude=True)
 
 
+class HandoffRuleConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    enabled: bool = True
+    keywords: list[str] = Field(default_factory=list)
+    priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    reason: str
+    customer_message: str | None = None
+
+
+class HandoffConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    default_priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    customer_message: str | None = "Vou transferir voce para um atendente."
+    private_note: str | None = None
+    assign_strategy: Literal["none", "team", "agent", "team_then_agent"] = "none"
+    team_id: int | None = None
+    agent_id: int | None = None
+    rules: list[HandoffRuleConfig] = Field(default_factory=list)
+
+
 class SpecialistConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -38,6 +62,7 @@ class SpecialistConfig(BaseModel):
     llm_api_key: SecretStr | None = Field(default=None, exclude=True)
     llm_temperature: float = Field(ge=0, le=2)
     tools: list[str] = Field(default_factory=list)
+    handoff_config: HandoffConfig = Field(default_factory=HandoffConfig)
     intent_keywords: list[str] = Field(default_factory=list)
     confidence_threshold: float = Field(ge=0, le=1)
     fallback_specialist_id: int | None = None

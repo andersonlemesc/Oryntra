@@ -31,12 +31,24 @@ it('casts status, inbox_ids, ignore_label_names', function () {
     $binding = AgentChatwootBinding::factory()->create([
         'inbox_ids' => [1, 2, 3],
         'ignore_label_names' => ['spam', 'lost'],
+        'handoff_team_id' => 12,
+        'handoff_agent_id' => 34,
+        'handoff_team_name' => 'Suporte',
+        'handoff_agent_name' => 'Ada',
+        'handoff_private_note_template' => 'Motivo: {reason}',
+        'handoff_assign_strategy' => 'team_then_agent',
     ]);
 
     expect($binding->status)->toBe(AgentChatwootBindingStatus::Active)
         ->and($binding->inbox_ids)->toBe([1, 2, 3])
         ->and($binding->ignore_label_names)->toBe(['spam', 'lost'])
-        ->and($binding->ignore_assigned_conversations)->toBeFalse();
+        ->and($binding->ignore_assigned_conversations)->toBeFalse()
+        ->and($binding->handoff_team_id)->toBe(12)
+        ->and($binding->handoff_agent_id)->toBe(34)
+        ->and($binding->handoff_team_name)->toBe('Suporte')
+        ->and($binding->handoff_agent_name)->toBe('Ada')
+        ->and($binding->handoff_private_note_template)->toBe('Motivo: {reason}')
+        ->and($binding->handoff_assign_strategy)->toBe('team_then_agent');
 });
 
 it('allows only one active binding per chatwoot connection', function () {

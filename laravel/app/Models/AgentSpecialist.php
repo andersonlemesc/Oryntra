@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'llm_model',
     'llm_temperature',
     'tools_allowlist',
+    'handoff_config',
     'priority',
     'confidence_threshold',
     'fallback_specialist_id',
@@ -81,6 +82,7 @@ class AgentSpecialist extends Model
         return [
             'intent_keywords' => 'array',
             'tools_allowlist' => 'array',
+            'handoff_config' => 'array',
             'llm_temperature' => 'float',
             'priority' => 'integer',
             'confidence_threshold' => 'float',

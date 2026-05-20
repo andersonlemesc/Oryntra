@@ -44,13 +44,32 @@ it('casts agent mode and specialist fields', function () {
         'workspace_id' => $agent->workspace_id,
         'intent_keywords' => ['vendas', 'preco'],
         'tools_allowlist' => ['search_kb'],
+        'handoff_config' => [
+            'enabled' => true,
+            'default_priority' => 'high',
+            'customer_message' => 'Vou transferir voce para um atendente.',
+            'rules' => [
+                [
+                    'name' => 'Cancelamento',
+                    'enabled' => true,
+                    'keywords' => ['cancelar'],
+                    'priority' => 'high',
+                    'reason' => 'Cliente pediu cancelamento.',
+                ],
+            ],
+        ],
         'status' => AgentSpecialistStatus::Inactive,
     ]);
+
+    $handoffConfig = $specialist->getAttribute('handoff_config');
+    assert(is_array($handoffConfig));
 
     expect($agent->mode)->toBe(AgentMode::Supervisor)
         ->and($specialist->status)->toBe(AgentSpecialistStatus::Inactive)
         ->and($specialist->intent_keywords)->toBe(['vendas', 'preco'])
-        ->and($specialist->tools_allowlist)->toBe(['search_kb']);
+        ->and($specialist->tools_allowlist)->toBe(['search_kb'])
+        ->and($handoffConfig['enabled'])->toBeTrue()
+        ->and($handoffConfig['rules'][0]['keywords'])->toBe(['cancelar']);
 });
 
 it('enforces unique specialist name per agent', function () {

@@ -62,7 +62,7 @@ it('sends the runtime payload with internal token', function () {
 
     expect($result['status'])->toBe('completed');
 
-    Http::assertSent(function (Request $request) use ($workspace, $agent) {
+    Http::assertSent(function (Request $request) use ($workspace, $agent, $run) {
         return $request->url() === 'http://agent-python:8000/internal/chatwoot/messages'
             && $request->hasHeader('X-Internal-Token', 'ci-token')
             && $request['workspace_id'] === $workspace->id
@@ -70,7 +70,9 @@ it('sends the runtime payload with internal token', function () {
             && $request['agent_mode'] === 'single'
             && $request['messages'][0]['content'] === 'oi'
             && $request['contact']['id'] === 7
-            && $request['inbox']['id'] === 3;
+            && $request['inbox']['id'] === 3
+            && $request['runtime_config']['agent_run_id'] === $run->id
+            && $request['runtime_config']['conversation_id'] === 99;
     });
 });
 

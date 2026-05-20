@@ -63,6 +63,21 @@ it('sends supervisor config and active specialists to runtime', function () {
         'intent_keywords' => ['ajuda'],
         'llm_key_id' => $specialistLlmKey->id,
         'llm_model' => 'gpt-4.1-mini',
+        'tools_allowlist' => ['request_human_handoff'],
+        'handoff_config' => [
+            'enabled' => true,
+            'default_priority' => 'high',
+            'customer_message' => 'Vou transferir voce para um atendente.',
+            'rules' => [
+                [
+                    'name' => 'Pedido humano',
+                    'enabled' => true,
+                    'keywords' => ['humano', 'atendente'],
+                    'priority' => 'high',
+                    'reason' => 'Cliente pediu atendimento humano.',
+                ],
+            ],
+        ],
         'priority' => 10,
     ]);
 
@@ -105,6 +120,9 @@ it('sends supervisor config and active specialists to runtime', function () {
             && $request['specialists'][0]['llm_provider'] === 'openai'
             && $request['specialists'][0]['llm_model'] === 'gpt-4.1-mini'
             && $request['specialists'][0]['llm_api_key'] === 'sk-specialist-test'
-            && $request['specialists'][0]['intent_keywords'] === ['ajuda'];
+            && $request['specialists'][0]['intent_keywords'] === ['ajuda']
+            && $request['specialists'][0]['tools'] === ['request_human_handoff']
+            && $request['specialists'][0]['handoff_config']['enabled'] === true
+            && $request['specialists'][0]['handoff_config']['rules'][0]['keywords'] === ['humano', 'atendente'];
     });
 });

@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     )
 
     internal_api_token: str = ""
+    laravel_internal_base_url: str = "http://laravel-app"
+    agent_runtime_internal_token: str = ""
     postgres_url: str = "postgresql://oryntra:oryntra_dev_pw@postgres:5432/oryntra"
     langgraph_checkpointer: str = "memory"
     log_level: str = "INFO"
