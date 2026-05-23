@@ -110,6 +110,10 @@ class DispatchAgentRunJob implements ShouldQueue
                     'messages' => count($run->input['messages'] ?? []),
                     'runtime_status' => $output['status'],
                 ]);
+
+                if ($output['status'] === AgentRunStatus::Completed->value) {
+                    ExtractContactMemoryJob::dispatch($run->id)->afterCommit();
+                }
             } catch (Throwable $e) {
                 $run->forceFill([
                     'status' => AgentRunStatus::Failed,

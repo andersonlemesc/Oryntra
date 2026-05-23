@@ -15,6 +15,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TagsInput;
@@ -266,6 +267,51 @@ class SpecialistsRelationManager extends RelationManager
                                             ->helperText('Quando habilitado, a IA pode chamar chatwoot_get_contact e chatwoot_update_contact. So edita nome, email e telefone. Nao mexe em custom attributes.'),
                                     ]),
                             ]),
+
+                        Tab::make('Memoria longo prazo')
+                            ->icon('heroicon-o-bookmark')
+                            ->schema([
+                                Section::make('Extracao automatica')
+                                    ->description('Apos cada turno completo, dispara um job que pede ao LLM novos fatos sobre o cliente.')
+                                    ->columns(2)
+                                    ->schema([
+                                        Toggle::make('memory_config.extraction_enabled')
+                                            ->label('Extrair memoria via LLM')
+                                            ->live()
+                                            ->default(false)
+                                            ->helperText('Custo de tokens adicional por turno. Use so quando o ganho de contexto valer.'),
+                                        CheckboxList::make('memory_config.extraction_types')
+                                            ->label('Tipos extraidos')
+                                            ->options([
+                                                'preference' => 'Preferencias',
+                                                'fact' => 'Fatos',
+                                                'constraint' => 'Restricoes',
+                                                'history' => 'Historico',
+                                                'custom' => 'Personalizados',
+                                            ])
+                                            ->default(['preference', 'fact', 'constraint'])
+                                            ->visible(fn (Get $get): bool => (bool) $get('memory_config.extraction_enabled'))
+                                            ->columns(2),
+                                    ]),
+                                Section::make('Injecao no prompt')
+                                    ->description('Antes de cada resposta, as memorias mais recentes do contato sao adicionadas ao system message do especialista.')
+                                    ->columns(2)
+                                    ->schema([
+                                        Toggle::make('memory_config.injection_enabled')
+                                            ->label('Incluir memorias no prompt')
+                                            ->live()
+                                            ->default(false)
+                                            ->helperText('Quando ativo, o especialista enxerga o que o contato ja disse em conversas anteriores.'),
+                                        TextInput::make('memory_config.injection_limit')
+                                            ->label('Limite de memorias')
+                                            ->numeric()
+                                            ->minValue(1)
+                                            ->maxValue(200)
+                                            ->placeholder('Vazio = todas')
+                                            ->visible(fn (Get $get): bool => (bool) $get('memory_config.injection_enabled'))
+                                            ->helperText('Top N por data de criacao desc. Vazio = sem limite.'),
+                                    ]),
+                            ]),
                     ]),
             ]);
     }
@@ -393,10 +439,15 @@ class SpecialistsRelationManager extends RelationManager
         $contactConfig = is_array($data['contact_tools_config'] ?? null)
             ? $data['contact_tools_config']
             : [];
+        $memoryConfig = is_array($data['memory_config'] ?? null)
+            ? $data['memory_config']
+            : [];
 
         $humanEnabled = (bool) ($handoffConfig['enabled'] ?? false);
         $teamEnabled = (bool) ($handoffConfig['team_enabled'] ?? false);
         $contactUpdateEnabled = (bool) ($contactConfig['update_enabled'] ?? false);
+        $memoryExtractionEnabled = (bool) ($memoryConfig['extraction_enabled'] ?? false);
+        $memoryInjectionEnabled = (bool) ($memoryConfig['injection_enabled'] ?? false);
 
         $toolsAllowlist = is_array($data['tools_allowlist'] ?? null)
             ? array_values($data['tools_allowlist'])
@@ -435,9 +486,25 @@ class SpecialistsRelationManager extends RelationManager
         $contactConfig['update_enabled'] = $contactUpdateEnabled;
         $contactConfig['update_fields'] = ['name', 'email', 'phone_number'];
 
+        $memoryConfig['extraction_enabled'] = $memoryExtractionEnabled;
+        $memoryConfig['injection_enabled'] = $memoryInjectionEnabled;
+        $memoryConfig['extraction_types'] = $memoryExtractionEnabled && is_array($memoryConfig['extraction_types'] ?? null)
+            ? array_values(array_filter(
+                $memoryConfig['extraction_types'],
+                fn (mixed $type): bool => in_array($type, ['preference', 'fact', 'constraint', 'history', 'custom'], true),
+            ))
+            : ($memoryExtractionEnabled ? ['preference', 'fact', 'constraint'] : []);
+
+        if ($memoryInjectionEnabled && filled($memoryConfig['injection_limit'] ?? null)) {
+            $memoryConfig['injection_limit'] = max(1, (int) $memoryConfig['injection_limit']);
+        } else {
+            $memoryConfig['injection_limit'] = null;
+        }
+
         $data['tools_allowlist'] = $toolsAllowlist;
         $data['handoff_config'] = $handoffConfig;
         $data['contact_tools_config'] = $contactConfig;
+        $data['memory_config'] = $memoryConfig;
         $data['intent_keywords'] = self::normalizeKeywordList($data['intent_keywords'] ?? null);
 
         return $data;
