@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Contacts\Tables;
 
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -14,6 +15,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class ContactsTable
 {
@@ -90,10 +92,25 @@ class ContactsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    self::leadStatusBulkAction('qualified', 'Marcar como qualificado', 'heroicon-o-star'),
+                    self::leadStatusBulkAction('won', 'Marcar como convertido', 'heroicon-o-trophy'),
+                    self::leadStatusBulkAction('lost', 'Marcar como perdido', 'heroicon-o-x-circle'),
+                    self::leadStatusBulkAction('dormant', 'Marcar como inativo', 'heroicon-o-moon'),
                     DeleteBulkAction::make(),
                     ForceDeleteBulkAction::make(),
                     RestoreBulkAction::make(),
                 ]),
             ]);
+    }
+
+    private static function leadStatusBulkAction(string $status, string $label, string $icon): BulkAction
+    {
+        return BulkAction::make("lead_status_{$status}")
+            ->label($label)
+            ->icon($icon)
+            ->requiresConfirmation()
+            ->action(function (Collection $records) use ($status): void {
+                $records->each(fn ($record) => $record->forceFill(['lead_status' => $status])->save());
+            });
     }
 }

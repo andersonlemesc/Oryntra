@@ -6,7 +6,9 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\Tenancy\RegisterWorkspace;
 use App\Filament\Widgets\AgentRunStatsOverview;
+use App\Filament\Widgets\RecentContactsTable;
 use App\Filament\Widgets\RecentFailedRunsTable;
+use App\Filament\Widgets\RecentLeadsStatsOverview;
 use App\Filament\Widgets\RunsThroughputChart;
 use App\Filament\Widgets\WaitingHumanRunsTable;
 use App\Models\Workspace;
@@ -46,6 +48,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->navigationGroups([
                 'Agentes',
+                'Contatos',
                 'Chatwoot',
                 'Plataforma',
             ])
@@ -61,6 +64,8 @@ class AdminPanelProvider extends PanelProvider
                 WaitingHumanRunsTable::class,
                 RunsThroughputChart::class,
                 RecentFailedRunsTable::class,
+                RecentLeadsStatsOverview::class,
+                RecentContactsTable::class,
                 FilamentInfoWidget::class,
             ])
             ->middleware([
