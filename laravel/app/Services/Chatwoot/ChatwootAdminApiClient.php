@@ -72,6 +72,29 @@ class ChatwootAdminApiClient
     }
 
     /**
+     * Fetch a page of contacts via the admin API.
+     *
+     * @return array{contacts: array<int, array<string, mixed>>, meta: array<string, mixed>}
+     */
+    public function listContactsPage(int $page = 1): array
+    {
+        $response = Http::withHeaders($this->connection->chatwootAdminHeaders())
+            ->get($this->url('contacts'), ['page' => $page]);
+
+        if ($response->failed()) {
+            throw new RuntimeException("Chatwoot admin listContactsPage({$page}) failed: HTTP {$response->status()}");
+        }
+
+        $payload = $response->json('payload');
+        $meta = $response->json('meta');
+
+        return [
+            'contacts' => is_array($payload) ? array_values($payload) : [],
+            'meta' => is_array($meta) ? $meta : [],
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function getContact(int $contactId): array
