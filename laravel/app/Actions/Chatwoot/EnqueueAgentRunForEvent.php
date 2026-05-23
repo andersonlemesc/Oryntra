@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace App\Actions\Chatwoot;
 
+use App\Actions\Contacts\ResolveOrCreateContact;
 use App\Enums\AgentRunStatus;
 use App\Jobs\Agent\DispatchAgentRunJob;
 use App\Models\Agent;
 use App\Models\AgentRun;
 use App\Models\ChatwootWebhookEvent;
+use App\Models\Contact;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class EnqueueAgentRunForEvent
 {
+    public function __construct(private readonly ResolveOrCreateContact $resolveContact) {}
+
     /**
      * Append the webhook event to an in-flight agent_run (debounce window)
      * or start a new one. Schedules DispatchAgentRunJob to run after the
@@ -23,7 +27,9 @@ class EnqueueAgentRunForEvent
      */
     public function execute(ChatwootWebhookEvent $event, Agent $agent, array $normalized): AgentRun
     {
-        return DB::transaction(function () use ($event, $agent, $normalized): AgentRun {
+        $contact = $this->resolveContact($event, $normalized);
+
+        return DB::transaction(function () use ($event, $agent, $normalized, $contact): AgentRun {
             $debounceConfig = $this->normalizeDebounceConfig($agent->debounce_config);
             $windowSeconds = (int) ($debounceConfig['window_seconds'] ?? 8);
 
@@ -47,6 +53,7 @@ class EnqueueAgentRunForEvent
                     'workspace_id' => $event->workspace_id,
                     'agent_id' => $agent->id,
                     'chatwoot_connection_id' => $event->chatwoot_connection_id,
+                    'contact_id' => $contact?->id,
                     'chatwoot_webhook_event_id' => $event->id,
                     'chatwoot_account_id' => $event->chatwoot_account_id,
                     'conversation_id' => (int) $event->conversation_id,
@@ -72,14 +79,45 @@ class EnqueueAgentRunForEvent
             $messages = is_array($existingMessages) ? $existingMessages : [];
             $messages[] = $message;
 
-            $run->forceFill([
+            $update = [
                 'input' => ['messages' => $messages],
                 'chatwoot_message_id' => $event->chatwoot_message_id,
                 'debounce_until' => $newWindow,
-            ])->save();
+            ];
+
+            if ($run->contact_id === null && $contact !== null) {
+                $update['contact_id'] = $contact->id;
+            }
+
+            $run->forceFill($update)->save();
 
             return $run;
         });
+    }
+
+    private function resolveContact(ChatwootWebhookEvent $event, array $normalized): ?Contact
+    {
+        $payload = is_array($event->payload) ? $event->payload : [];
+        $sender = $payload['conversation']['meta']['sender'] ?? $payload['sender'] ?? null;
+
+        if (! is_array($sender) || ! isset($sender['id'])) {
+            return null;
+        }
+
+        $messageAt = isset($normalized['created_at'])
+            ? Carbon::parse((string) $normalized['created_at'])
+            : ($event->received_at ?? Carbon::now());
+
+        try {
+            return $this->resolveContact->execute(
+                workspaceId: (int) $event->workspace_id,
+                chatwootConnectionId: (int) $event->chatwoot_connection_id,
+                sender: $sender,
+                messageAt: $messageAt,
+            );
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**

@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'workspace_id',
     'agent_id',
     'chatwoot_connection_id',
+    'contact_id',
     'chatwoot_webhook_event_id',
     'chatwoot_account_id',
     'conversation_id',
@@ -57,6 +58,14 @@ class AgentRun extends Model
     public function chatwootConnection(): BelongsTo
     {
         return $this->belongsTo(ChatwootConnection::class);
+    }
+
+    /**
+     * @return BelongsTo<Contact, $this>
+     */
+    public function contact(): BelongsTo
+    {
+        return $this->belongsTo(Contact::class);
     }
 
     /**
