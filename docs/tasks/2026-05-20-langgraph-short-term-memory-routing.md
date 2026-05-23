@@ -25,7 +25,7 @@
 
 ### Task 1: Persist Conversation History In LangGraph State
 
-- [ ] **Step 1: Write a failing test**
+- [x] **Step 1: Write a failing test**
 
 Add a test to `agent-python/tests/test_supervisor_runtime.py`:
 
@@ -46,7 +46,7 @@ def test_runtime_accumulates_conversation_history_for_same_thread() -> None:
     ]
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run:
 
@@ -56,7 +56,7 @@ docker compose exec agent-python ./.venv/bin/pytest tests/test_supervisor_runtim
 
 Expected: fails because `conversation_messages` does not exist.
 
-- [ ] **Step 3: Implement state accumulation**
+- [x] **Step 3: Implement state accumulation**
 
 In `supervisor.py`, add `conversation_messages` to `SupervisorState`, append new payload messages at the start of each run, and cap history to a small limit:
 
@@ -74,13 +74,13 @@ class SupervisorState(TypedDict, total=False):
     turn_count: int
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run the single test again. Expected: pass.
 
 ### Task 2: Keep Active Specialist Across Related Turns
 
-- [ ] **Step 1: Write a failing test**
+- [x] **Step 1: Write a failing test**
 
 Add:
 
@@ -106,7 +106,7 @@ def test_runtime_reuses_active_specialist_for_followup_without_rerouting(monkeyp
     assert second.trace[1].output["reason"] == "active_specialist_continuation"
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run:
 
@@ -116,7 +116,7 @@ docker compose exec agent-python ./.venv/bin/pytest tests/test_supervisor_runtim
 
 Expected: fails because every turn routes through supervisor.
 
-- [ ] **Step 3: Implement active specialist continuation**
+- [x] **Step 3: Implement active specialist continuation**
 
 Update `route_node`:
 
@@ -132,13 +132,13 @@ if active_specialist is not None and not latest_message_requests_reroute(payload
     }
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run the single test. Expected: pass.
 
 ### Task 3: Give Specialists The Conversation History
 
-- [ ] **Step 1: Write a failing test**
+- [x] **Step 1: Write a failing test**
 
 Add:
 
@@ -184,11 +184,11 @@ def test_specialist_prompt_receives_recent_conversation_history(monkeypatch) -> 
     assert "Minha altura é 1,72" in captured["human"]
 ```
 
-- [ ] **Step 2: Implement prompt history**
+- [x] **Step 2: Implement prompt history**
 
 Change `specialist_decision_messages`, `specialist_response_messages`, and `supervisor_route_messages` to use recent `conversation_messages` from the active state rather than only `payload.messages`.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Run:
 
@@ -200,7 +200,7 @@ Expected: all supervisor runtime tests pass.
 
 ### Task 4: Manual Validation Against Chatwoot Conversation 18
 
-- [ ] **Step 1: Restart runtime**
+- [x] **Step 1: Restart runtime**
 
 Run:
 
@@ -209,7 +209,7 @@ docker compose restart agent-python
 docker compose restart laravel-horizon
 ```
 
-- [ ] **Step 2: Test with a fresh conversation**
+- [x] **Step 2: Test with a fresh conversation**
 
 Send:
 
@@ -220,7 +220,7 @@ Minha altura é 1,72 tenho 79kg
 Trajeto é asfalto
 ```
 
-- [ ] **Step 3: Verify database state**
+- [x] **Step 3: Verify database state**
 
 Run:
 

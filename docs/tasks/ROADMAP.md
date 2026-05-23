@@ -3,9 +3,9 @@
 > Indice vivo do que ja foi entregue e o que esta pendente.
 > Atualize ao concluir ou re-priorizar uma fase. Detalhes completos ficam em cada plano `YYYY-MM-DD-*.md` neste diretorio.
 
-## Estado atual (2026-05-20)
+## Estado atual (2026-05-23)
 
-Branch ativa: `develop` (sincronizada com `origin/develop`).
+Branch ativa: `feature/langgraph-conversation-memory` (pronta pra merge em `main`).
 
 ## Fases entregues
 
@@ -19,14 +19,15 @@ Branch ativa: `develop` (sincronizada com `origin/develop`).
 | 7.1 | `2026-05-19-human-handoff-admin-rules-phase-7-1.md` | UI das regras de handoff por especialista (palavras-chave, prioridade, mensagem). |
 | 8 | `2026-05-19-chatwoot-native-tools-phase-8.md` | Tools Chatwoot nativas: send_message, add_private_note, add_label, assign_team, assign_agent. Job `ApplyHumanHandoffToChatwootJob` com retry e idempotencia. `handoff_assign_strategy` na binding. |
 | 9 | `2026-05-19-hitl-dashboard-filament-ux-phase-9.md` | `AgentRunResource` (lista + view com Tabs: Resumo, Handoff, Trace bruto, Erros). HITL Approve/Reject/Edit com lock for update. Endpoint `/api/internal/agent-runs/{id}/resume` idempotente. Dashboard widgets (stats 24h, waiting humano, throughput chart, falhas recentes). AgentForm em 4 tabs (Geral / Modelo / Comportamento / Execucao). Specialists em 4 tabs com repeater colapsavel. Bindings em 2 secoes nomeadas. Brand `Oryntra` + paleta Indigo + nav groups fixos + sidebar collapsible. 26 hint tooltips em campos tecnicos. Aba Trace visual com RepeatableEntry (badge colorido por tipo de step). |
+| Memory | `2026-05-20-langgraph-short-term-memory-routing.md` | LangGraph persiste `conversation_messages` por `thread_id`. Especialista ativo permanece entre turnos (`active_specialist_continuation`) — supervisor so re-rotea quando mensagem sai do escopo. Prompts de especialista e supervisor recebem historico recente. Validado em conversa Chatwoot real (13 mensagens preservadas, IA nao repete perguntas). |
+| 7.2 | `2026-05-20-handoff-auto-execute-and-contact-tools-phase-7-2.md` | Handoff dispara side effects direto (sem gate HITL): abre conversa via `toggle_status`, manda mensagem ao cliente, nota privada (com resumo LLM opcional), label, atribuicao team/agent. Migrations `chatwoot_teams` + `chatwoot_team_members` + `workspace_members.chatwoot_user_id` + `chatwoot_connections.admin_api_token`. Sync via `ChatwootAdminApiClient`. Tools `request_team_handoff`, `chatwoot_get_contact`, `chatwoot_update_contact`. Filament: 3 tabs novas no especialista. Bugfix: `DispatchAgentRunJob` preserva handoff payload no merge. |
+| 7.3 | `2026-05-21-specialist-first-handoff-config.md` | `label_name` + `private_note_template` viraram campos por especialista. Binding mantem como fallback default. Hints Filament esclarecem que binding sao defaults. |
 
 ## Fases pendentes
 
 ### Em andamento
 
-| Fase | Plano | Escopo |
-|---|---|---|
-| 7.2 | `2026-05-20-handoff-auto-execute-and-contact-tools-phase-7-2.md` | Remove gate HITL do handoff (IA chama tool → side effects rodam direto). Abre conversa via `toggle_status`. Dropdowns de team/atendente por especialista (jsonb `handoff_config.agent_id`/`team_id`). Sync de times Chatwoot (`chatwoot_teams`) + `chatwoot_user_id` em `workspace_members`. Tools `chatwoot_get_contact` + `chatwoot_update_contact` (whitelist name/email/phone). |
+(nenhuma)
 
 ### Adiada — decisao do usuario
 
