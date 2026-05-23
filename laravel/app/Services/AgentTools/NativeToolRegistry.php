@@ -48,6 +48,10 @@ final class NativeToolRegistry
                 'label' => 'Editar contato',
                 'description' => 'Atualiza nome, email ou telefone de um contato no Chatwoot.',
             ],
+            NativeTool::UpdateContactMemory->value => [
+                'label' => 'Registrar memoria',
+                'description' => 'Registra um fato sobre o contato (preferencia, restricao, historico) para uso em conversas futuras.',
+            ],
         ];
     }
 

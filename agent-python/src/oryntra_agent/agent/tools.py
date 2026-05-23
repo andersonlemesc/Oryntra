@@ -89,6 +89,27 @@ class UpdateContactRequest(BaseModel):
         return self
 
 
+class UpdateContactMemoryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_id: int
+    agent_run_id: int
+    specialist_id: int | None = None
+    contact_id: int
+    type: Literal["preference", "fact", "constraint", "history", "custom"]
+    content: str
+    confidence: float | None = None
+    expires_at: str | None = None
+
+
+class UpdateContactMemoryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok"]
+    memory_id: int
+
+
 def _post(path: str, payload: BaseModel) -> dict[str, Any]:
     base_url = settings.laravel_internal_base_url.rstrip("/")
 
@@ -127,4 +148,10 @@ def chatwoot_get_contact(payload: GetContactRequest) -> ContactResponse:
 def chatwoot_update_contact(payload: UpdateContactRequest) -> ContactResponse:
     return ContactResponse.model_validate(
         _post("/api/internal/agent-tools/chatwoot-update-contact", payload)
+    )
+
+
+def update_contact_memory(payload: UpdateContactMemoryRequest) -> UpdateContactMemoryResponse:
+    return UpdateContactMemoryResponse.model_validate(
+        _post("/api/internal/agent-tools/update-contact-memory", payload)
     )

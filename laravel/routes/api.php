@@ -8,6 +8,7 @@ use App\Http\Controllers\Internal\GetChatwootContactController;
 use App\Http\Controllers\Internal\RequestHumanHandoffController;
 use App\Http\Controllers\Internal\RequestTeamHandoffController;
 use App\Http\Controllers\Internal\UpdateChatwootContactController;
+use App\Http\Controllers\Internal\UpdateContactMemoryController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('webhooks/chatwoot/{connectionUuid}', ChatwootWebhookController::class)
@@ -26,6 +27,9 @@ Route::middleware('internal.runtime')->group(function (): void {
 
     Route::post('internal/agent-tools/chatwoot-update-contact', UpdateChatwootContactController::class)
         ->name('internal.agent-tools.chatwoot-update-contact');
+
+    Route::post('internal/agent-tools/update-contact-memory', UpdateContactMemoryController::class)
+        ->name('internal.agent-tools.update-contact-memory');
 
     Route::post('internal/agent-runs/{agentRun}/resume', AgentRunResumeController::class)
         ->name('internal.agent-runs.resume');

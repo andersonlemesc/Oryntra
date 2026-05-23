@@ -15,4 +15,5 @@ enum NativeTool: string
     case ChatwootAssignAgent = 'chatwoot_assign_agent';
     case ChatwootGetContact = 'chatwoot_get_contact';
     case ChatwootUpdateContact = 'chatwoot_update_contact';
+    case UpdateContactMemory = 'update_contact_memory';
 }
