@@ -22,11 +22,17 @@ Branch ativa: `develop` (sincronizada com `origin/develop`).
 
 ## Fases pendentes
 
+### Em andamento
+
+| Fase | Plano | Escopo |
+|---|---|---|
+| 7.2 | `2026-05-20-handoff-auto-execute-and-contact-tools-phase-7-2.md` | Remove gate HITL do handoff (IA chama tool → side effects rodam direto). Abre conversa via `toggle_status`. Dropdowns de team/atendente por especialista (jsonb `handoff_config.agent_id`/`team_id`). Sync de times Chatwoot (`chatwoot_teams`) + `chatwoot_user_id` em `workspace_members`. Tools `chatwoot_get_contact` + `chatwoot_update_contact` (whitelist name/email/phone). |
+
 ### Adiada — decisao do usuario
 
 | Fase | Plano | Motivo da pausa |
 |---|---|---|
-| 10 | `2026-05-20-rag-knowledge-base-phase-10.md` | RAG com `smalot/pdfparser` quebra tabelas em PDF. Usuario quer avaliar alternativas (OCR, parser nativo, outra abordagem) antes de seguir. |
+| 10 | `2026-05-20-rag-knowledge-base-phase-10.md` | Estrategia de extracao PDF revisada: `spatie/pdf-to-text` + `poppler-utils` no container (mais leve em memoria que `smalot/pdfparser`). Decisao registrada em `docs/integrations/chatwoot/captain-rag-reference.md`. Plano principal a ser refeito antes de iniciar. |
 
 ### Candidatas (ordenadas por prioridade sugerida)
 
