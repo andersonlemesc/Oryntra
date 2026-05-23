@@ -6,14 +6,18 @@ namespace App\Actions\AgentTools;
 
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
+use App\Models\Contact;
 use App\Services\Chatwoot\ChatwootAdminApiClient;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 class GetChatwootContact
 {
+    private const CACHE_TTL_SECONDS = 300;
+
     /**
      * @param  array{workspace_id:int,agent_id:int,agent_run_id:int,specialist_id?:int|null,contact_id:int} $payload
-     * @return array{status:string,contact:array<string, mixed>}
+     * @return array{status:string,contact:array<string, mixed>,source:string}
      */
     public function execute(array $payload): array
     {
@@ -28,19 +32,121 @@ class GetChatwootContact
             ]);
         }
 
+        $chatwootContactId = (int) $payload['contact_id'];
+        $cached = $this->loadCachedContact($payload['workspace_id'], $connection->id, $chatwootContactId);
+
+        if ($cached !== null && $this->isFresh($cached)) {
+            return [
+                'status' => 'ok',
+                'contact' => $this->serializeCached($cached),
+                'source' => 'cache',
+            ];
+        }
+
         if (! $connection->hasAdminApiToken()) {
+            if ($cached !== null) {
+                return [
+                    'status' => 'ok',
+                    'contact' => $this->serializeCached($cached),
+                    'source' => 'cache_stale',
+                ];
+            }
+
             throw ValidationException::withMessages([
                 'agent_run_id' => 'The Chatwoot connection has no admin_api_token configured.',
             ]);
         }
 
         $client = new ChatwootAdminApiClient($connection);
-        $contact = $client->getContact((int) $payload['contact_id']);
+        $remote = $client->getContact($chatwootContactId);
+        $this->syncLocalContact($payload['workspace_id'], $connection->id, $chatwootContactId, $remote);
 
         return [
             'status' => 'ok',
-            'contact' => $contact,
+            'contact' => $remote,
+            'source' => 'chatwoot',
         ];
+    }
+
+    private function loadCachedContact(int $workspaceId, int $connectionId, int $chatwootContactId): ?Contact
+    {
+        return Contact::query()
+            ->where('workspace_id', $workspaceId)
+            ->where('chatwoot_connection_id', $connectionId)
+            ->where('chatwoot_contact_id', $chatwootContactId)
+            ->first();
+    }
+
+    private function isFresh(Contact $contact): bool
+    {
+        if ($contact->synced_at === null) {
+            return false;
+        }
+
+        return $contact->synced_at->greaterThan(Carbon::now()->subSeconds(self::CACHE_TTL_SECONDS));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeCached(Contact $contact): array
+    {
+        return [
+            'id' => $contact->chatwoot_contact_id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'phone_number' => $contact->phone_number,
+            'identifier' => $contact->identifier,
+            'thumbnail' => $contact->thumbnail,
+            'additional_attributes' => $contact->additional_attributes,
+            'custom_attributes' => $contact->chatwoot_custom_attributes,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $remote
+     */
+    private function syncLocalContact(int $workspaceId, int $connectionId, int $chatwootContactId, array $remote): void
+    {
+        $contact = Contact::query()->firstOrNew([
+            'workspace_id' => $workspaceId,
+            'chatwoot_connection_id' => $connectionId,
+            'chatwoot_contact_id' => $chatwootContactId,
+        ]);
+
+        $now = Carbon::now();
+
+        if (! $contact->exists) {
+            $contact->first_seen_at = $now;
+            $contact->last_seen_at = $now;
+            $contact->lead_status = 'new';
+        }
+
+        $contact->name = $this->stringValue($remote['name'] ?? null) ?? $contact->name;
+        $contact->email = $this->stringValue($remote['email'] ?? null) ?? $contact->email;
+        $contact->phone_number = $this->stringValue($remote['phone_number'] ?? null) ?? $contact->phone_number;
+        $contact->identifier = $this->stringValue($remote['identifier'] ?? null) ?? $contact->identifier;
+        $contact->thumbnail = $this->stringValue($remote['thumbnail'] ?? null) ?? $contact->thumbnail;
+        $contact->additional_attributes = is_array($remote['additional_attributes'] ?? null)
+            ? $remote['additional_attributes']
+            : ($contact->additional_attributes ?? []);
+        $contact->chatwoot_custom_attributes = is_array($remote['custom_attributes'] ?? null)
+            ? $remote['custom_attributes']
+            : ($contact->chatwoot_custom_attributes ?? []);
+        $contact->synced_at = $now;
+
+        $contact->save();
+    }
+
+    private function stringValue(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 
     /**

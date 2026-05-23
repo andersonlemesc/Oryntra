@@ -6,7 +6,10 @@ namespace App\Actions\AgentTools;
 
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
+use App\Models\Contact;
 use App\Services\Chatwoot\ChatwootAdminApiClient;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class UpdateChatwootContact
@@ -51,11 +54,42 @@ class UpdateChatwootContact
         }
 
         $client = new ChatwootAdminApiClient($connection);
-        $contact = $client->updateContact((int) $payload['contact_id'], $attributes);
+        $remote = $client->updateContact((int) $payload['contact_id'], $attributes);
+
+        DB::transaction(function () use ($payload, $connection, $attributes, $remote): void {
+            $contact = Contact::query()->firstOrNew([
+                'workspace_id' => (int) $payload['workspace_id'],
+                'chatwoot_connection_id' => (int) $connection->id,
+                'chatwoot_contact_id' => (int) $payload['contact_id'],
+            ]);
+
+            $now = Carbon::now();
+
+            if (! $contact->exists) {
+                $contact->first_seen_at = $now;
+                $contact->last_seen_at = $now;
+                $contact->lead_status = 'new';
+            }
+
+            foreach ($attributes as $field => $value) {
+                $contact->{$field} = $value;
+            }
+
+            if (is_array($remote['additional_attributes'] ?? null)) {
+                $contact->additional_attributes = $remote['additional_attributes'];
+            }
+
+            if (is_array($remote['custom_attributes'] ?? null)) {
+                $contact->chatwoot_custom_attributes = $remote['custom_attributes'];
+            }
+
+            $contact->synced_at = $now;
+            $contact->save();
+        });
 
         return [
             'status' => 'ok',
-            'contact' => $contact,
+            'contact' => $remote,
         ];
     }
 
