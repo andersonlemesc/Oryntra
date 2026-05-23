@@ -7,6 +7,7 @@ use App\Jobs\Agent\ApplyHumanHandoffToChatwootJob;
 use App\Models\Agent;
 use App\Models\AgentChatwootBinding;
 use App\Models\AgentRun;
+use App\Models\AgentSpecialist;
 use App\Models\ChatwootConnection;
 use App\Models\Workspace;
 use App\Support\AgentTools\HandoffPrivateNoteRenderer;
@@ -123,6 +124,110 @@ it('skips already completed actions when retrying handoff side effects', functio
 
     Http::assertNotSent(fn (Request $request): bool => ($request['content'] ?? null) === 'Vou transferir voce para um atendente.'
         && ($request['private'] ?? null) === false);
+});
+
+it('uses the specialist label_name and private_note_template when set, overriding the binding', function () {
+    $workspace = Workspace::factory()->create();
+    $agent = Agent::factory()->active()->for($workspace)->create();
+    $connection = ChatwootConnection::factory()->for($workspace)->create([
+        'base_url' => 'http://chatwoot.test',
+        'account_id' => 5,
+        'api_access_token' => 'agent-bot-token',
+    ]);
+    AgentChatwootBinding::factory()->create([
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $connection->id,
+        'handoff_label_name' => 'binding_label',
+        'handoff_assign_strategy' => 'none',
+        'handoff_private_note_template' => 'BINDING fallback {reason}',
+    ]);
+    $specialist = AgentSpecialist::factory()->for($agent)->for($workspace)->create([
+        'tools_allowlist' => ['request_human_handoff'],
+        'handoff_config' => [
+            'enabled' => true,
+            'label_name' => 'vendas',
+            'private_note_template' => 'SPECIALIST {reason} / {priority}',
+        ],
+    ]);
+    $output = humanHandoffOutputForJobTest();
+    $output['trace'][0]['specialist_id'] = $specialist->id;
+    $run = AgentRun::factory()->create([
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $connection->id,
+        'chatwoot_account_id' => 5,
+        'conversation_id' => 99,
+        'thread_id' => "workspace:{$workspace->id}:account:5:conversation:99",
+        'status' => AgentRunStatus::Completed,
+        'output' => $output,
+    ]);
+
+    Http::fake([
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/toggle_status' => Http::response(['payload' => ['success' => true]]),
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages' => Http::response(['id' => 123]),
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/labels' => Http::response(['payload' => ['vendas']]),
+    ]);
+
+    (new ApplyHumanHandoffToChatwootJob($run->id))->handle(app(HandoffPrivateNoteRenderer::class));
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/labels'
+        && $request['labels'] === ['vendas']);
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages'
+        && str_starts_with((string) $request['content'], 'SPECIALIST ')
+        && $request['private'] === true);
+});
+
+it('falls back to the binding label and template when the specialist leaves them blank', function () {
+    $workspace = Workspace::factory()->create();
+    $agent = Agent::factory()->active()->for($workspace)->create();
+    $connection = ChatwootConnection::factory()->for($workspace)->create([
+        'base_url' => 'http://chatwoot.test',
+        'account_id' => 5,
+        'api_access_token' => 'agent-bot-token',
+    ]);
+    AgentChatwootBinding::factory()->create([
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $connection->id,
+        'handoff_label_name' => 'binding_label',
+        'handoff_assign_strategy' => 'none',
+        'handoff_private_note_template' => 'BINDING fallback {reason}',
+    ]);
+    $specialist = AgentSpecialist::factory()->for($agent)->for($workspace)->create([
+        'tools_allowlist' => ['request_human_handoff'],
+        'handoff_config' => [
+            'enabled' => true,
+            'label_name' => null,
+            'private_note_template' => null,
+        ],
+    ]);
+    $output = humanHandoffOutputForJobTest();
+    $output['trace'][0]['specialist_id'] = $specialist->id;
+    $run = AgentRun::factory()->create([
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $connection->id,
+        'chatwoot_account_id' => 5,
+        'conversation_id' => 99,
+        'thread_id' => "workspace:{$workspace->id}:account:5:conversation:99",
+        'status' => AgentRunStatus::Completed,
+        'output' => $output,
+    ]);
+
+    Http::fake([
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/toggle_status' => Http::response(['payload' => ['success' => true]]),
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages' => Http::response(['id' => 124]),
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/labels' => Http::response(['payload' => ['binding_label']]),
+    ]);
+
+    (new ApplyHumanHandoffToChatwootJob($run->id))->handle(app(HandoffPrivateNoteRenderer::class));
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/labels'
+        && $request['labels'] === ['binding_label']);
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages'
+        && str_starts_with((string) $request['content'], 'BINDING fallback ')
+        && $request['private'] === true);
 });
 
 it('stores failed side effect state when the job fails permanently', function () {

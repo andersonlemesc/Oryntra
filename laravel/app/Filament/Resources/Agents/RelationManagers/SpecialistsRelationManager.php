@@ -195,6 +195,19 @@ class SpecialistsRelationManager extends RelationManager
                                             ->rows(2)
                                             ->default('Vou transferir voce para um atendente.')
                                             ->columnSpanFull(),
+                                        TextInput::make('handoff_config.label_name')
+                                            ->label('Label Chatwoot')
+                                            ->maxLength(120)
+                                            ->visible(fn (Get $get): bool => (bool) $get('handoff_config.enabled'))
+                                            ->placeholder('Herda do bot quando vazio')
+                                            ->helperText('Opcional. Sobrescreve a label configurada no bot. Use para diferenciar vendas/suporte/financeiro.'),
+                                        Textarea::make('handoff_config.private_note_template')
+                                            ->label('Template da nota privada')
+                                            ->rows(3)
+                                            ->visible(fn (Get $get): bool => (bool) $get('handoff_config.enabled'))
+                                            ->placeholder('Herda do bot quando vazio')
+                                            ->helperText('Opcional. Placeholders: {reason}, {priority}, {customer_message}, {agent_name}, {conversation_summary}, {key_fact}, {recent_messages}, {conversation_id}, {specialist_id}.')
+                                            ->columnSpanFull(),
                                     ]),
 
                                 Section::make('Situacoes de transferencia')
@@ -404,6 +417,12 @@ class SpecialistsRelationManager extends RelationManager
         $handoffConfig['team_enabled'] = $teamEnabled;
         $handoffConfig['team_id'] = $teamEnabled && filled($handoffConfig['team_id'] ?? null)
             ? (int) $handoffConfig['team_id']
+            : null;
+        $handoffConfig['label_name'] = $humanEnabled && filled($handoffConfig['label_name'] ?? null)
+            ? trim((string) $handoffConfig['label_name'])
+            : null;
+        $handoffConfig['private_note_template'] = $humanEnabled && filled($handoffConfig['private_note_template'] ?? null)
+            ? (string) $handoffConfig['private_note_template']
             : null;
         $handoffConfig['rules'] = is_array($handoffConfig['rules'] ?? null)
             ? array_values($handoffConfig['rules'])

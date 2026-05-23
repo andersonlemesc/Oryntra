@@ -61,6 +61,8 @@ class ApplyHumanHandoffToChatwootJob implements ShouldQueue
         $customerMessage = $this->stringValue($handoff['customer_message'] ?? null);
         $specialist = $this->loadSpecialist($run);
         [$teamId, $agentId] = $this->resolveHandoffDestination($specialist, $binding);
+        $labelName = $this->resolveLabelName($specialist, $binding);
+        $privateNoteTemplate = $this->resolvePrivateNoteTemplate($specialist, $binding);
 
         $this->runAction($run, 'open_conversation', function () use ($client, $conversationId): void {
             $client->toggleConversationStatus($conversationId, 'open');
@@ -76,7 +78,7 @@ class ApplyHumanHandoffToChatwootJob implements ShouldQueue
 
         if ($binding !== null) {
             $privateNote = $privateNoteRenderer->render(
-                $binding->handoff_private_note_template,
+                $privateNoteTemplate,
                 [
                     'reason' => $this->stringValue($handoff['reason'] ?? null),
                     'priority' => $this->stringValue($handoff['priority'] ?? null),
@@ -93,9 +95,9 @@ class ApplyHumanHandoffToChatwootJob implements ShouldQueue
                 $client->addPrivateNote($conversationId, $privateNote);
             });
 
-            if (filled($binding->handoff_label_name)) {
-                $this->runAction($run, 'label', function () use ($client, $conversationId, $binding): void {
-                    $client->addConversationLabel($conversationId, (string) $binding->handoff_label_name);
+            if (filled($labelName)) {
+                $this->runAction($run, 'label', function () use ($client, $conversationId, $labelName): void {
+                    $client->addConversationLabel($conversationId, (string) $labelName);
                 });
             } else {
                 $this->markAction($run, 'label', 'skipped');
@@ -270,6 +272,42 @@ class ApplyHumanHandoffToChatwootJob implements ShouldQueue
         }
 
         return [$teamId, $agentId];
+    }
+
+    private function resolveLabelName(?AgentSpecialist $specialist, $binding): ?string
+    {
+        $config = is_array($specialist?->handoff_config) ? $specialist->handoff_config : [];
+        $specialistLabel = $config['label_name'] ?? null;
+
+        if (is_string($specialistLabel) && trim($specialistLabel) !== '') {
+            return trim($specialistLabel);
+        }
+
+        $bindingLabel = $binding?->handoff_label_name;
+
+        if (is_string($bindingLabel) && trim($bindingLabel) !== '') {
+            return trim($bindingLabel);
+        }
+
+        return null;
+    }
+
+    private function resolvePrivateNoteTemplate(?AgentSpecialist $specialist, $binding): ?string
+    {
+        $config = is_array($specialist?->handoff_config) ? $specialist->handoff_config : [];
+        $specialistTemplate = $config['private_note_template'] ?? null;
+
+        if (is_string($specialistTemplate) && trim($specialistTemplate) !== '') {
+            return $specialistTemplate;
+        }
+
+        $bindingTemplate = $binding?->handoff_private_note_template;
+
+        if (is_string($bindingTemplate) && trim($bindingTemplate) !== '') {
+            return $bindingTemplate;
+        }
+
+        return null;
     }
 
     private function traceSpecialistId(AgentRun $run): ?int
