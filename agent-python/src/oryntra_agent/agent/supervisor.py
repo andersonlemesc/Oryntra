@@ -650,6 +650,7 @@ def run_specialist_with_tool_calling(
         tools=tools,
         system_prompt=system_prompt,
         user_prompt=user_prompt,
+        max_iterations=selected_specialist.memory_config.max_tool_iterations,
     )
 
 

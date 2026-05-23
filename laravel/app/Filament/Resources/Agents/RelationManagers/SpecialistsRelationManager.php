@@ -311,6 +311,18 @@ class SpecialistsRelationManager extends RelationManager
                                             ->visible(fn (Get $get): bool => (bool) $get('memory_config.injection_enabled'))
                                             ->helperText('Top N por data de criacao desc. Vazio = sem limite.'),
                                     ]),
+                                Section::make('Tool calling')
+                                    ->description('Quantas iteracoes de tool calling o especialista pode executar num mesmo turno (chamar tool, ler resultado, decidir proximo passo).')
+                                    ->columns(2)
+                                    ->schema([
+                                        TextInput::make('memory_config.max_tool_iterations')
+                                            ->label('Maximo de iteracoes')
+                                            ->numeric()
+                                            ->minValue(1)
+                                            ->maxValue(20)
+                                            ->default(4)
+                                            ->helperText('Padrao 4. Cada iteracao = 1 chamada extra ao LLM. Subir so se o especialista precisa encadear muitas tools.'),
+                                    ]),
                             ]),
                     ]),
             ]);
@@ -500,6 +512,10 @@ class SpecialistsRelationManager extends RelationManager
         } else {
             $memoryConfig['injection_limit'] = null;
         }
+
+        $memoryConfig['max_tool_iterations'] = isset($memoryConfig['max_tool_iterations']) && is_numeric($memoryConfig['max_tool_iterations'])
+            ? max(1, min(20, (int) $memoryConfig['max_tool_iterations']))
+            : 4;
 
         $data['tools_allowlist'] = $toolsAllowlist;
         $data['handoff_config'] = $handoffConfig;

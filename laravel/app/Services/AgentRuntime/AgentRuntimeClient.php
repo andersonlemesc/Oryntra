@@ -191,7 +191,7 @@ class AgentRuntimeClient
     }
 
     /**
-     * @return array{extraction_enabled:bool,injection_enabled:bool,injection_limit:int|null,extraction_types:array<int,string>}
+     * @return array{extraction_enabled:bool,injection_enabled:bool,injection_limit:int|null,extraction_types:array<int,string>,max_tool_iterations:int}
      */
     private function normalizedMemoryConfig(AgentSpecialist $specialist): array
     {
@@ -209,6 +209,9 @@ class AgentRuntimeClient
                     fn (mixed $type): bool => in_array($type, ['preference', 'fact', 'constraint', 'history', 'custom'], true),
                 ))
                 : [],
+            'max_tool_iterations' => isset($config['max_tool_iterations']) && is_numeric($config['max_tool_iterations'])
+                ? max(1, min(20, (int) $config['max_tool_iterations']))
+                : 4,
         ];
     }
 

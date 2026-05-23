@@ -63,6 +63,7 @@ class MemoryConfig(BaseModel):
     injection_enabled: bool = False
     injection_limit: int | None = None
     extraction_types: list[str] = Field(default_factory=list)
+    max_tool_iterations: int = Field(default=4, ge=1, le=20)
 
 
 class ContactMemorySnapshot(BaseModel):

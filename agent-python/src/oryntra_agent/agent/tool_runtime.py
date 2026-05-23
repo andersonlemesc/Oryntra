@@ -45,6 +45,7 @@ EXECUTABLE_TOOLS: frozenset[str] = frozenset(
 
 
 MAX_TOOL_ITERATIONS = 4
+TOOL_ITERATIONS_HARD_CAP = 20
 
 
 @dataclass(frozen=True)
@@ -208,14 +209,17 @@ def run_specialist_tool_loop(
     tools: list[StructuredTool],
     system_prompt: str,
     user_prompt: str,
+    max_iterations: int = MAX_TOOL_ITERATIONS,
 ) -> ToolLoopResult:
     """Run a bounded ReAct loop: invoke the model, dispatch any tool calls,
     feed back ``ToolMessage``s, and repeat until the model returns plain text
-    or we hit ``MAX_TOOL_ITERATIONS``.
+    or we hit ``max_iterations`` (clamped to ``TOOL_ITERATIONS_HARD_CAP``).
     """
 
     if not tools:
         raise ValueError("run_specialist_tool_loop requires at least one tool.")
+
+    iterations = max(1, min(max_iterations, TOOL_ITERATIONS_HARD_CAP))
 
     chat_with_tools = chat_model.bind_tools(tools)
     tool_by_name = {tool.name: tool for tool in tools}
@@ -225,7 +229,7 @@ def run_specialist_tool_loop(
     ]
     tool_calls_trace: list[dict[str, Any]] = []
 
-    for _ in range(MAX_TOOL_ITERATIONS):
+    for _ in range(iterations):
         try:
             ai_message: AIMessage = chat_with_tools.invoke(messages)
         except Exception:
@@ -272,7 +276,7 @@ def run_specialist_tool_loop(
 
     logger.warning(
         "specialist tool loop exhausted iterations",
-        extra={"max_iterations": MAX_TOOL_ITERATIONS},
+        extra={"max_iterations": iterations},
     )
     return ToolLoopResult(text=None, tool_calls=tool_calls_trace)
 
