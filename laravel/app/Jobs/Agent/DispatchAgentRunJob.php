@@ -77,11 +77,20 @@ class DispatchAgentRunJob implements ShouldQueue
                 $output = $this->deliverResponseToChatwoot($run, $output);
 
                 DB::transaction(function () use ($run, $output): void {
+                    $run->refresh();
+                    $existingOutput = is_array($run->output) ? $run->output : [];
+                    $existingHandoff = is_array($existingOutput['handoff'] ?? null) ? $existingOutput['handoff'] : null;
+                    $mergedOutput = $output;
+
+                    if ($existingHandoff !== null) {
+                        $mergedOutput['handoff'] = array_replace($existingHandoff, $mergedOutput['handoff'] ?? []);
+                    }
+
                     $run->forceFill([
                         'status' => $output['status'] === 'waiting_human'
                             ? AgentRunStatus::WaitingHuman
                             : AgentRunStatus::Completed,
-                        'output' => $output,
+                        'output' => $mergedOutput,
                         'finished_at' => Carbon::now(),
                     ])->save();
 
@@ -119,7 +128,7 @@ class DispatchAgentRunJob implements ShouldQueue
     }
 
     /**
-     * @param  array<string, mixed>  $output
+     * @param  array<string, mixed> $output
      * @return array<string, mixed>
      */
     private function deliverResponseToChatwoot(AgentRun $run, array $output): array
