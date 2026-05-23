@@ -36,6 +36,8 @@ class RequestHumanHandoffRequest extends FormRequest
             'priority' => ['required', Rule::in(['low', 'normal', 'high', 'urgent'])],
             'suggested_team' => ['nullable', 'string', 'max:120'],
             'customer_message' => ['nullable', 'string', 'max:2000'],
+            'conversation_summary' => ['nullable', 'string', 'max:4000'],
+            'key_fact' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

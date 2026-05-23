@@ -49,6 +49,11 @@ class SpecialistChoice(BaseModel):
     reason: str
 
 
+class HandoffSummary(BaseModel):
+    summary: str = Field(description="Resumo conciso da conversa em 1-3 frases.")
+    key_fact: str = Field(description="O fato mais relevante para o atendente humano agir agora (1 frase).")
+
+
 class SpecialistDecision(BaseModel):
     action: Literal["respond_text", "request_human_handoff", "request_reroute"]
     content: str | None = None
@@ -595,6 +600,58 @@ def matching_handoff_rule(
     return None
 
 
+def generate_handoff_summary_with_llm(
+    payload: ChatwootRuntimeRequest,
+    selected_specialist: SpecialistConfig,
+) -> HandoffSummary | None:
+    if not selected_specialist.handoff_config.summary_llm_enabled:
+        return None
+
+    credentials = _runtime_llm_credentials.get()
+
+    if credentials is None:
+        return None
+
+    credential = credentials.specialists.get(selected_specialist.id)
+
+    if credential is None:
+        return None
+
+    chat_model = chat_model_for_credential(credential, temperature=0.2)
+
+    if chat_model is None:
+        return None
+
+    transcript_lines = []
+    for message in payload.messages[-MAX_CONVERSATION_MESSAGES:]:
+        content = (message.content or "").strip()
+        if not content:
+            continue
+        transcript_lines.append(f"Cliente: {content}")
+
+    if not transcript_lines:
+        return None
+
+    transcript = "\n".join(transcript_lines)
+    prompt = (
+        "Voce ajuda atendentes humanos a entender rapidamente uma conversa transferida pela IA. "
+        "Leia o historico abaixo e devolva um JSON com:\n"
+        "- summary: 1-3 frases descrevendo o que o cliente quer.\n"
+        "- key_fact: a unica informacao mais critica para o atendente agir agora (1 frase).\n\n"
+        f"Historico:\n{transcript}"
+    )
+
+    try:
+        structured = chat_model.with_structured_output(HandoffSummary)
+        return structured.invoke(prompt)
+    except Exception:
+        logger.exception(
+            "handoff summary generation failed; proceeding without summary",
+            extra={"specialist_id": selected_specialist.id, "agent_id": payload.agent_id},
+        )
+        return None
+
+
 def human_handoff_response(
     payload: ChatwootRuntimeRequest,
     selected_specialist: SpecialistConfig,
@@ -606,6 +663,8 @@ def human_handoff_response(
     customer_message: str,
     trace_input: dict[str, Any] | None = None,
 ) -> ChatwootRuntimeResponse:
+    summary = generate_handoff_summary_with_llm(payload, selected_specialist)
+
     tool_response = request_human_handoff(
         HumanHandoffRequest(
             workspace_id=payload.workspace_id,
@@ -617,11 +676,13 @@ def human_handoff_response(
             reason=handoff_reason,
             priority=handoff_priority,
             customer_message=customer_message,
+            conversation_summary=summary.summary if summary else None,
+            key_fact=summary.key_fact if summary else None,
         )
     )
 
     return ChatwootRuntimeResponse(
-        status="waiting_human",
+        status="completed",
         response=RuntimeResponsePayload(
             type="escalate",
             content=customer_message,

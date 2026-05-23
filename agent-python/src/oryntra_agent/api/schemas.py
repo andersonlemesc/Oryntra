@@ -43,6 +43,8 @@ class HandoffConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
+    team_enabled: bool = False
+    summary_llm_enabled: bool = False
     default_priority: Literal["low", "normal", "high", "urgent"] = "normal"
     customer_message: str | None = "Vou transferir voce para um atendente."
     private_note: str | None = None

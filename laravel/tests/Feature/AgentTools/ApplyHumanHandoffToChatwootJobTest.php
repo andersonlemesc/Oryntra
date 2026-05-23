@@ -48,6 +48,7 @@ it('applies configured human handoff side effects to Chatwoot', function () {
     ]);
 
     Http::fake([
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/toggle_status' => Http::response(['payload' => ['success' => true]]),
         'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages' => Http::sequence()
             ->push(['id' => 123])
             ->push(['id' => 124]),
@@ -57,6 +58,8 @@ it('applies configured human handoff side effects to Chatwoot', function () {
 
     (new ApplyHumanHandoffToChatwootJob($run->id))->handle(app(HandoffPrivateNoteRenderer::class));
 
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/toggle_status'
+        && ($request['status'] ?? null) === 'open');
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages'
         && $request['content'] === 'Vou transferir voce para um atendente.'
         && $request['private'] === false);
@@ -75,6 +78,7 @@ it('applies configured human handoff side effects to Chatwoot', function () {
     assert(is_array($output));
 
     expect($output['handoff']['side_effects']['status'])->toBe('completed')
+        ->and($output['handoff']['side_effects']['actions']['open_conversation'])->toBe('completed')
         ->and($output['handoff']['side_effects']['actions']['customer_message'])->toBe('completed')
         ->and($output['handoff']['side_effects']['actions']['private_note'])->toBe('completed')
         ->and($output['handoff']['side_effects']['actions']['label'])->toBe('completed')
@@ -110,6 +114,7 @@ it('skips already completed actions when retrying handoff side effects', functio
     ]);
 
     Http::fake([
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/toggle_status' => Http::response(['payload' => ['success' => true]]),
         'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages' => Http::response(['id' => 124]),
         'http://chatwoot.test/api/v1/accounts/5/conversations/99/labels' => Http::response(['payload' => ['human_handoff']]),
     ]);

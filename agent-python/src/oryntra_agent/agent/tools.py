@@ -1,7 +1,7 @@
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from oryntra_agent.settings import settings
 
@@ -19,26 +19,112 @@ class HumanHandoffRequest(BaseModel):
     priority: Literal["low", "normal", "high", "urgent"] = "normal"
     suggested_team: str | None = None
     customer_message: str | None = None
+    conversation_summary: str | None = None
+    key_fact: str | None = None
 
 
 class HumanHandoffResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    status: Literal["waiting_human"]
+    status: Literal["handoff_dispatched"]
     handoff_id: int
     message: str
 
 
-def request_human_handoff(payload: HumanHandoffRequest) -> HumanHandoffResponse:
+class TeamHandoffRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_id: int
+    agent_run_id: int
+    thread_id: str
+    conversation_id: int
+    specialist_id: int | None = None
+    reason: str
+    priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    customer_message: str | None = None
+
+
+class TeamHandoffResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["handoff_dispatched"]
+    handoff_id: int
+    message: str
+
+
+class GetContactRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_id: int
+    agent_run_id: int
+    specialist_id: int | None = None
+    contact_id: int
+
+
+class ContactResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok"]
+    contact: dict[str, Any]
+
+
+class UpdateContactRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_id: int
+    agent_run_id: int
+    specialist_id: int | None = None
+    contact_id: int
+    name: str | None = None
+    email: str | None = None
+    phone_number: str | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_field(self) -> "UpdateContactRequest":
+        if not any([self.name, self.email, self.phone_number]):
+            raise ValueError("Provide at least one of: name, email, phone_number.")
+        return self
+
+
+def _post(path: str, payload: BaseModel) -> dict[str, Any]:
     base_url = settings.laravel_internal_base_url.rstrip("/")
 
     with httpx.Client(timeout=10) as client:
         response = client.post(
-            f"{base_url}/api/internal/agent-tools/request-human-handoff",
-            headers={"X-Internal-Token": settings.agent_runtime_internal_token},
+            f"{base_url}{path}",
+            headers={
+                "Accept": "application/json",
+                "X-Internal-Token": settings.agent_runtime_internal_token,
+            },
             json=payload.model_dump(mode="json"),
         )
 
     response.raise_for_status()
+    return response.json()
 
-    return HumanHandoffResponse.model_validate(response.json())
+
+def request_human_handoff(payload: HumanHandoffRequest) -> HumanHandoffResponse:
+    return HumanHandoffResponse.model_validate(
+        _post("/api/internal/agent-tools/request-human-handoff", payload)
+    )
+
+
+def request_team_handoff(payload: TeamHandoffRequest) -> TeamHandoffResponse:
+    return TeamHandoffResponse.model_validate(
+        _post("/api/internal/agent-tools/request-team-handoff", payload)
+    )
+
+
+def chatwoot_get_contact(payload: GetContactRequest) -> ContactResponse:
+    return ContactResponse.model_validate(
+        _post("/api/internal/agent-tools/chatwoot-get-contact", payload)
+    )
+
+
+def chatwoot_update_contact(payload: UpdateContactRequest) -> ContactResponse:
+    return ContactResponse.model_validate(
+        _post("/api/internal/agent-tools/chatwoot-update-contact", payload)
+    )

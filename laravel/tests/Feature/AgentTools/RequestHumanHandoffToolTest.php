@@ -75,9 +75,9 @@ it('marks the agent run waiting human and appends handoff trace', function () {
     ], ['X-Internal-Token' => 'ci-token'])
         ->assertOk()
         ->assertJson([
-            'status' => 'waiting_human',
+            'status' => 'handoff_dispatched',
             'handoff_id' => $run->id,
-            'message' => 'Human handoff requested.',
+            'message' => 'Human handoff dispatched to Chatwoot.',
         ]);
 
     $run->refresh();
@@ -85,14 +85,15 @@ it('marks the agent run waiting human and appends handoff trace', function () {
 
     assert(is_array($output));
 
-    expect($run->status)->toBe(AgentRunStatus::WaitingHuman)
+    expect($run->status)->toBe(AgentRunStatus::Completed)
         ->and($output['handoff']['reason'])->toBe('Cliente pediu cancelamento e reembolso.')
         ->and($output['handoff']['side_effects']['status'])->toBe('queued')
+        ->and($output['handoff']['side_effects']['actions']['open_conversation'])->toBe('pending')
         ->and($output['trace'])->toHaveCount(3)
         ->and($output['trace'][1]['type'])->toBe('tool_call')
         ->and($output['trace'][1]['tool'])->toBe('request_human_handoff')
         ->and($output['trace'][2]['type'])->toBe('tool_result')
-        ->and($output['trace'][2]['output']['status'])->toBe('waiting_human');
+        ->and($output['trace'][2]['output']['status'])->toBe('handoff_dispatched');
 
     Queue::assertPushed(
         ApplyHumanHandoffToChatwootJob::class,
