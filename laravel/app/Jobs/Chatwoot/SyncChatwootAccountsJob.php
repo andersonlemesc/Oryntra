@@ -103,9 +103,18 @@ class SyncChatwootAccountsJob implements ShouldQueue
                         $newUsers[$user->id] = $user;
                     }
 
-                    $role = $this->mapRole((string) ($accountUser['role'] ?? 'agent'));
+                    $chatwootRole = (string) ($accountUser['role'] ?? 'agent');
+                    $role = $this->mapRole($chatwootRole);
                     $workspace->users()->syncWithoutDetaching([
-                        $user->id => ['role' => $role],
+                        $user->id => [
+                            'role' => $role,
+                            'chatwoot_user_id' => $userId,
+                            'chatwoot_availability' => is_string($userData['availability_status'] ?? null)
+                                ? (string) $userData['availability_status']
+                                : null,
+                            'chatwoot_confirmed' => (bool) ($userData['confirmed'] ?? false),
+                            'chatwoot_role' => $chatwootRole,
+                        ],
                     ]);
                     $summary['members_upserted']++;
                 }

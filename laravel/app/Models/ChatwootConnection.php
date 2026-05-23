@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\AgentChatwootBindingStatus;
 use App\Enums\ChatwootConnectionStatus;
 use App\Jobs\Chatwoot\DeleteChatwootAgentBotJob;
+use App\Jobs\Chatwoot\SyncChatwootMetadataJob;
 use Database\Factories\ChatwootConnectionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -25,6 +26,7 @@ use Illuminate\Support\Str;
     'agent_bot_id',
     'agent_bot_outgoing_url',
     'api_access_token',
+    'admin_api_token',
     'webhook_secret',
     'status',
     'provisioned_at',
@@ -41,6 +43,7 @@ class ChatwootConnection extends Model
      */
     protected $hidden = [
         'api_access_token',
+        'admin_api_token',
         'webhook_secret',
     ];
 
@@ -55,6 +58,12 @@ class ChatwootConnection extends Model
         self::deleting(function (ChatwootConnection $connection): void {
             if (filled($connection->agent_bot_id)) {
                 DeleteChatwootAgentBotJob::dispatch((int) $connection->agent_bot_id)->afterCommit();
+            }
+        });
+
+        self::saved(function (ChatwootConnection $connection): void {
+            if ($connection->wasChanged('admin_api_token') && $connection->hasAdminApiToken()) {
+                SyncChatwootMetadataJob::dispatch($connection->id)->afterCommit();
             }
         });
     }
@@ -103,12 +112,28 @@ class ChatwootConnection extends Model
     }
 
     /**
+     * @return array{api_access_token: string}
+     */
+    public function chatwootAdminHeaders(): array
+    {
+        return [
+            'api_access_token' => (string) $this->admin_api_token,
+        ];
+    }
+
+    public function hasAdminApiToken(): bool
+    {
+        return filled($this->admin_api_token);
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
     {
         return [
             'api_access_token' => 'encrypted',
+            'admin_api_token' => 'encrypted',
             'webhook_secret' => 'encrypted',
             'status' => ChatwootConnectionStatus::class,
             'provisioned_at' => 'datetime',

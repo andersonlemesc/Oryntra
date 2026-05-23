@@ -24,7 +24,7 @@ class Workspace extends Model implements HasName
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'workspace_members')
-            ->withPivot('role')
+            ->withPivot('role', 'chatwoot_user_id', 'chatwoot_availability', 'chatwoot_confirmed', 'chatwoot_role')
             ->withTimestamps();
     }
 
