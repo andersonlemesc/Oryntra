@@ -163,16 +163,16 @@ Cron 1x/h
 
 ### Bloco A — Contacts table + auto-create (11.1)
 
-- [ ] A.1 Migration `contacts` com indices e constraints.
-- [ ] A.2 Migration `agent_runs.contact_id`.
-- [ ] A.3 Model `App\Models\Contact` + cast + factory + soft delete.
-- [ ] A.4 Action `App\Actions\Contacts\ResolveOrCreateContact::execute(workspaceId, connectionId, chatwootPayload): Contact`.
-- [ ] A.5 Hook na hidratacao do AgentRun (provavelmente em `App\Actions\Agents\ResolveAgentForWebhook` ou similar) para popular `agent_runs.contact_id` antes do save.
-- [ ] A.6 Filament: nav group `Contatos` + `ContactResource` (list, view, edit).
-- [ ] A.7 List: columns name, email, phone, lead_status (badge), last_message_at, agent counter; filtros por lead_status e por agente vinculado.
-- [ ] A.8 View Infolist com tab "Resumo" basico.
-- [ ] A.9 Edit: lead_status (select) + name/email/phone (editaveis locais).
-- [ ] A.10 Tests Pest:
+- [x] A.1 Migration `contacts` com indices e constraints.
+- [x] A.2 Migration `agent_runs.contact_id`.
+- [x] A.3 Model `App\Models\Contact` + cast + factory + soft delete.
+- [x] A.4 Action `App\Actions\Contacts\ResolveOrCreateContact::execute(workspaceId, connectionId, chatwootPayload): Contact`.
+- [x] A.5 Hook na hidratacao do AgentRun (provavelmente em `App\Actions\Agents\ResolveAgentForWebhook` ou similar) para popular `agent_runs.contact_id` antes do save.
+- [x] A.6 Filament: nav group `Contatos` + `ContactResource` (list, view, edit).
+- [x] A.7 List: columns name, email, phone, lead_status (badge), last_message_at, agent counter; filtros por lead_status e por agente vinculado.
+- [x] A.8 View Infolist com tab "Resumo" basico.
+- [x] A.9 Edit: lead_status (select) + name/email/phone (editaveis locais).
+- [x] A.10 Tests Pest:
   - Webhook do Chatwoot cria contact novo + popula campos
   - Webhook repetido nao duplica + atualiza last_seen
   - AgentRun.contact_id vinculado
@@ -180,40 +180,40 @@ Cron 1x/h
 
 ### Bloco B — Memories + manual UI (11.2 parte 1)
 
-- [ ] B.1 Migration `contact_memories`.
-- [ ] B.2 Model `App\Models\ContactMemory` + factory.
-- [ ] B.3 Tab "Memorias" no ContactResource view:
+- [x] B.1 Migration `contact_memories`.
+- [x] B.2 Model `App\Models\ContactMemory` + factory.
+- [x] B.3 Tab "Memorias" no ContactResource view:
   - Timeline cronologica desc, filtro por type
   - Badge colorido por source
   - Action "Adicionar memoria" (manual) com type/content
   - Action "Apagar memoria"
-- [ ] B.4 Migration sem schema mas commit do enum `ContactMemoryType` + `ContactMemorySource` PHP enum.
-- [ ] B.5 Tests Pest: criar memoria manual, listar por contact, soft-delete cascata quando contato e apagado.
+- [x] B.4 Migration sem schema mas commit do enum `ContactMemoryType` + `ContactMemorySource` PHP enum.
+- [x] B.5 Tests Pest: criar memoria manual, listar por contact, soft-delete cascata quando contato e apagado.
 
 ### Bloco C — Tool `update_contact_memory` (11.2 parte 2)
 
-- [ ] C.1 Action `App\Actions\AgentTools\UpdateContactMemory::execute(payload): array`.
-- [ ] C.2 FormRequest `UpdateContactMemoryRequest` valida payload (workspace_id, agent_id, agent_run_id, specialist_id?, contact_id, type, content, confidence?).
-- [ ] C.3 Controller `App\Http\Controllers\Internal\UpdateContactMemoryController`.
-- [ ] C.4 Route `POST /api/internal/agent-tools/update-contact-memory` no `internal.runtime` middleware.
-- [ ] C.5 Enum `NativeTool::UpdateContactMemory = 'update_contact_memory'` + entrada no `NativeToolRegistry`.
-- [ ] C.6 Python `agent-python/src/oryntra_agent/agent/tools.py`:
+- [x] C.1 Action `App\Actions\AgentTools\UpdateContactMemory::execute(payload): array`.
+- [x] C.2 FormRequest `UpdateContactMemoryRequest` valida payload (workspace_id, agent_id, agent_run_id, specialist_id?, contact_id, type, content, confidence?).
+- [x] C.3 Controller `App\Http\Controllers\Internal\UpdateContactMemoryController`.
+- [x] C.4 Route `POST /api/internal/agent-tools/update-contact-memory` no `internal.runtime` middleware.
+- [x] C.5 Enum `NativeTool::UpdateContactMemory = 'update_contact_memory'` + entrada no `NativeToolRegistry`.
+- [x] C.6 Python `agent-python/src/oryntra_agent/agent/tools.py`:
   - `UpdateContactMemoryRequest` Pydantic
   - `MemoryResponse` Pydantic
   - `update_contact_memory(payload) -> MemoryResponse`
-- [ ] C.7 Tests Pest: tool requer specialist allowlist, persiste memoria com source=tool, rejeita type fora do enum.
+- [x] C.7 Tests Pest: tool requer specialist allowlist, persiste memoria com source=tool, rejeita type fora do enum.
 
 ### Bloco D — Extraction job (11.2 parte 3)
 
-- [ ] D.1 `memory_config` jsonb em `agent_specialists` (model cast).
-- [ ] D.2 Filament `SpecialistsRelationManager` ganha tab "Memoria":
+- [x] D.1 `memory_config` jsonb em `agent_specialists` (model cast).
+- [x] D.2 Filament `SpecialistsRelationManager` ganha tab "Memoria":
   - Toggle "Extracao automatica"
   - Toggle "Injetar no prompt"
   - TextInput numerico "Limite de memorias no prompt" (placeholder "Vazio = todas")
   - CheckboxList "Tipos extraidos" (preference, fact, constraint, history, custom)
   - Helper text explicando custo de tokens
-- [ ] D.3 `normalizeSpecialistFormData` trata `memory_config` (defaults + cast).
-- [ ] D.4 Job `App\Jobs\Agent\ExtractContactMemoryJob`:
+- [x] D.3 `normalizeSpecialistFormData` trata `memory_config` (defaults + cast).
+- [x] D.4 Job `App\Jobs\Agent\ExtractContactMemoryJob`:
   - Le AgentRun + Contact + memorias existentes do contato
   - Monta prompt:
     - Transcript (ultimas N msgs)
@@ -223,10 +223,10 @@ Cron 1x/h
   - Retorno: structured `list[ExtractedMemory]` (type, content, confidence)
   - Dedup: normaliza content (lower + trim + colapso de espacos) e ignora se ja existe identico no contato
   - INSERT contact_memories com source=agent_extracted
-- [ ] D.5 `DispatchAgentRunJob` ja existente: apos transaction commit, se especialista tem `memory_config.extraction_enabled`, dispatch `ExtractContactMemoryJob::dispatch($run->id)->afterCommit()`.
-- [ ] D.6 Decisao tecnica: Laravel chama LLM diretamente via SDK PHP (`openai-php/client` ou Anthropic SDK)? OU Laravel chama endpoint Python `/internal/memory/extract`?
+- [x] D.5 `DispatchAgentRunJob` ja existente: apos transaction commit, se especialista tem `memory_config.extraction_enabled`, dispatch `ExtractContactMemoryJob::dispatch($run->id)->afterCommit()`.
+- [x] D.6 Decisao tecnica: Laravel chama LLM diretamente via SDK PHP (`openai-php/client` ou Anthropic SDK)? OU Laravel chama endpoint Python `/internal/memory/extract`?
   - **Recomendacao**: novo endpoint Python `/internal/memory/extract` reaproveita `chat_model_for_credential` e `with_structured_output` ja maduros. Laravel posta transcript + memorias existentes + tipos, recebe lista estruturada.
-- [ ] D.7 Tests:
+- [x] D.7 Tests:
   - Job extrai memorias novas
   - Job nao duplica content identico ja existente
   - Job respeita extraction_types do especialista
@@ -235,53 +235,53 @@ Cron 1x/h
 
 ### Bloco E — Prompt injection (11.2 parte 4)
 
-- [ ] E.1 `AgentRuntimeClient::payload`:
+- [x] E.1 `AgentRuntimeClient::payload`:
   - Carrega `Contact->memories()->orderByDesc('created_at')->limit($specialistInjectionLimit)->get()` se specialist tem `injection_enabled`.
   - Inclui em `payload['contact']['memories']` como `[{type, content, source, created_at, conversation_id}]`.
   - Se `injection_enabled=false`, envia array vazio.
-- [ ] E.2 Python `schemas.py`:
+- [x] E.2 Python `schemas.py`:
   - `ContactMemorySnapshot` BaseModel (type, content, source, created_at, conversation_id).
   - `ChatwootRuntimeRequest.contact` aceita `memories: list[ContactMemorySnapshot] = []`.
-- [ ] E.3 Python `specialist_response_messages` e `specialist_decision_messages`:
+- [x] E.3 Python `specialist_response_messages` e `specialist_decision_messages`:
   - Se `payload.contact.memories` nao vazio, prepend section no system:
     ```
     Memorias do contato:
     - [preference] Altura 1,72m, peso 80kg (2026-05-21)
     - [fact] Procura bike eletrica urbana
     ```
-- [ ] E.4 Tests Python: prompt inclui memorias quando presentes, nao inclui quando vazio.
-- [ ] E.5 Tests Laravel: payload tem memorias top N quando injection_enabled, vazio quando off.
+- [x] E.4 Tests Python: prompt inclui memorias quando presentes, nao inclui quando vazio.
+- [x] E.5 Tests Laravel: payload tem memorias top N quando injection_enabled, vazio quando off.
 
 ### Bloco F — Lead status manual UI (11.3)
 
-- [ ] F.1 Filament list: badge colorido por lead_status (new=gray, contacted=blue, qualified=amber, won=green, lost=red, dormant=zinc).
-- [ ] F.2 Filtro de tabela por lead_status (multi-select).
-- [ ] F.3 Bulk actions: "Marcar como qualified", "won", "lost".
-- [ ] F.4 Dashboard widget `RecentLeadsStatsWidget`:
+- [x] F.1 Filament list: badge colorido por lead_status (new=gray, contacted=blue, qualified=amber, won=green, lost=red, dormant=zinc).
+- [x] F.2 Filtro de tabela por lead_status (multi-select).
+- [x] F.3 Bulk actions: "Marcar como qualified", "won", "lost".
+- [x] F.4 Dashboard widget `RecentLeadsStatsWidget`:
   - Card "Leads novos 24h" (count + delta vs 24h anteriores)
   - Card "Em qualified" (count)
-- [ ] F.5 Dashboard widget `RecentLeadsTableWidget`:
+- [x] F.5 Dashboard widget `RecentLeadsTableWidget`:
   - Top 10 contatos `last_message_at` desc com lead_status != dormant
-- [ ] F.6 Tests Pest UI: widget renderiza, filtro funciona.
+- [x] F.6 Tests Pest UI: widget renderiza, filtro funciona.
 
 ### Bloco G — Sync periodico Chatwoot → contacts (11.4)
 
-- [ ] G.1 `ChatwootAdminApiClient::listContacts(updatedSince): array` — pagina `/api/v1/accounts/{id}/contacts` com `updated_at>` filter.
-- [ ] G.2 Job `App\Jobs\Chatwoot\SyncChatwootContactsJob`:
+- [x] G.1 `ChatwootAdminApiClient::listContacts(updatedSince): array` — pagina `/api/v1/accounts/{id}/contacts` com `updated_at>` filter.
+- [x] G.2 Job `App\Jobs\Chatwoot\SyncChatwootContactsJob`:
   - Para cada contato retornado, atualiza local respeitando regras:
     - `chatwoot_custom_attributes` e `additional_attributes` sobrescritos pelo Chatwoot
     - `name/email/phone` atualizados apenas se Chatwoot tem valor e local esta vazio OU se ambos preenchidos e diferentes (Chatwoot vence — fonte da verdade externa)
     - `lead_status` NUNCA sobrescrito (e local-only)
   - Atualiza `synced_at`
-- [ ] G.3 Schedule cron 1x/h em `routes/console.php`.
-- [ ] G.4 Botao "Sincronizar contatos agora" no header da ContactResource list (Filament action).
-- [ ] G.5 Tests: job atualiza custom_attributes, preserva lead_status, nao duplica.
+- [x] G.3 Schedule cron 1x/h em `routes/console.php`.
+- [x] G.4 Botao "Sincronizar contatos agora" no header da ContactResource list (Filament action).
+- [x] G.5 Tests: job atualiza custom_attributes, preserva lead_status, nao duplica.
 
 ### Bloco H — Integrar tools Chatwoot existentes com contacts table
 
-- [ ] H.1 `chatwoot_update_contact` (Fase 7.2 ja existe) agora tambem atualiza linha local em `contacts` (mesma transaction).
-- [ ] H.2 `chatwoot_get_contact` (Fase 7.2 ja existe) le do banco local primeiro; se nao encontrar OU `synced_at` for muito antigo (> 5min), chama Chatwoot e atualiza cache local.
-- [ ] H.3 Tests ajustados.
+- [x] H.1 `chatwoot_update_contact` (Fase 7.2 ja existe) agora tambem atualiza linha local em `contacts` (mesma transaction).
+- [x] H.2 `chatwoot_get_contact` (Fase 7.2 ja existe) le do banco local primeiro; se nao encontrar OU `synced_at` for muito antigo (> 5min), chama Chatwoot e atualiza cache local.
+- [x] H.3 Tests ajustados.
 
 ---
 
