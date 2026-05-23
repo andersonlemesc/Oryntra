@@ -8,6 +8,7 @@ use App\Filament\Resources\Contacts\Pages\CreateContact;
 use App\Filament\Resources\Contacts\Pages\EditContact;
 use App\Filament\Resources\Contacts\Pages\ListContacts;
 use App\Filament\Resources\Contacts\Pages\ViewContact;
+use App\Filament\Resources\Contacts\RelationManagers\MemoriesRelationManager;
 use App\Filament\Resources\Contacts\Schemas\ContactForm;
 use App\Filament\Resources\Contacts\Schemas\ContactInfolist;
 use App\Filament\Resources\Contacts\Tables\ContactsTable;
@@ -55,7 +56,7 @@ class ContactResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            MemoriesRelationManager::class,
         ];
     }
 

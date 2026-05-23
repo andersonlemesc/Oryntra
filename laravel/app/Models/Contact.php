@@ -77,4 +77,12 @@ class Contact extends Model
     {
         return $this->hasMany(AgentRun::class);
     }
+
+    /**
+     * @return HasMany<ContactMemory, $this>
+     */
+    public function memories(): HasMany
+    {
+        return $this->hasMany(ContactMemory::class);
+    }
 }
