@@ -38,8 +38,8 @@ return [
     ],
 
     'agent_runtime' => [
-        'base_url' => env('AGENT_RUNTIME_URL', 'http://agent-python:8000'),
-        'internal_token' => env('AGENT_RUNTIME_INTERNAL_TOKEN'),
+        'base_url' => env('AGENT_RUNTIME_URL', env('AGENT_PYTHON_URL', 'http://agent-python:8000')),
+        'internal_token' => env('AGENT_RUNTIME_INTERNAL_TOKEN', env('INTERNAL_API_TOKEN')),
         'timeout' => (int) env('AGENT_RUNTIME_TIMEOUT', 30),
     ],
 

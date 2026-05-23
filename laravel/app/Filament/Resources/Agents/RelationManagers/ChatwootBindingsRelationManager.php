@@ -66,21 +66,21 @@ class ChatwootBindingsRelationManager extends RelationManager
                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Conversas marcadas com qualquer uma dessas labels no Chatwoot sao ignoradas pela IA.'),
                     ]),
 
-                Section::make('Destino do handoff')
-                    ->description('Para onde a conversa vai quando a IA transferir para humano.')
+                Section::make('Destino do handoff (fallback)')
+                    ->description('Padroes usados quando o especialista nao define seus proprios valores. O especialista vence sempre que preencher.')
                     ->columns(2)
                     ->schema([
                         Select::make('handoff_assign_strategy')
-                            ->label('Estrategia')
+                            ->label('Estrategia padrao')
                             ->options(self::handoffAssignStrategyOptions())
                             ->default('none')
                             ->live()
                             ->required()
-                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Para quem o Chatwoot atribui a conversa quando a IA transferir. "Time" = roteia para um time inteiro (ex: Suporte N1). "Atendente" = atendente especifico. "Time e atendente" = ambos.'),
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Para quem o Chatwoot atribui quando o especialista nao define team/agent proprios. Especialista com team_id/agent_id ignora esta estrategia.'),
                         TextInput::make('handoff_label_name')
-                            ->label('Label de handoff')
+                            ->label('Label padrao')
                             ->maxLength(255)
-                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Label aplicada na conversa do Chatwoot ao transferir. Util para filtrar conversas em handoff nos relatorios. Ex: "ia-handoff".'),
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Label aplicada quando o especialista nao define label propria. Especialista com label_name preenchido sobrescreve esta.'),
                         TextInput::make('handoff_team_id')
                             ->label('ID do time Chatwoot')
                             ->numeric()
@@ -100,11 +100,11 @@ class ChatwootBindingsRelationManager extends RelationManager
                             ->visible(fn (Get $get): bool => in_array($get('handoff_assign_strategy'), ['agent', 'team_then_agent'], true))
                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Nome amigavel do atendente. Aparece nos logs e telas do painel.'),
                         Textarea::make('handoff_private_note_template')
-                            ->label('Nota interna para atendente')
+                            ->label('Template padrao da nota privada')
                             ->rows(4)
-                            ->helperText('Use {reason}, {priority}, {specialist_id}, {conversation_id} e {customer_message}.')
+                            ->helperText('Padrao quando o especialista nao define template proprio. Placeholders: {reason}, {priority}, {specialist_id}, {conversation_id}, {customer_message}, {agent_name}, {conversation_summary}, {key_fact}, {recent_messages}.')
                             ->columnSpanFull()
-                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Mensagem privada (so o atendente ve, o cliente nao) anexada na conversa do Chatwoot quando o handoff acontece. Use as variaveis entre chaves para personalizar.'),
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Template aplicado quando o especialista nao tem private_note_template proprio. Especialista com template preenchido sobrescreve este.'),
                     ]),
             ]);
     }

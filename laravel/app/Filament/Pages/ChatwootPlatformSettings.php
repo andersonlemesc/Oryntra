@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Jobs\Chatwoot\SyncChatwootAccountsJob;
+use App\Jobs\Chatwoot\SyncChatwootMetadataJob;
+use App\Models\ChatwootConnection;
 use App\Models\ChatwootPlatformConnection;
 use App\Models\User;
 use Filament\Actions\Action;
@@ -117,9 +119,15 @@ class ChatwootPlatformSettings extends Page implements HasForms
     {
         SyncChatwootAccountsJob::dispatch();
 
+        ChatwootConnection::query()
+            ->whereNotNull('admin_api_token')
+            ->whereNotNull('base_url')
+            ->pluck('id')
+            ->each(fn (int $connectionId) => SyncChatwootMetadataJob::dispatch($connectionId));
+
         Notification::make()
             ->title('Sincronização enfileirada')
-            ->body('Acompanhe o status na fila Horizon ou recarregue a página em alguns segundos.')
+            ->body('Accounts, usuários, times e membros Chatwoot serão atualizados em background.')
             ->success()
             ->send();
     }

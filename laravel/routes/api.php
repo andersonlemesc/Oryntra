@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 use App\Http\Controllers\ChatwootWebhookController;
 use App\Http\Controllers\Internal\AgentRunResumeController;
+use App\Http\Controllers\Internal\GetChatwootContactController;
 use App\Http\Controllers\Internal\RequestHumanHandoffController;
+use App\Http\Controllers\Internal\RequestTeamHandoffController;
+use App\Http\Controllers\Internal\UpdateChatwootContactController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('webhooks/chatwoot/{connectionUuid}', ChatwootWebhookController::class)
@@ -14,6 +17,15 @@ Route::post('webhooks/chatwoot/{connectionUuid}', ChatwootWebhookController::cla
 Route::middleware('internal.runtime')->group(function (): void {
     Route::post('internal/agent-tools/request-human-handoff', RequestHumanHandoffController::class)
         ->name('internal.agent-tools.request-human-handoff');
+
+    Route::post('internal/agent-tools/request-team-handoff', RequestTeamHandoffController::class)
+        ->name('internal.agent-tools.request-team-handoff');
+
+    Route::post('internal/agent-tools/chatwoot-get-contact', GetChatwootContactController::class)
+        ->name('internal.agent-tools.chatwoot-get-contact');
+
+    Route::post('internal/agent-tools/chatwoot-update-contact', UpdateChatwootContactController::class)
+        ->name('internal.agent-tools.chatwoot-update-contact');
 
     Route::post('internal/agent-runs/{agentRun}/resume', AgentRunResumeController::class)
         ->name('internal.agent-runs.resume');

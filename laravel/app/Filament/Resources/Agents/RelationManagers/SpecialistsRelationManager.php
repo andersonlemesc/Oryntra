@@ -25,9 +25,11 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\DB;
 
 class SpecialistsRelationManager extends RelationManager
 {
@@ -133,6 +135,29 @@ class SpecialistsRelationManager extends RelationManager
                                     ]),
                             ]),
 
+                        Tab::make('Transferencia para time')
+                            ->icon('heroicon-o-user-group')
+                            ->schema([
+                                Section::make('Configuracao')
+                                    ->description('Permite a IA transferir a conversa para um time Chatwoot. Se um time for selecionado, a aba "Transferencia humana" so listara atendentes desse time.')
+                                    ->columns(2)
+                                    ->schema([
+                                        Toggle::make('handoff_config.team_enabled')
+                                            ->label('Permitir transferencia para time')
+                                            ->live()
+                                            ->default(false)
+                                            ->helperText('Quando habilitado, a tool request_team_handoff sera adicionada automaticamente ao especialista.'),
+                                        Select::make('handoff_config.team_id')
+                                            ->label('Time destino')
+                                            ->options(fn (): array => self::chatwootTeamOptions())
+                                            ->searchable()
+                                            ->live()
+                                            ->placeholder('Nenhum - apenas abrir conversa')
+                                            ->visible(fn (Get $get): bool => (bool) $get('handoff_config.team_enabled'))
+                                            ->helperText('Opcional. Se vazio, a conversa abre mas nao e atribuida a nenhum time.'),
+                                    ]),
+                            ]),
+
                         Tab::make('Transferencia humana')
                             ->icon('heroicon-o-arrow-uturn-right')
                             ->schema([
@@ -146,15 +171,42 @@ class SpecialistsRelationManager extends RelationManager
                                             ->default(false)
                                             ->helperText('Quando habilitado, a tool request_human_handoff sera adicionada automaticamente ao especialista.')
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Permite que este especialista escale a conversa para um atendente humano em situacoes definidas nas regras abaixo (ou quando a IA achar que nao consegue resolver).'),
+                                        Toggle::make('handoff_config.summary_llm_enabled')
+                                            ->label('Gerar resumo LLM no handoff')
+                                            ->default(false)
+                                            ->visible(fn (Get $get): bool => (bool) $get('handoff_config.enabled'))
+                                            ->helperText('Quando ativo, gera resumo + fato relevante da conversa via LLM antes de criar a nota privada. Custo de tokens adicional.'),
                                         Select::make('handoff_config.default_priority')
                                             ->label('Prioridade padrao')
                                             ->options(self::handoffPriorityOptions())
                                             ->default('normal')
                                             ->required(),
+                                        Select::make('handoff_config.agent_id')
+                                            ->label('Atendente destino')
+                                            ->options(fn (Get $get): array => self::chatwootAgentOptions(
+                                                $get('handoff_config.team_enabled') ? $get('handoff_config.team_id') : null,
+                                            ))
+                                            ->searchable()
+                                            ->placeholder('Nenhum - apenas abrir conversa')
+                                            ->visible(fn (Get $get): bool => (bool) $get('handoff_config.enabled'))
+                                            ->helperText('Opcional. Se um time foi selecionado, a lista filtra so membros desse time. Se vazio, a conversa abre mas nao e atribuida a ninguem.'),
                                         Textarea::make('handoff_config.customer_message')
                                             ->label('Mensagem ao cliente')
                                             ->rows(2)
                                             ->default('Vou transferir voce para um atendente.')
+                                            ->columnSpanFull(),
+                                        TextInput::make('handoff_config.label_name')
+                                            ->label('Label Chatwoot')
+                                            ->maxLength(120)
+                                            ->visible(fn (Get $get): bool => (bool) $get('handoff_config.enabled'))
+                                            ->placeholder('Herda do bot quando vazio')
+                                            ->helperText('Opcional. Sobrescreve a label configurada no bot. Use para diferenciar vendas/suporte/financeiro.'),
+                                        Textarea::make('handoff_config.private_note_template')
+                                            ->label('Template da nota privada')
+                                            ->rows(3)
+                                            ->visible(fn (Get $get): bool => (bool) $get('handoff_config.enabled'))
+                                            ->placeholder('Herda do bot quando vazio')
+                                            ->helperText('Opcional. Placeholders: {reason}, {priority}, {customer_message}, {agent_name}, {conversation_summary}, {key_fact}, {recent_messages}, {conversation_id}, {specialist_id}.')
                                             ->columnSpanFull(),
                                     ]),
 
@@ -199,6 +251,19 @@ class SpecialistsRelationManager extends RelationManager
                                             ->columns(2)
                                             ->defaultItems(0)
                                             ->columnSpanFull(),
+                                    ]),
+                            ]),
+
+                        Tab::make('Contatos Chatwoot')
+                            ->icon('heroicon-o-identification')
+                            ->schema([
+                                Section::make('Edicao de contato')
+                                    ->description('Permite a IA ler e atualizar dados de contato no Chatwoot.')
+                                    ->schema([
+                                        Toggle::make('contact_tools_config.update_enabled')
+                                            ->label('Permitir editar contato')
+                                            ->default(false)
+                                            ->helperText('Quando habilitado, a IA pode chamar chatwoot_get_contact e chatwoot_update_contact. So edita nome, email e telefone. Nao mexe em custom attributes.'),
                                     ]),
                             ]),
                     ]),
@@ -325,25 +390,40 @@ class SpecialistsRelationManager extends RelationManager
         $handoffConfig = is_array($data['handoff_config'] ?? null)
             ? $data['handoff_config']
             : [];
-        $handoffEnabled = (bool) ($handoffConfig['enabled'] ?? false);
+        $contactConfig = is_array($data['contact_tools_config'] ?? null)
+            ? $data['contact_tools_config']
+            : [];
+
+        $humanEnabled = (bool) ($handoffConfig['enabled'] ?? false);
+        $teamEnabled = (bool) ($handoffConfig['team_enabled'] ?? false);
+        $contactUpdateEnabled = (bool) ($contactConfig['update_enabled'] ?? false);
+
         $toolsAllowlist = is_array($data['tools_allowlist'] ?? null)
             ? array_values($data['tools_allowlist'])
             : [];
 
-        if ($handoffEnabled && ! in_array(NativeTool::RequestHumanHandoff->value, $toolsAllowlist, true)) {
-            $toolsAllowlist[] = NativeTool::RequestHumanHandoff->value;
-        }
+        $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::RequestHumanHandoff->value, $humanEnabled);
+        $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::RequestTeamHandoff->value, $teamEnabled);
+        $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ChatwootGetContact->value, $contactUpdateEnabled);
+        $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ChatwootUpdateContact->value, $contactUpdateEnabled);
 
-        if (! $handoffEnabled) {
-            $toolsAllowlist = array_values(array_filter(
-                $toolsAllowlist,
-                fn (mixed $tool): bool => $tool !== NativeTool::RequestHumanHandoff->value,
-            ));
-        }
-
+        $handoffConfig['summary_llm_enabled'] = (bool) ($handoffConfig['summary_llm_enabled'] ?? false);
         $handoffConfig['default_priority'] = $handoffConfig['default_priority'] ?? 'normal';
         $handoffConfig['customer_message'] = $handoffConfig['customer_message']
             ?? 'Vou transferir voce para um atendente.';
+        $handoffConfig['agent_id'] = $humanEnabled && filled($handoffConfig['agent_id'] ?? null)
+            ? (int) $handoffConfig['agent_id']
+            : null;
+        $handoffConfig['team_enabled'] = $teamEnabled;
+        $handoffConfig['team_id'] = $teamEnabled && filled($handoffConfig['team_id'] ?? null)
+            ? (int) $handoffConfig['team_id']
+            : null;
+        $handoffConfig['label_name'] = $humanEnabled && filled($handoffConfig['label_name'] ?? null)
+            ? trim((string) $handoffConfig['label_name'])
+            : null;
+        $handoffConfig['private_note_template'] = $humanEnabled && filled($handoffConfig['private_note_template'] ?? null)
+            ? (string) $handoffConfig['private_note_template']
+            : null;
         $handoffConfig['rules'] = is_array($handoffConfig['rules'] ?? null)
             ? array_values($handoffConfig['rules'])
             : [];
@@ -352,10 +432,106 @@ class SpecialistsRelationManager extends RelationManager
             $handoffConfig['rules'],
         );
 
+        $contactConfig['update_enabled'] = $contactUpdateEnabled;
+        $contactConfig['update_fields'] = ['name', 'email', 'phone_number'];
+
         $data['tools_allowlist'] = $toolsAllowlist;
         $data['handoff_config'] = $handoffConfig;
+        $data['contact_tools_config'] = $contactConfig;
+        $data['intent_keywords'] = self::normalizeKeywordList($data['intent_keywords'] ?? null);
 
         return $data;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function normalizeKeywordList(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = explode(',', $value);
+        }
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            fn (mixed $item): string => is_string($item) ? trim($item) : '',
+            $value,
+        ), fn (string $item): bool => $item !== ''));
+    }
+
+    /**
+     * @param  array<int, mixed> $toolsAllowlist
+     * @return array<int, mixed>
+     */
+    private static function reconcileTool(array $toolsAllowlist, string $tool, bool $enabled): array
+    {
+        if ($enabled && ! in_array($tool, $toolsAllowlist, true)) {
+            $toolsAllowlist[] = $tool;
+        }
+
+        if (! $enabled) {
+            $toolsAllowlist = array_values(array_filter(
+                $toolsAllowlist,
+                fn (mixed $candidate): bool => $candidate !== $tool,
+            ));
+        }
+
+        return $toolsAllowlist;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function chatwootAgentOptions(mixed $teamId = null): array
+    {
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return [];
+        }
+
+        $query = DB::table('workspace_members')
+            ->join('users', 'users.id', '=', 'workspace_members.user_id')
+            ->where('workspace_members.workspace_id', $tenant->getKey())
+            ->whereNotNull('workspace_members.chatwoot_user_id');
+
+        if (is_numeric($teamId) && (int) $teamId > 0) {
+            $query->whereIn(
+                'workspace_members.chatwoot_user_id',
+                DB::table('chatwoot_team_members')
+                    ->where('workspace_id', $tenant->getKey())
+                    ->where('chatwoot_team_id', (int) $teamId)
+                    ->pluck('chatwoot_user_id'),
+            );
+        }
+
+        return $query
+            ->orderBy('users.name')
+            ->pluck('users.name', 'workspace_members.chatwoot_user_id')
+            ->map(fn (mixed $name): string => (string) $name)
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function chatwootTeamOptions(): array
+    {
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return [];
+        }
+
+        return DB::table('chatwoot_teams')
+            ->where('workspace_id', $tenant->getKey())
+            ->orderBy('name')
+            ->pluck('name', 'chatwoot_team_id')
+            ->map(fn (mixed $name): string => (string) $name)
+            ->all();
     }
 
     /**

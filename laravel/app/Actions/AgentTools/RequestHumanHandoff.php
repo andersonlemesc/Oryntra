@@ -14,13 +14,25 @@ use Illuminate\Validation\ValidationException;
 
 class RequestHumanHandoff
 {
+    private const VALID_PRIORITIES = ['low', 'normal', 'high', 'urgent'];
+
     /**
      * @param  array{workspace_id:int,agent_id:int,agent_run_id:int,thread_id:string,conversation_id:int,specialist_id?:int|null,reason:string,priority:string,suggested_team?:string|null,customer_message?:string|null} $payload
      * @return array{status:string,handoff_id:int,message:string}
      */
     public function execute(array $payload): array
     {
-        $run = DB::transaction(function () use ($payload): AgentRun {
+        if (! filled($payload['reason'] ?? null)) {
+            throw ValidationException::withMessages([
+                'reason' => 'Reason is required for human handoff.',
+            ]);
+        }
+
+        if (! in_array($payload['priority'] ?? null, self::VALID_PRIORITIES, true)) {
+            $payload['priority'] = 'normal';
+        }
+
+        $run = DB::transaction(function () use (&$payload): AgentRun {
             $run = AgentRun::query()
                 ->where('id', $payload['agent_run_id'])
                 ->where('workspace_id', $payload['workspace_id'])
@@ -37,15 +49,20 @@ class RequestHumanHandoff
             }
 
             $specialistId = $payload['specialist_id'] ?? null;
+            $specialist = null;
 
             if ($specialistId !== null) {
-                $this->assertSpecialistCanRequestHandoff($payload, $specialistId);
+                $specialist = $this->assertSpecialistCanRequestHandoff($payload, $specialistId);
+            }
+
+            if (! filled($payload['customer_message'] ?? null)) {
+                $payload['customer_message'] = $this->resolveDefaultCustomerMessage($specialist);
             }
 
             $run->update([
-                'status' => AgentRunStatus::WaitingHuman,
+                'status' => AgentRunStatus::Completed,
                 'output' => $this->handoffOutput($run, $payload, $specialistId),
-                'finished_at' => null,
+                'finished_at' => Carbon::now(),
             ]);
 
             return $run->refresh();
@@ -54,16 +71,16 @@ class RequestHumanHandoff
         ApplyHumanHandoffToChatwootJob::dispatch($run->id)->afterCommit();
 
         return [
-            'status' => 'waiting_human',
+            'status' => 'handoff_dispatched',
             'handoff_id' => $run->id,
-            'message' => 'Human handoff requested.',
+            'message' => 'Human handoff dispatched to Chatwoot.',
         ];
     }
 
     /**
      * @param array<string, mixed> $payload
      */
-    private function assertSpecialistCanRequestHandoff(array $payload, int $specialistId): void
+    private function assertSpecialistCanRequestHandoff(array $payload, int $specialistId): AgentSpecialist
     {
         $specialist = AgentSpecialist::query()
             ->where('id', $specialistId)
@@ -88,6 +105,20 @@ class RequestHumanHandoff
                 'specialist_id' => 'The specialist is not allowed to request human handoff.',
             ]);
         }
+
+        return $specialist;
+    }
+
+    private function resolveDefaultCustomerMessage(?AgentSpecialist $specialist): string
+    {
+        $config = is_array($specialist?->handoff_config) ? $specialist->handoff_config : [];
+        $message = $config['customer_message'] ?? null;
+
+        if (is_string($message) && filled($message)) {
+            return $message;
+        }
+
+        return 'Vou transferir voce para um atendente.';
     }
 
     /**
@@ -125,7 +156,7 @@ class RequestHumanHandoff
             'tool' => 'request_human_handoff',
             'input' => [],
             'output' => [
-                'status' => 'waiting_human',
+                'status' => 'handoff_dispatched',
                 'handoff_id' => $run->id,
             ],
             'tokens' => ['input' => 0, 'output' => 0],
@@ -138,6 +169,8 @@ class RequestHumanHandoff
             'priority' => $payload['priority'],
             'suggested_team' => $payload['suggested_team'] ?? null,
             'customer_message' => $payload['customer_message'] ?? null,
+            'conversation_summary' => $payload['conversation_summary'] ?? null,
+            'key_fact' => $payload['key_fact'] ?? null,
             'private_note' => null,
             'requested_at' => $timestamp,
             'side_effects' => [
@@ -148,6 +181,7 @@ class RequestHumanHandoff
                 'failed_at' => null,
                 'error' => null,
                 'actions' => [
+                    'open_conversation' => 'pending',
                     'customer_message' => 'pending',
                     'private_note' => 'pending',
                     'label' => 'pending',

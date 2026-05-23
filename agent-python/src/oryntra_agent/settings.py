@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,13 @@ class Settings(BaseSettings):
     postgres_url: str = "postgresql://oryntra:oryntra_dev_pw@postgres:5432/oryntra"
     langgraph_checkpointer: str = "memory"
     log_level: str = "INFO"
+
+    @model_validator(mode="after")
+    def fallback_agent_runtime_token(self) -> "Settings":
+        if self.agent_runtime_internal_token == "":
+            self.agent_runtime_internal_token = self.internal_api_token
+
+        return self
 
 
 settings = Settings()

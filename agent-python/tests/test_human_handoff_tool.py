@@ -34,7 +34,7 @@ def test_request_human_handoff_posts_to_laravel_gateway(monkeypatch, httpx_mock)
         method="POST",
         url="http://laravel-app/api/internal/agent-tools/request-human-handoff",
         json={
-            "status": "waiting_human",
+            "status": "handoff_dispatched",
             "handoff_id": 55,
             "message": "Human handoff requested.",
         },
@@ -57,9 +57,10 @@ def test_request_human_handoff_posts_to_laravel_gateway(monkeypatch, httpx_mock)
 
     request = httpx_mock.get_request()
 
-    assert response.status == "waiting_human"
+    assert response.status == "handoff_dispatched"
     assert response.handoff_id == 55
     assert request is not None
+    assert request.headers["Accept"] == "application/json"
     assert request.headers["X-Internal-Token"] == "ci-token"
     assert request.url.path == "/api/internal/agent-tools/request-human-handoff"
 
@@ -103,7 +104,7 @@ def test_specialist_can_request_human_handoff_when_tool_is_allowed(monkeypatch) 
         supervisor,
         "request_human_handoff",
         lambda request: HumanHandoffResponse(
-            status="waiting_human",
+            status="handoff_dispatched",
             handoff_id=55,
             message="Human handoff requested.",
         ),
@@ -111,7 +112,7 @@ def test_specialist_can_request_human_handoff_when_tool_is_allowed(monkeypatch) 
 
     response = run_chatwoot_runtime(payload)
 
-    assert response.status == "waiting_human"
+    assert response.status == "completed"
     assert response.response.type == "escalate"
     assert response.response.handoff_reason == "Human handoff requested by specialist."
     assert response.trace[2].type == "tool_call"
@@ -166,7 +167,7 @@ def test_configured_handoff_rule_requests_human_handoff(monkeypatch) -> None:
         supervisor,
         "request_human_handoff",
         lambda request: HumanHandoffResponse(
-            status="waiting_human",
+            status="handoff_dispatched",
             handoff_id=55,
             message="Human handoff requested.",
         ),
@@ -174,7 +175,7 @@ def test_configured_handoff_rule_requests_human_handoff(monkeypatch) -> None:
 
     response = run_chatwoot_runtime(payload)
 
-    assert response.status == "waiting_human"
+    assert response.status == "completed"
     assert response.response.handoff_reason == "Cliente pediu cancelamento."
     assert response.trace[2].input["source"] == "handoff_rule"
     assert response.trace[2].input["rule"] == "Cancelamento"
@@ -199,7 +200,7 @@ def test_structured_specialist_decision_requests_human_handoff(monkeypatch) -> N
         supervisor,
         "request_human_handoff",
         lambda request: HumanHandoffResponse(
-            status="waiting_human",
+            status="handoff_dispatched",
             handoff_id=55,
             message="Human handoff requested.",
         ),
@@ -207,7 +208,7 @@ def test_structured_specialist_decision_requests_human_handoff(monkeypatch) -> N
 
     response = run_chatwoot_runtime(payload)
 
-    assert response.status == "waiting_human"
+    assert response.status == "completed"
     assert response.response.content == "Vou transferir voce para um atendente."
     assert response.response.handoff_reason == "Cliente pediu atendimento humano."
     assert response.trace[2].input["source"] == "structured_decision"

@@ -7,6 +7,7 @@ from pydantic import SecretStr
 from oryntra_agent import settings as settings_module
 from oryntra_agent.agent import supervisor
 from oryntra_agent.agent.supervisor import (
+    SpecialistDecision,
     SpecialistChoice,
     get_runtime_graph,
     run_chatwoot_runtime,
@@ -67,14 +68,46 @@ def test_supervisor_routes_to_keyword_matching_specialist() -> None:
     assert response.trace[1].output["reason"] == "keyword_match"
 
 
-def test_supervisor_waits_for_human_when_no_keyword_matches() -> None:
+def test_supervisor_asks_for_context_when_no_keyword_matches() -> None:
     response = run_chatwoot_runtime(supervisor_payload("boa tarde"))
 
-    assert response.status == "waiting_human"
+    assert response.status == "completed"
     assert response.specialist_id is None
     assert response.response.type == "clarify"
-    assert response.response.handoff_reason == "no_confident_specialist_route"
+    assert response.response.handoff_reason is None
     assert response.trace[1].output["reason"] == "no_keyword_match"
+
+
+def test_supervisor_can_generate_opening_response_with_llm(monkeypatch) -> None:
+    payload = supervisor_payload("Oi")
+    payload.supervisor.llm_provider = "openai"
+    payload.supervisor.llm_model = "gpt-4.1-mini"
+    payload.supervisor.llm_api_key = SecretStr("sk-test")
+
+    monkeypatch.setattr(supervisor, "choose_specialist_with_llm", lambda payload: None)
+
+    class FakeChatModel:
+        def invoke(self, messages):
+            assert "recepcao inicial" in messages[0][1]
+            assert "Cliente: Oi" in messages[1][1]
+
+            return SimpleNamespace(
+                content="Olá! Bem-vindo à BikePulse. Qual é o seu nome e como posso te ajudar hoje?"
+            )
+
+    monkeypatch.setattr(
+        supervisor,
+        "chat_model_for_credential",
+        lambda credential, temperature: FakeChatModel(),
+    )
+
+    response = run_chatwoot_runtime(payload)
+
+    assert response.status == "completed"
+    assert response.specialist_id is None
+    assert response.response.content == (
+        "Olá! Bem-vindo à BikePulse. Qual é o seu nome e como posso te ajudar hoje?"
+    )
 
 
 def test_supervisor_waits_for_human_when_confidence_is_below_threshold() -> None:
@@ -83,7 +116,7 @@ def test_supervisor_waits_for_human_when_confidence_is_below_threshold() -> None
 
     response = run_chatwoot_runtime(payload)
 
-    assert response.status == "waiting_human"
+    assert response.status == "completed"
     assert response.specialist_id is None
     assert response.response.confidence == 0.5
     assert response.trace[1].output["reason"] == "below_confidence_threshold"
@@ -155,6 +188,56 @@ def test_specialist_can_generate_response_with_llm(monkeypatch) -> None:
     assert response.trace[2].output["source"] == "llm"
 
 
+def test_specialist_prompt_receives_recent_conversation_history(monkeypatch) -> None:
+    thread_id = "workspace:1:account:5:conversation:specialist-history"
+    captured = {}
+
+    monkeypatch.setattr(
+        supervisor,
+        "choose_specialist_with_llm",
+        lambda payload: SpecialistChoice(
+            specialist_id=6,
+            confidence=0.9,
+            reason="initial_sales",
+        ),
+    )
+
+    class FakeChatModel:
+        def with_structured_output(self, _schema):
+            return self
+
+        def invoke(self, messages):
+            captured["human"] = messages[1][1]
+
+            return SpecialistDecision(
+                action="respond_text",
+                content="Com 1,72 e trajeto de 5km, recomendo modelo urbano.",
+                confidence=0.9,
+            )
+
+    monkeypatch.setattr(
+        supervisor,
+        "chat_model_for_credential",
+        lambda credential, temperature: FakeChatModel(),
+    )
+
+    first = supervisor_payload("Preciso comprar uma bike", thread_id=thread_id)
+    first.specialists[1].llm_provider = "openai"
+    first.specialists[1].llm_model = "gpt-4.1-mini"
+    first.specialists[1].llm_api_key = SecretStr("sk-test")
+    run_chatwoot_runtime(first)
+
+    second = supervisor_payload("Minha altura é 1,72", thread_id=thread_id)
+    second.specialists[1].llm_provider = "openai"
+    second.specialists[1].llm_model = "gpt-4.1-mini"
+    second.specialists[1].llm_api_key = SecretStr("sk-test")
+    run_chatwoot_runtime(second)
+
+    assert "Cliente: Preciso comprar uma bike" in captured["human"]
+    assert "IA: Com 1,72 e trajeto de 5km, recomendo modelo urbano." in captured["human"]
+    assert "Cliente: Minha altura é 1,72" in captured["human"]
+
+
 def test_supervisor_waits_when_llm_choice_is_below_threshold(monkeypatch) -> None:
     payload = supervisor_payload("sem palavra chave")
 
@@ -168,7 +251,7 @@ def test_supervisor_waits_when_llm_choice_is_below_threshold(monkeypatch) -> Non
 
     response = run_chatwoot_runtime(payload)
 
-    assert response.status == "waiting_human"
+    assert response.status == "completed"
     assert response.specialist_id is None
     assert response.trace[1].output["reason"] == "llm_low_confidence"
 
@@ -183,6 +266,50 @@ def test_runtime_checkpointer_reuses_state_for_same_thread_id() -> None:
     assert first.trace[0].input["turn_count"] == 1
     assert second.trace[0].input["turn_count"] == 2
     assert state["turn_count"] == 2
+
+
+def test_runtime_accumulates_conversation_history_for_same_thread() -> None:
+    thread_id = "workspace:1:account:5:conversation:memory-history"
+
+    run_chatwoot_runtime(supervisor_payload("Preciso comprar uma bike", thread_id=thread_id))
+    run_chatwoot_runtime(
+        supervisor_payload("Uso para ir ao trabalho cerca de 5km", thread_id=thread_id)
+    )
+
+    state = get_runtime_graph().get_state(
+        runtime_config(supervisor_payload(thread_id=thread_id))
+    ).values
+
+    assert [message["content"] for message in state["conversation_messages"]] == [
+        "Preciso comprar uma bike",
+        "[mock] Vendas recebeu 1 mensagem(ns).",
+        "Uso para ir ao trabalho cerca de 5km",
+        "[mock] Vendas recebeu 2 mensagem(ns).",
+    ]
+
+
+def test_runtime_reuses_active_specialist_for_followup_without_rerouting(monkeypatch) -> None:
+    thread_id = "workspace:1:account:5:conversation:active-specialist"
+    calls = []
+
+    def fake_choice(payload):
+        calls.append(payload.messages[-1].content)
+
+        return SpecialistChoice(specialist_id=6, confidence=0.9, reason="initial_sales")
+
+    monkeypatch.setattr(supervisor, "choose_specialist_with_llm", fake_choice)
+
+    first = run_chatwoot_runtime(
+        supervisor_payload("Preciso comprar uma bike", thread_id=thread_id)
+    )
+    second = run_chatwoot_runtime(
+        supervisor_payload("Tenho 1,72 e peso 79kg", thread_id=thread_id)
+    )
+
+    assert first.specialist_id == 6
+    assert second.specialist_id == 6
+    assert calls == ["Preciso comprar uma bike"]
+    assert second.trace[1].output["reason"] == "active_specialist_continuation"
 
 
 def test_runtime_checkpointer_isolates_different_thread_ids() -> None:

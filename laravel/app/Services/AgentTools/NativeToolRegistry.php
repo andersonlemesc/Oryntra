@@ -14,7 +14,11 @@ final class NativeToolRegistry
         return [
             NativeTool::RequestHumanHandoff->value => [
                 'label' => 'Transferir para humano',
-                'description' => 'Pausa a IA e solicita atendimento humano.',
+                'description' => 'Encerra a IA e dispara handoff para atendente humano.',
+            ],
+            NativeTool::RequestTeamHandoff->value => [
+                'label' => 'Transferir para time',
+                'description' => 'Encerra a IA e dispara handoff para um time Chatwoot.',
             ],
             NativeTool::ChatwootSendMessage->value => [
                 'label' => 'Enviar mensagem Chatwoot',
@@ -35,6 +39,14 @@ final class NativeToolRegistry
             NativeTool::ChatwootAssignAgent->value => [
                 'label' => 'Atribuir atendente',
                 'description' => 'Atribui a conversa a um atendente Chatwoot.',
+            ],
+            NativeTool::ChatwootGetContact->value => [
+                'label' => 'Consultar contato',
+                'description' => 'Le os dados de um contato no Chatwoot.',
+            ],
+            NativeTool::ChatwootUpdateContact->value => [
+                'label' => 'Editar contato',
+                'description' => 'Atualiza nome, email ou telefone de um contato no Chatwoot.',
             ],
         ];
     }

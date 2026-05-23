@@ -115,6 +115,8 @@ services:
       - ./agent-python/src:/app/src
     environment:
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-replace_me_with_long_random_string}
+      AGENT_RUNTIME_INTERNAL_TOKEN: ${AGENT_RUNTIME_INTERNAL_TOKEN:-${INTERNAL_API_TOKEN:-replace_me_with_long_random_string}}
+      LARAVEL_INTERNAL_BASE_URL: ${LARAVEL_INTERNAL_BASE_URL:-http://nginx}
       POSTGRES_URL: ${POSTGRES_URL:-postgresql://oryntra:oryntra_dev_pw@postgres:5432/oryntra}
       LANGGRAPH_CHECKPOINTER: ${LANGGRAPH_CHECKPOINTER:-postgres}
     expose:

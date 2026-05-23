@@ -51,6 +51,16 @@ class ChatwootConnectionForm
                     ->options(self::statusOptions())
                     ->default(ChatwootConnectionStatus::Active->value)
                     ->required(),
+                TextInput::make('admin_api_token')
+                    ->label('Admin API Token')
+                    ->password()
+                    ->revealable()
+                    ->dehydrated(fn (?string $state): bool => filled($state))
+                    ->placeholder(fn (?ChatwootConnection $record): string => $record?->hasAdminApiToken()
+                        ? 'Token salvo (deixe em branco para manter)'
+                        : 'Cole o User Access Token de um Administrator no Chatwoot')
+                    ->helperText('Necessario para listar times, agentes e editar contatos. Gere em: Chatwoot → Profile Settings → Access Token (usuario com role Administrator).')
+                    ->columnSpanFull(),
             ]);
     }
 

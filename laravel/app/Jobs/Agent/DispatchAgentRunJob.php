@@ -7,6 +7,7 @@ namespace App\Jobs\Agent;
 use App\Enums\AgentRunStatus;
 use App\Models\AgentRun;
 use App\Services\AgentRuntime\AgentRuntimeClient;
+use App\Services\Chatwoot\ChatwootAgentBotClient;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -16,6 +17,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 class DispatchAgentRunJob implements ShouldQueue
@@ -72,13 +74,23 @@ class DispatchAgentRunJob implements ShouldQueue
                 ])->save();
 
                 $output = $runtime->run($run);
+                $output = $this->deliverResponseToChatwoot($run, $output);
 
                 DB::transaction(function () use ($run, $output): void {
+                    $run->refresh();
+                    $existingOutput = is_array($run->output) ? $run->output : [];
+                    $existingHandoff = is_array($existingOutput['handoff'] ?? null) ? $existingOutput['handoff'] : null;
+                    $mergedOutput = $output;
+
+                    if ($existingHandoff !== null) {
+                        $mergedOutput['handoff'] = array_replace($existingHandoff, $mergedOutput['handoff'] ?? []);
+                    }
+
                     $run->forceFill([
                         'status' => $output['status'] === 'waiting_human'
                             ? AgentRunStatus::WaitingHuman
                             : AgentRunStatus::Completed,
-                        'output' => $output,
+                        'output' => $mergedOutput,
                         'finished_at' => Carbon::now(),
                     ])->save();
 
@@ -113,5 +125,117 @@ class DispatchAgentRunJob implements ShouldQueue
                 throw $e;
             }
         });
+    }
+
+    /**
+     * @param  array<string, mixed> $output
+     * @return array<string, mixed>
+     */
+    private function deliverResponseToChatwoot(AgentRun $run, array $output): array
+    {
+        if ($this->responseDeliveryCompleted($run)) {
+            $output['response_delivery'] = $this->arrayValue($run->output['response_delivery'] ?? []);
+
+            return $output;
+        }
+
+        if (($output['status'] ?? null) !== AgentRunStatus::Completed->value) {
+            $output['response_delivery'] = $this->skippedResponseDelivery('runtime_status_not_completed');
+
+            return $output;
+        }
+
+        $response = $this->arrayValue($output['response'] ?? []);
+        $responseType = $this->stringValue($response['type'] ?? null);
+        $content = $this->stringValue($response['content'] ?? null);
+
+        if (! in_array($responseType, ['text', 'clarify'], true)) {
+            $output['response_delivery'] = $this->skippedResponseDelivery('unsupported_response_type');
+
+            return $output;
+        }
+
+        if ($content === '') {
+            $output['response_delivery'] = $this->skippedResponseDelivery('empty_response_content');
+
+            return $output;
+        }
+
+        $run->loadMissing('chatwootConnection');
+        $connection = $run->chatwootConnection;
+
+        if ($connection === null) {
+            $output['response_delivery'] = $this->failedResponseDelivery('missing_chatwoot_connection');
+            $run->forceFill(['output' => $output])->save();
+
+            throw new RuntimeException('Cannot deliver agent response without a Chatwoot connection.');
+        }
+
+        try {
+            (new ChatwootAgentBotClient($connection))
+                ->sendConversationMessage((int) $run->conversation_id, $content);
+        } catch (Throwable $exception) {
+            $output['response_delivery'] = $this->failedResponseDelivery($exception->getMessage());
+            $run->forceFill(['output' => $output])->save();
+
+            throw $exception;
+        }
+
+        $output['response_delivery'] = [
+            'status' => 'completed',
+            'sent_at' => Carbon::now()->toISOString(),
+            'conversation_id' => (int) $run->conversation_id,
+            'response_type' => $responseType,
+        ];
+
+        return $output;
+    }
+
+    private function responseDeliveryCompleted(AgentRun $run): bool
+    {
+        $output = $run->output;
+
+        if (! is_array($output)) {
+            return false;
+        }
+
+        return data_get($output, 'response_delivery.status') === 'completed';
+    }
+
+    /**
+     * @return array{status: string, reason: string, skipped_at: string}
+     */
+    private function skippedResponseDelivery(string $reason): array
+    {
+        return [
+            'status' => 'skipped',
+            'reason' => $reason,
+            'skipped_at' => Carbon::now()->toISOString(),
+        ];
+    }
+
+    /**
+     * @return array{status: string, error: string, failed_at: string}
+     */
+    private function failedResponseDelivery(string $error): array
+    {
+        return [
+            'status' => 'failed',
+            'error' => $error,
+            'failed_at' => Carbon::now()->toISOString(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function arrayValue(mixed $value): array
+    {
+        return is_array($value) ? $value : [];
+    }
+
+    private function stringValue(mixed $value): string
+    {
+        return is_string($value) ? trim($value) : '';
     }
 }

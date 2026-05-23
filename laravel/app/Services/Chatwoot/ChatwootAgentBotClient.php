@@ -76,6 +76,18 @@ class ChatwootAgentBotClient
         }
     }
 
+    public function toggleConversationStatus(int $conversationId, string $status): void
+    {
+        $response = Http::withHeaders($this->connection->chatwootHeaders())
+            ->post($this->url("conversations/{$conversationId}/toggle_status"), [
+                'status' => $status,
+            ]);
+
+        if ($response->failed()) {
+            throw new RuntimeException("Chatwoot toggleConversationStatus({$conversationId}) failed: HTTP {$response->status()}");
+        }
+    }
+
     private function url(string $path): string
     {
         $baseUrl = rtrim((string) $this->connection->base_url, '/');
