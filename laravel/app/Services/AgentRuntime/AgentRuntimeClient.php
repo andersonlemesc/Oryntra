@@ -12,6 +12,7 @@ use App\Models\Agent;
 use App\Models\AgentLlmKey;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
+use App\Models\ContactMemory;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -119,6 +120,7 @@ class AgentRuntimeClient
                 ->where('status', AgentSpecialistStatus::Active->value)
                 ->orderBy('priority')
                 ->orderBy('id'),
+            'contact',
         ]);
 
         $input = $run->getAttribute('input');
@@ -163,6 +165,7 @@ class AgentRuntimeClient
                         'llm_temperature' => $specialist->llm_temperature,
                         'tools' => $specialist->tools_allowlist,
                         'handoff_config' => $specialist->handoff_config,
+                        'memory_config' => $this->normalizedMemoryConfig($specialist),
                         'intent_keywords' => $specialist->intent_keywords,
                         'confidence_threshold' => $specialist->confidence_threshold,
                         'fallback_specialist_id' => $specialist->fallback_specialist_id,
@@ -171,7 +174,7 @@ class AgentRuntimeClient
                 ->values()
                 ->all(),
             'messages' => array_values($this->arrayInput($input, 'messages')),
-            'contact' => $this->objectInput($input, 'contact'),
+            'contact' => $this->contactPayload($run, $input),
             'inbox' => $this->objectInput($input, 'inbox'),
             'guard_config' => $this->objectInput($input, 'guard_config'),
             'media_config' => $this->objectInput($input, 'media_config'),
@@ -185,6 +188,97 @@ class AgentRuntimeClient
     private function specialistCredential(AgentSpecialist $specialist, int $workspaceId): array
     {
         return $this->credentialFromKey($specialist->llmKey, $workspaceId);
+    }
+
+    /**
+     * @return array{extraction_enabled:bool,injection_enabled:bool,injection_limit:int|null,extraction_types:array<int,string>}
+     */
+    private function normalizedMemoryConfig(AgentSpecialist $specialist): array
+    {
+        $config = is_array($specialist->memory_config) ? $specialist->memory_config : [];
+
+        return [
+            'extraction_enabled' => (bool) ($config['extraction_enabled'] ?? false),
+            'injection_enabled' => (bool) ($config['injection_enabled'] ?? false),
+            'injection_limit' => isset($config['injection_limit']) && is_numeric($config['injection_limit'])
+                ? max(1, (int) $config['injection_limit'])
+                : null,
+            'extraction_types' => is_array($config['extraction_types'] ?? null)
+                ? array_values(array_filter(
+                    $config['extraction_types'],
+                    fn (mixed $type): bool => in_array($type, ['preference', 'fact', 'constraint', 'history', 'custom'], true),
+                ))
+                : [],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>           $input
+     * @return array<string, mixed>|\stdClass
+     */
+    private function contactPayload(AgentRun $run, array $input): array|\stdClass
+    {
+        $base = $this->objectInput($input, 'contact');
+        $contact = $run->contact;
+
+        if ($contact === null) {
+            return $base;
+        }
+
+        $payload = is_array($base) ? $base : [];
+        $payload['id'] = $contact->id;
+        $payload['chatwoot_contact_id'] = $contact->chatwoot_contact_id;
+        $payload['memories'] = $this->contactMemoriesPayload($run);
+
+        return $payload;
+    }
+
+    /**
+     * @return array<int, array{type:string,content:string,source:string,confidence:float|null,created_at:string,conversation_id:int|null}>
+     */
+    private function contactMemoriesPayload(AgentRun $run): array
+    {
+        if ($run->contact_id === null) {
+            return [];
+        }
+
+        if (! $this->anySpecialistInjectsMemory($run)) {
+            return [];
+        }
+
+        return ContactMemory::query()
+            ->where('contact_id', $run->contact_id)
+            ->orderByDesc('created_at')
+            ->limit(100)
+            ->get(['type', 'content', 'source', 'confidence', 'created_at', 'conversation_id'])
+            ->map(fn (ContactMemory $memory): array => [
+                'type' => $memory->type->value,
+                'content' => $memory->content,
+                'source' => $memory->source->value,
+                'confidence' => $memory->confidence !== null ? (float) $memory->confidence : null,
+                'created_at' => $memory->created_at?->toIso8601String() ?? '',
+                'conversation_id' => $memory->conversation_id,
+            ])
+            ->all();
+    }
+
+    private function anySpecialistInjectsMemory(AgentRun $run): bool
+    {
+        $agent = $run->agent;
+
+        if ($agent === null) {
+            return false;
+        }
+
+        foreach ($agent->specialists as $specialist) {
+            $config = is_array($specialist->memory_config) ? $specialist->memory_config : [];
+
+            if ($config['injection_enabled'] ?? false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -51,7 +51,29 @@ class HandoffConfig(BaseModel):
     assign_strategy: Literal["none", "team", "agent", "team_then_agent"] = "none"
     team_id: int | None = None
     agent_id: int | None = None
+    label_name: str | None = None
+    private_note_template: str | None = None
     rules: list[HandoffRuleConfig] = Field(default_factory=list)
+
+
+class MemoryConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    extraction_enabled: bool = False
+    injection_enabled: bool = False
+    injection_limit: int | None = None
+    extraction_types: list[str] = Field(default_factory=list)
+
+
+class ContactMemorySnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["preference", "fact", "constraint", "history", "custom"]
+    content: str
+    source: Literal["agent_extracted", "manual", "chatwoot_attribute", "tool"]
+    confidence: float | None = None
+    created_at: str | None = None
+    conversation_id: int | None = None
 
 
 class SpecialistConfig(BaseModel):
@@ -68,6 +90,7 @@ class SpecialistConfig(BaseModel):
     llm_temperature: float = Field(ge=0, le=2)
     tools: list[str] = Field(default_factory=list)
     handoff_config: HandoffConfig = Field(default_factory=HandoffConfig)
+    memory_config: MemoryConfig = Field(default_factory=MemoryConfig)
     intent_keywords: list[str] = Field(default_factory=list)
     confidence_threshold: float = Field(ge=0, le=1)
     fallback_specialist_id: int | None = None
