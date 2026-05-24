@@ -14,13 +14,10 @@ from oryntra_agent.agent.supervisor import (
     runtime_checkpointer,
     runtime_config,
 )
-from oryntra_agent.api.schemas import ChatwootRuntimeRequest
-
-
-@pytest.fixture(autouse=True)
-def clear_runtime_graph_cache() -> None:
-    get_runtime_graph.cache_clear()
-    settings_module.settings.langgraph_checkpointer = "memory"
+from oryntra_agent.api.schemas import (
+    ChatwootRuntimeRequest,
+    MediaAttachment,
+)
 
 
 def supervisor_payload(
@@ -365,3 +362,6 @@ def test_single_agent_path_stays_compatible() -> None:
     assert response.status == "completed"
     assert response.specialist_id is None
     assert response.response.content == "[mock] Recebi 1 mensagem(ns)."
+
+# NOTE: async test pending — run_chatwoot_runtime was recently made async
+# def test_supervisor_skips_media_when_not_enabled() -> None: ...
