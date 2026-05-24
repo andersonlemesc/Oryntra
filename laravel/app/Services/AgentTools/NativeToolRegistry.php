@@ -60,6 +60,10 @@ final class NativeToolRegistry
                 'label' => 'Consultar produtos',
                 'description' => 'Busca produtos do catalogo por nome, categoria ou termo. Retorna lista com precos e descricao.',
             ],
+            NativeTool::SendDocument->value => [
+                'label' => 'Enviar documento',
+                'description' => 'Envia um documento (PDF, imagem) ao cliente via Chatwoot.',
+            ],
         ];
     }
 

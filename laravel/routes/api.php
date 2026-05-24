@@ -9,6 +9,7 @@ use App\Http\Controllers\Internal\QueryProductsController;
 use App\Http\Controllers\Internal\RequestHumanHandoffController;
 use App\Http\Controllers\Internal\RequestTeamHandoffController;
 use App\Http\Controllers\Internal\ResolveConversationController;
+use App\Http\Controllers\Internal\SendDocumentController;
 use App\Http\Controllers\Internal\UpdateChatwootContactController;
 use App\Http\Controllers\Internal\UpdateContactMemoryController;
 use Illuminate\Support\Facades\Route;
@@ -38,6 +39,9 @@ Route::middleware('internal.runtime')->group(function (): void {
 
     Route::post('internal/agent-tools/query-products', QueryProductsController::class)
         ->name('internal.agent-tools.query-products');
+
+    Route::post('internal/agent-tools/send-document', SendDocumentController::class)
+        ->name('internal.agent-tools.send-document');
 
     Route::post('internal/agent-runs/{agentRun}/resume', AgentRunResumeController::class)
         ->name('internal.agent-runs.resume');
