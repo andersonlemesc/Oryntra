@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Products;
 
+use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -22,6 +23,7 @@ class ProductSearchService
         int $limit = 20,
     ): array {
         $q = Product::query()
+            ->with('category')
             ->where('workspace_id', $workspaceId);
 
         if ($activeOnly) {
@@ -29,7 +31,14 @@ class ProductSearchService
         }
 
         if ($category !== null && $category !== '') {
-            $q->where('category', $category);
+            $q->whereHas('category', function (Builder $categoryQuery) use ($category, $workspaceId): void {
+                $categoryQuery
+                    ->where('workspace_id', $workspaceId)
+                    ->where(function (Builder $match) use ($category): void {
+                        $match->where('name', $category)
+                            ->orWhere('slug', $category);
+                    });
+            });
         }
 
         if ($minPrice !== null) {
@@ -41,11 +50,13 @@ class ProductSearchService
         }
 
         if ($query !== null && $query !== '') {
-            $q->where(function (Builder $sub) use ($query): void {
+            $operator = Product::query()->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
+            $q->where(function (Builder $sub) use ($operator, $query): void {
                 $search = "%{$query}%";
-                $sub->where('name', 'ilike', $search)
-                    ->orWhere('description', 'ilike', $search)
-                    ->orWhere('sku', 'ilike', $search);
+                $sub->where('name', $operator, $search)
+                    ->orWhere('description', $operator, $search)
+                    ->orWhere('sku', $operator, $search);
             });
         }
 
@@ -64,12 +75,10 @@ class ProductSearchService
      */
     public function categoriesForWorkspace(int $workspaceId): array
     {
-        return Product::query()
+        return Category::query()
             ->where('workspace_id', $workspaceId)
-            ->whereNotNull('category')
-            ->where('active', true)
-            ->distinct()
-            ->pluck('category')
+            ->whereHas('products', fn (Builder $query): Builder => $query->where('active', true))
+            ->pluck('name')
             ->sort()
             ->values()
             ->all();

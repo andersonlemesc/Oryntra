@@ -4,24 +4,26 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use Database\Factories\ProductFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
- * @property int                          $id
- * @property int                          $workspace_id
- * @property string                       $name
- * @property string|null                  $sku
- * @property string|null                  $description
- * @property float|null                   $price
- * @property string|null                  $category
- * @property array<string, mixed>|null   $metadata
- * @property bool                         $active
- * @property \Illuminate\Support\Carbon  $created_at
- * @property \Illuminate\Support\Carbon  $updated_at
- * @property Workspace                   $workspace
+ * @property int                       $id
+ * @property int                       $workspace_id
+ * @property int|null                  $category_id
+ * @property string                    $name
+ * @property string|null               $sku
+ * @property string|null               $description
+ * @property float|null                $price
+ * @property array<string, mixed>|null $metadata
+ * @property bool                      $active
+ * @property Carbon                    $created_at
+ * @property Carbon                    $updated_at
+ * @property Workspace                 $workspace
+ * @property Category|null             $category
  */
 class Product extends Model
 {
@@ -29,11 +31,11 @@ class Product extends Model
 
     protected $fillable = [
         'workspace_id',
+        'category_id',
         'name',
         'sku',
         'description',
         'price',
-        'category',
         'metadata',
         'active',
     ];
@@ -52,26 +54,55 @@ class Product extends Model
         return $this->belongsTo(Workspace::class);
     }
 
-    public function scopeActive($query)
+    /**
+     * @return BelongsTo<Category, $this>
+     */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * @param  Builder<Product> $query
+     * @return Builder<Product>
+     */
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('active', true);
     }
 
-    public function scopeInCategory($query, string $category)
+    /**
+     * @param  Builder<Product> $query
+     * @return Builder<Product>
+     */
+    public function scopeInCategory(Builder $query, string $category): Builder
     {
-        return $query->where('category', $category);
-    }
-
-    public function scopeBySearch($query, string $search)
-    {
-        return $query->where(function ($q) use ($search) {
-            $q->where('name', 'ilike', "%{$search}%")
-              ->orWhere('description', 'ilike', "%{$search}%")
-              ->orWhere('sku', 'ilike', "%{$search}%");
+        return $query->whereHas('category', function (Builder $categoryQuery) use ($category): void {
+            $categoryQuery->where('name', $category)
+                ->orWhere('slug', $category);
         });
     }
 
-    public function scopePriceRange($query, ?float $min = null, ?float $max = null)
+    /**
+     * @param  Builder<Product> $query
+     * @return Builder<Product>
+     */
+    public function scopeBySearch(Builder $query, string $search): Builder
+    {
+        $operator = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
+        return $query->where(function (Builder $q) use ($operator, $search): void {
+            $q->where('name', $operator, "%{$search}%")
+                ->orWhere('description', $operator, "%{$search}%")
+                ->orWhere('sku', $operator, "%{$search}%");
+        });
+    }
+
+    /**
+     * @param  Builder<Product> $query
+     * @return Builder<Product>
+     */
+    public function scopePriceRange(Builder $query, ?float $min = null, ?float $max = null): Builder
     {
         if ($min !== null) {
             $query->where('price', '>=', $min);
@@ -83,6 +114,9 @@ class Product extends Model
         return $query;
     }
 
+    /**
+     * @return array{id:int,name:string,sku:string|null,description:string|null,price:float|null,category:string|null}
+     */
     public function toAgentPayload(): array
     {
         return [
@@ -91,7 +125,7 @@ class Product extends Model
             'sku' => $this->sku,
             'description' => $this->description,
             'price' => $this->price,
-            'category' => $this->category,
+            'category' => $this->category?->name,
         ];
     }
 }

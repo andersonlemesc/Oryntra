@@ -23,7 +23,6 @@ from oryntra_agent.agent.tool_runtime import (
     ToolRuntimeContext,
     build_specialist_tools,
     run_specialist_tool_loop,
-    track_llm_invoke,
 )
 from oryntra_agent.agent.tools import (
     HumanHandoffRequest,
@@ -765,9 +764,9 @@ def _debug_prompts_enabled(payload: ChatwootRuntimeRequest) -> bool:
 
 
 def _specialist_response_trace_step(
-    payload: ChatwootRuntimeRequest,
+    _payload: ChatwootRuntimeRequest,
     selected_specialist: SpecialistConfig,
-    response_content: str,
+    _response_content: str,
     response_source: str,
 ) -> TraceStep:
     usage = _accumulated_usage.get().consume_specialist_usage()

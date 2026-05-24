@@ -11,10 +11,12 @@ use App\Filament\Resources\Products\Schemas\ProductForm;
 use App\Filament\Resources\Products\Tables\ProductsTable;
 use App\Models\Product;
 use BackedEnum;
+use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class ProductResource extends Resource
@@ -41,6 +43,18 @@ class ProductResource extends Resource
     public static function table(Table $table): Table
     {
         return ProductsTable::configure($table);
+    }
+
+    /**
+     * @return Builder<Product>
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        $tenant = Filament::getTenant();
+
+        return parent::getEloquentQuery()
+            ->with('category')
+            ->when($tenant !== null, fn (Builder $query): Builder => $query->where('workspace_id', $tenant->getKey()));
     }
 
     public static function getRelations(): array

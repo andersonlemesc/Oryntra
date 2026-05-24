@@ -28,6 +28,7 @@ Route::post(config('invitations.accept_path') . '/{token}', [InvitationControlle
     ->name('invitation.accept');
 
 Route::get('/download/products-template', DownloadTemplateController::class)
+    ->middleware('auth')
     ->name('download.products-template');
 
 Route::middleware(['auth', EnsurePlatformSetupNeeded::class])

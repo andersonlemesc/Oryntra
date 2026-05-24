@@ -38,6 +38,26 @@ class AgentSpecialistFactory extends Factory
                 'customer_message' => 'Vou transferir voce para um atendente.',
                 'rules' => [],
             ],
+            'contact_tools_config' => [
+                'update_enabled' => false,
+                'update_fields' => ['name', 'email', 'phone_number'],
+            ],
+            'product_tools_config' => [
+                'query_enabled' => false,
+            ],
+            'memory_config' => [
+                'extraction_enabled' => false,
+                'injection_enabled' => false,
+                'extraction_types' => [],
+                'injection_limit' => null,
+                'max_tool_iterations' => 4,
+            ],
+            'resolution_config' => [
+                'enabled' => false,
+                'customer_message' => null,
+                'label_name' => null,
+                'rules' => [],
+            ],
             'priority' => 100,
             'confidence_threshold' => 0.6,
             'status' => AgentSpecialistStatus::Active,

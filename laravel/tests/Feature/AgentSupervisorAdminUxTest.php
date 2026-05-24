@@ -165,6 +165,9 @@ it('creates specialists scoped to the current Filament tenant', function () {
                     ],
                 ],
             ],
+            'product_tools_config' => [
+                'query_enabled' => true,
+            ],
             'priority' => 10,
             'confidence_threshold' => 0.6,
         ])
@@ -187,6 +190,7 @@ it('creates specialists scoped to the current Filament tenant', function () {
     assert(is_array($handoffConfig));
 
     expect($specialist->tools_allowlist)->toContain('request_human_handoff')
+        ->and($specialist->tools_allowlist)->toContain('query_products')
         ->and($handoffConfig['enabled'])->toBeTrue()
         ->and($handoffConfig['rules'][0]['keywords'])->toBe(['humano', 'atendente']);
 });

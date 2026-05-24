@@ -269,6 +269,19 @@ class SpecialistsRelationManager extends RelationManager
                                     ]),
                             ]),
 
+                        Tab::make('Produtos')
+                            ->icon('heroicon-o-shopping-bag')
+                            ->schema([
+                                Section::make('Catalogo')
+                                    ->description('Permite a IA consultar produtos ativos cadastrados neste workspace.')
+                                    ->schema([
+                                        Toggle::make('product_tools_config.query_enabled')
+                                            ->label('Permitir consultar produtos')
+                                            ->default(false)
+                                            ->helperText('Quando habilitado, a tool query_products sera adicionada automaticamente ao especialista.'),
+                                    ]),
+                            ]),
+
                         Tab::make('Encerramento')
                             ->icon('heroicon-o-check-circle')
                             ->schema([
@@ -524,6 +537,9 @@ class SpecialistsRelationManager extends RelationManager
         $contactConfig = is_array($data['contact_tools_config'] ?? null)
             ? $data['contact_tools_config']
             : [];
+        $productConfig = is_array($data['product_tools_config'] ?? null)
+            ? $data['product_tools_config']
+            : [];
         $memoryConfig = is_array($data['memory_config'] ?? null)
             ? $data['memory_config']
             : [];
@@ -542,10 +558,13 @@ class SpecialistsRelationManager extends RelationManager
             ? array_values($data['tools_allowlist'])
             : [];
 
+        $productQueryEnabled = (bool) ($productConfig['query_enabled'] ?? in_array(NativeTool::QueryProducts->value, $toolsAllowlist, true));
+
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::RequestHumanHandoff->value, $humanEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::RequestTeamHandoff->value, $teamEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ChatwootGetContact->value, $contactUpdateEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ChatwootUpdateContact->value, $contactUpdateEnabled);
+        $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::QueryProducts->value, $productQueryEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ResolveConversation->value, $resolutionEnabled);
 
         $handoffConfig['summary_llm_enabled'] = (bool) ($handoffConfig['summary_llm_enabled'] ?? false);
@@ -575,6 +594,8 @@ class SpecialistsRelationManager extends RelationManager
 
         $contactConfig['update_enabled'] = $contactUpdateEnabled;
         $contactConfig['update_fields'] = ['name', 'email', 'phone_number'];
+
+        $productConfig['query_enabled'] = $productQueryEnabled;
 
         $memoryConfig['extraction_enabled'] = $memoryExtractionEnabled;
         $memoryConfig['injection_enabled'] = $memoryInjectionEnabled;
@@ -613,6 +634,7 @@ class SpecialistsRelationManager extends RelationManager
         $data['tools_allowlist'] = $toolsAllowlist;
         $data['handoff_config'] = $handoffConfig;
         $data['contact_tools_config'] = $contactConfig;
+        $data['product_tools_config'] = $productConfig;
         $data['memory_config'] = $memoryConfig;
         $data['resolution_config'] = $resolutionConfig;
         $data['intent_keywords'] = self::normalizeKeywordList($data['intent_keywords'] ?? null);

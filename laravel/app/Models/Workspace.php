@@ -61,6 +61,22 @@ class Workspace extends Model implements HasName
     }
 
     /**
+     * @return HasMany<Category, $this>
+     */
+    public function categories(): HasMany
+    {
+        return $this->hasMany(Category::class);
+    }
+
+    /**
+     * @return HasMany<Product, $this>
+     */
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
+    /**
      * @return HasMany<ChatwootWebhookEvent, $this>
      */
     public function chatwootWebhookEvents(): HasMany

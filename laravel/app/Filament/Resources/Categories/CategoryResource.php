@@ -11,10 +11,12 @@ use App\Filament\Resources\Categories\Schemas\CategoryForm;
 use App\Filament\Resources\Categories\Tables\CategoriesTable;
 use App\Models\Category;
 use BackedEnum;
+use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class CategoryResource extends Resource
@@ -41,6 +43,17 @@ class CategoryResource extends Resource
     public static function table(Table $table): Table
     {
         return CategoriesTable::configure($table);
+    }
+
+    /**
+     * @return Builder<Category>
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        $tenant = Filament::getTenant();
+
+        return parent::getEloquentQuery()
+            ->when($tenant !== null, fn (Builder $query): Builder => $query->where('workspace_id', $tenant->getKey()));
     }
 
     public static function getRelations(): array

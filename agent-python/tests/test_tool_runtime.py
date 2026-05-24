@@ -56,6 +56,16 @@ def test_build_specialist_tools_builds_resolve_without_contact() -> None:
     assert names == ["resolve_conversation"]
 
 
+def test_build_specialist_tools_builds_query_products_without_contact() -> None:
+    tools = build_specialist_tools(
+        ["query_products"],
+        make_ctx(contact_id=None),
+    )
+
+    names = sorted(tool.name for tool in tools)
+    assert names == ["query_products"]
+
+
 def test_build_specialist_tools_skips_resolve_without_terminal_state() -> None:
     tools = build_specialist_tools(
         ["resolve_conversation"],
@@ -181,6 +191,66 @@ def test_tool_loop_dispatches_tool_then_returns_text(monkeypatch) -> None:
     assert "ok" in result.tool_calls[0]["output"]
     assert captured_payloads[0].email == "anderson@example.com"
     assert captured_payloads[0].contact_id == 7
+
+
+def test_tool_loop_dispatches_query_products(monkeypatch) -> None:
+    captured_payloads: list[Any] = []
+
+    def fake_query_products(payload):
+        captured_payloads.append(payload)
+
+        class FakeResponse:
+            def __init__(self) -> None:
+                self.products = [
+                    {
+                        "name": "Bike Eletrica Urbana",
+                        "price": 3499.9,
+                        "category": "Bikes",
+                        "description": "Autonomia de 50km.",
+                    }
+                ]
+                self.total = 1
+
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "oryntra_agent.agent.tool_runtime.query_products",
+        fake_query_products,
+    )
+
+    tools = build_specialist_tools(["query_products"], make_ctx(contact_id=None))
+
+    first = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": "call_products",
+                "name": "query_products",
+                "args": {"query": "bike", "category": "Bikes", "limit": 5},
+            }
+        ],
+    )
+    second = AIMessage(content="Temos a Bike Eletrica Urbana por R$ 3499,90.")
+
+    chat_model = MagicMock()
+    bound = MagicMock()
+    bound.invoke.side_effect = [first, second]
+    chat_model.bind_tools.return_value = bound
+
+    result = run_specialist_tool_loop(
+        chat_model=chat_model,
+        tools=tools,
+        system_prompt="system",
+        user_prompt="tem bike eletrica?",
+    )
+
+    assert result.text == "Temos a Bike Eletrica Urbana por R$ 3499,90."
+    assert result.tool_calls[0]["tool"] == "query_products"
+    assert "Bike Eletrica Urbana" in result.tool_calls[0]["output"]
+    assert captured_payloads[0].workspace_id == 1
+    assert captured_payloads[0].agent_run_id == 55
+    assert captured_payloads[0].query == "bike"
+    assert captured_payloads[0].category == "Bikes"
 
 
 def test_tool_loop_returns_text_when_model_does_not_call_tools() -> None:

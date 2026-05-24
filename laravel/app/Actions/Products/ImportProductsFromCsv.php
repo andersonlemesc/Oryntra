@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Actions\Products;
 
+use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ImportProductsFromCsv
 {
@@ -39,7 +41,7 @@ class ImportProductsFromCsv
             return ['imported' => 0, 'updated' => 0, 'errors' => ['Column "name" is required']];
         }
 
-        DB::transaction(function () use ($lines, $workspaceId, $header, $nameIdx, $skuIdx, $descIdx, $priceIdx, $categoryIdx, &$imported, &$updated, &$errors): void {
+        DB::transaction(function () use ($lines, $workspaceId, $nameIdx, $skuIdx, $descIdx, $priceIdx, $categoryIdx, &$imported, &$updated, &$errors): void {
             foreach ($lines as $lineNum => $line) {
                 $line = trim($line);
                 if ($line === '') {
@@ -48,13 +50,15 @@ class ImportProductsFromCsv
 
                 $row = str_getcsv($line);
                 if (count($row) <= $nameIdx) {
-                    $errors[] = "Line " . ($lineNum + 2) . ": invalid row";
+                    $errors[] = 'Line ' . ($lineNum + 2) . ': invalid row';
+
                     continue;
                 }
 
                 $name = trim($row[$nameIdx] ?? '');
                 if ($name === '') {
-                    $errors[] = "Line " . ($lineNum + 2) . ": name is empty";
+                    $errors[] = 'Line ' . ($lineNum + 2) . ': name is empty';
+
                     continue;
                 }
 
@@ -62,13 +66,16 @@ class ImportProductsFromCsv
                 $description = $descIdx !== null ? trim($row[$descIdx] ?? '') : null;
                 $price = $priceIdx !== null ? $this->parsePrice($row[$priceIdx] ?? '') : null;
                 $category = $categoryIdx !== null ? trim($row[$categoryIdx] ?? '') : null;
+                $categoryId = $category !== null && $category !== ''
+                    ? $this->resolveCategoryId($workspaceId, $category)
+                    : null;
 
                 $data = [
                     'workspace_id' => $workspaceId,
+                    'category_id' => $categoryId,
                     'name' => $name,
                     'description' => $description ?: null,
                     'price' => $price,
-                    'category' => $category ?: null,
                 ];
 
                 if ($sku !== null && $sku !== '') {
@@ -122,5 +129,22 @@ class ImportProductsFromCsv
         }
 
         return (float) $value;
+    }
+
+    private function resolveCategoryId(int $workspaceId, string $name): int
+    {
+        $slug = Str::slug($name);
+
+        $category = Category::query()->firstOrCreate(
+            [
+                'workspace_id' => $workspaceId,
+                'slug' => $slug,
+            ],
+            [
+                'name' => $name,
+            ],
+        );
+
+        return $category->id;
     }
 }

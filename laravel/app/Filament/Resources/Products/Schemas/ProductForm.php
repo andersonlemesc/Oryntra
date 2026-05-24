@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Products\Schemas;
 
-use App\Models\Product;
+use App\Models\Category;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
@@ -27,26 +28,50 @@ class ProductForm
                             ->schema([
                                 TextInput::make('name')
                                     ->label('Nome')
-                                    ->required(),
+                                    ->required()
+                                    ->maxLength(255),
                                 TextInput::make('sku')
-                                    ->label('SKU'),
+                                    ->label('SKU')
+                                    ->maxLength(255),
                             ]),
                         Grid::make(2)
                             ->schema([
-                                TextInput::make('category')
-                                    ->label('Categoria'),
+                                Select::make('category_id')
+                                    ->label('Categoria')
+                                    ->options(fn (): array => self::categoryOptions())
+                                    ->searchable()
+                                    ->preload(),
                                 TextInput::make('price')
-                                    ->label('Preço')
+                                    ->label('Preco')
                                     ->numeric()
+                                    ->minValue(0)
                                     ->prefix('R$'),
                             ]),
                         TextInput::make('description')
-                            ->label('Descrição')
+                            ->label('Descricao')
                             ->columnSpanFull(),
                         Toggle::make('active')
                             ->label('Ativo')
                             ->default(true),
                     ]),
             ]);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function categoryOptions(): array
+    {
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return [];
+        }
+
+        return Category::query()
+            ->where('workspace_id', $tenant->getKey())
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
     }
 }

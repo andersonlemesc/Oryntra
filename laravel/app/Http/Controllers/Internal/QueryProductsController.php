@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Internal;
 
 use App\Actions\Products\QueryProducts;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Internal\QueryProductsRequest;
 use Illuminate\Http\JsonResponse;
 
 class QueryProductsController extends Controller
@@ -18,6 +19,9 @@ class QueryProductsController extends Controller
 
         $result = $query->execute(
             workspaceId: $validated['workspace_id'],
+            agentId: $validated['agent_id'],
+            agentRunId: $validated['agent_run_id'],
+            specialistId: $validated['specialist_id'] ?? null,
             query: $validated['query'] ?? null,
             category: $validated['category'] ?? null,
             minPrice: $validated['min_price'] ?? null,

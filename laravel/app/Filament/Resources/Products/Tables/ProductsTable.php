@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Products\Tables;
 
-use App\Models\Product;
+use App\Models\Category;
+use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -25,7 +26,7 @@ class ProductsTable
                     ->label('SKU')
                     ->searchable()
                     ->toggleable(),
-                TextColumn::make('category')
+                TextColumn::make('category.name')
                     ->label('Categoria')
                     ->sortable()
                     ->toggleable(),
@@ -44,6 +45,7 @@ class ProductsTable
             ->filters([
                 SelectFilter::make('category')
                     ->label('Categoria')
+                    ->attribute('category_id')
                     ->options(fn (): array => self::categoryOptions()),
                 Filter::make('active')
                     ->label('Somente ativos')
@@ -54,15 +56,20 @@ class ProductsTable
     }
 
     /**
-     * @return array<int, string>
+     * @return array<string, string>
      */
     private static function categoryOptions(): array
     {
-        return Product::query()
-            ->whereNotNull('category')
-            ->distinct()
-            ->pluck('category', 'category')
-            ->sort()
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return [];
+        }
+
+        return Category::query()
+            ->where('workspace_id', $tenant->getKey())
+            ->orderBy('name')
+            ->pluck('name', 'id')
             ->all();
     }
 }

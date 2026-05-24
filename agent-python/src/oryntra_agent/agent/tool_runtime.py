@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from langchain_core.messages import (
@@ -299,6 +299,8 @@ def _make_resolve_conversation_tool(
 
 
 class QueryProductsArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     query: str | None = Field(default=None, description="Termo de busca pelo nome ou descricao do produto.")
     category: str | None = Field(default=None, description="Filtrar por categoria.")
     min_price: float | None = Field(default=None, description="Preco minimo.")
@@ -372,7 +374,7 @@ class ToolLoopResult:
     debug_prompt: dict[str, str] | None = None
     resolved: bool = False
     resolution: dict[str, Any] | None = None
-    total_usage: LlmUsage = Field(default_factory=LlmUsage)
+    total_usage: LlmUsage = field(default_factory=LlmUsage)
 
 
 def run_specialist_tool_loop(
@@ -496,23 +498,6 @@ def _truncate(value: str, limit: int) -> str:
     return value[: limit - 3] + "..."
 
 
-@dataclass
-class LlmUsage:
-    input_tokens: int = 0
-    output_tokens: int = 0
-    latency_ms: int = 0
-
-
-@dataclass(frozen=True)
-class ToolLoopResult:
-    text: str | None
-    tool_calls: list[dict[str, Any]]
-    debug_prompt: dict[str, str] | None = None
-    resolved: bool = False
-    resolution: dict[str, Any] | None = None
-    total_usage: LlmUsage = Field(default_factory=LlmUsage)
-
-
 def track_llm_invoke(
     chat_with_tools: Any,
     messages: list[Any],
@@ -537,8 +522,8 @@ def track_llm_invoke(
 
 __all__ = [
     "EXECUTABLE_TOOLS",
-    "LlmUsage",
     "MAX_TOOL_ITERATIONS",
+    "LlmUsage",
     "ToolLoopResult",
     "ToolRuntimeContext",
     "build_specialist_tools",
