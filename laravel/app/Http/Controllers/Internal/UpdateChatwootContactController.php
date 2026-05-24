@@ -15,7 +15,7 @@ class UpdateChatwootContactController extends Controller
         UpdateChatwootContactRequest $request,
         UpdateChatwootContact $action,
     ): JsonResponse {
-        /** @var array{workspace_id:int,agent_id:int,agent_run_id:int,specialist_id?:int|null,contact_id:int,name?:string|null,email?:string|null,phone_number?:string|null} $payload */
+        /** @var array<string, mixed> $payload */
         $payload = $request->validated();
 
         return response()->json($action->execute($payload));

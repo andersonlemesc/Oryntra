@@ -193,6 +193,61 @@ def test_tool_loop_dispatches_tool_then_returns_text(monkeypatch) -> None:
     assert captured_payloads[0].contact_id == 7
 
 
+def test_tool_loop_dispatches_contact_address_update(monkeypatch) -> None:
+    captured_payloads: list[Any] = []
+
+    def fake_update_contact(payload):
+        captured_payloads.append(payload)
+
+        class FakeResponse:
+            status = "ok"
+
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "oryntra_agent.agent.tool_runtime.chatwoot_update_contact",
+        fake_update_contact,
+    )
+
+    tools = build_specialist_tools(["chatwoot_update_contact"], make_ctx())
+
+    first = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": "call_address",
+                "name": "chatwoot_update_contact",
+                "args": {
+                    "address_street": "Praca da Se",
+                    "address_number": "100",
+                    "address_city": "Sao Paulo",
+                    "address_state": "SP",
+                    "address_postal_code": "01001-000",
+                },
+            }
+        ],
+    )
+    second = AIMessage(content="Anotei seu endereco de entrega.")
+
+    chat_model = MagicMock()
+    bound = MagicMock()
+    bound.invoke.side_effect = [first, second]
+    chat_model.bind_tools.return_value = bound
+
+    result = run_specialist_tool_loop(
+        chat_model=chat_model,
+        tools=tools,
+        system_prompt="system",
+        user_prompt="entrega na Praca da Se 100",
+    )
+
+    assert result.text == "Anotei seu endereco de entrega."
+    assert captured_payloads[0].address_street == "Praca da Se"
+    assert captured_payloads[0].address_number == "100"
+    assert captured_payloads[0].address_city == "Sao Paulo"
+    assert captured_payloads[0].address_state == "SP"
+
+
 def test_tool_loop_dispatches_query_products(monkeypatch) -> None:
     captured_payloads: list[Any] = []
 

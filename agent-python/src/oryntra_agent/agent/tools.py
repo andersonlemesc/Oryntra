@@ -81,11 +81,35 @@ class UpdateContactRequest(BaseModel):
     name: str | None = None
     email: str | None = None
     phone_number: str | None = None
+    address_postal_code: str | None = None
+    address_street: str | None = None
+    address_number: str | None = None
+    address_complement: str | None = None
+    address_neighborhood: str | None = None
+    address_city: str | None = None
+    address_state: str | None = None
+    address_country: str | None = None
+    address_reference: str | None = None
 
     @model_validator(mode="after")
     def at_least_one_field(self) -> "UpdateContactRequest":
-        if not any([self.name, self.email, self.phone_number]):
-            raise ValueError("Provide at least one of: name, email, phone_number.")
+        if not any(
+            [
+                self.name,
+                self.email,
+                self.phone_number,
+                self.address_postal_code,
+                self.address_street,
+                self.address_number,
+                self.address_complement,
+                self.address_neighborhood,
+                self.address_city,
+                self.address_state,
+                self.address_country,
+                self.address_reference,
+            ]
+        ):
+            raise ValueError("Provide at least one contact or address field.")
         return self
 
 

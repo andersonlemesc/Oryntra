@@ -14,10 +14,22 @@ use Illuminate\Validation\ValidationException;
 
 class UpdateChatwootContact
 {
-    private const ALLOWED_FIELDS = ['name', 'email', 'phone_number'];
+    private const CHATWOOT_FIELDS = ['name', 'email', 'phone_number'];
+
+    private const LOCAL_FIELDS = [
+        'address_postal_code',
+        'address_street',
+        'address_number',
+        'address_complement',
+        'address_neighborhood',
+        'address_city',
+        'address_state',
+        'address_country',
+        'address_reference',
+    ];
 
     /**
-     * @param  array{workspace_id:int,agent_id:int,agent_run_id:int,specialist_id?:int|null,contact_id:int,name?:string|null,email?:string|null,phone_number?:string|null} $payload
+     * @param  array<string, mixed>                              $payload
      * @return array{status:string,contact:array<string, mixed>}
      */
     public function execute(array $payload): array
@@ -25,17 +37,24 @@ class UpdateChatwootContact
         $run = $this->loadRun($payload);
         $this->assertSpecialistCanUse($payload, 'chatwoot_update_contact');
 
-        $attributes = [];
+        $chatwootAttributes = [];
+        $localAttributes = [];
 
-        foreach (self::ALLOWED_FIELDS as $field) {
+        foreach (self::CHATWOOT_FIELDS as $field) {
             if (array_key_exists($field, $payload) && filled($payload[$field])) {
-                $attributes[$field] = $payload[$field];
+                $chatwootAttributes[$field] = $payload[$field];
             }
         }
 
-        if ($attributes === []) {
+        foreach (self::LOCAL_FIELDS as $field) {
+            if (array_key_exists($field, $payload) && filled($payload[$field])) {
+                $localAttributes[$field] = $payload[$field];
+            }
+        }
+
+        if ($chatwootAttributes === [] && $localAttributes === []) {
             throw ValidationException::withMessages([
-                'attributes' => 'Provide at least one of: ' . implode(', ', self::ALLOWED_FIELDS) . '.',
+                'attributes' => 'Provide at least one contact or address field.',
             ]);
         }
 
@@ -47,28 +66,31 @@ class UpdateChatwootContact
             ]);
         }
 
-        if (! $connection->hasAdminApiToken()) {
+        if ($chatwootAttributes !== [] && ! $connection->hasAdminApiToken()) {
             throw ValidationException::withMessages([
                 'agent_run_id' => 'The Chatwoot connection has no admin_api_token configured.',
             ]);
         }
 
         $localContact = $this->resolveLocalContact($payload, $connection->id);
-        $chatwootContactId = (int) $localContact->chatwoot_contact_id;
+        $remote = null;
 
-        $client = new ChatwootAdminApiClient($connection);
-        $remote = $client->updateContact($chatwootContactId, $attributes);
+        if ($chatwootAttributes !== []) {
+            $chatwootContactId = (int) $localContact->chatwoot_contact_id;
+            $client = new ChatwootAdminApiClient($connection);
+            $remote = $client->updateContact($chatwootContactId, $chatwootAttributes);
+        }
 
-        DB::transaction(function () use ($localContact, $attributes, $remote): void {
-            foreach ($attributes as $field => $value) {
+        DB::transaction(function () use ($chatwootAttributes, $localAttributes, $localContact, $remote): void {
+            foreach ([...$chatwootAttributes, ...$localAttributes] as $field => $value) {
                 $localContact->{$field} = $value;
             }
 
-            if (is_array($remote['additional_attributes'] ?? null)) {
+            if (is_array($remote) && is_array($remote['additional_attributes'] ?? null)) {
                 $localContact->additional_attributes = $remote['additional_attributes'];
             }
 
-            if (is_array($remote['custom_attributes'] ?? null)) {
+            if (is_array($remote) && is_array($remote['custom_attributes'] ?? null)) {
                 $localContact->chatwoot_custom_attributes = $remote['custom_attributes'];
             }
 
@@ -78,7 +100,30 @@ class UpdateChatwootContact
 
         return [
             'status' => 'ok',
-            'contact' => $remote,
+            'contact' => $remote ?? $this->contactPayload($localContact->refresh()),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function contactPayload(Contact $contact): array
+    {
+        return [
+            'id' => $contact->id,
+            'chatwoot_contact_id' => $contact->chatwoot_contact_id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'phone_number' => $contact->phone_number,
+            'address_postal_code' => $contact->address_postal_code,
+            'address_street' => $contact->address_street,
+            'address_number' => $contact->address_number,
+            'address_complement' => $contact->address_complement,
+            'address_neighborhood' => $contact->address_neighborhood,
+            'address_city' => $contact->address_city,
+            'address_state' => $contact->address_state,
+            'address_country' => $contact->address_country,
+            'address_reference' => $contact->address_reference,
         ];
     }
 
