@@ -70,16 +70,30 @@ class AccumulatedUsage:
         self.specialist_input_tokens: int = 0
         self.specialist_output_tokens: int = 0
         self.specialist_latency_ms: int = 0
+        self.last_specialist_usage: LlmUsage | None = None
+        self.last_supervisor_usage: LlmUsage | None = None
 
     def add_supervisor(self, usage: LlmUsage) -> None:
         self.supervisor_input_tokens += usage.input_tokens
         self.supervisor_output_tokens += usage.output_tokens
         self.supervisor_latency_ms += usage.latency_ms
+        self.last_supervisor_usage = usage
 
     def add_specialist(self, usage: LlmUsage) -> None:
         self.specialist_input_tokens += usage.input_tokens
         self.specialist_output_tokens += usage.output_tokens
         self.specialist_latency_ms += usage.latency_ms
+        self.last_specialist_usage = usage
+
+    def consume_specialist_usage(self) -> LlmUsage | None:
+        usage = self.last_specialist_usage
+        self.last_specialist_usage = None
+        return usage
+
+    def consume_supervisor_usage(self) -> LlmUsage | None:
+        usage = self.last_supervisor_usage
+        self.last_supervisor_usage = None
+        return usage
 
     def to_runtime_usage(self) -> "RuntimeUsage":
         return RuntimeUsage(
@@ -739,13 +753,8 @@ def specialist_text_response(
                 },
                 ts=datetime.now(UTC),
             ),
-            TraceStep(
-                step=3,
-                type="specialist_response",
-                specialist_id=selected_specialist.id,
-                input=specialist_response_input,
-                output={"response_type": "text", "source": response_source},
-                ts=datetime.now(UTC),
+            _specialist_response_trace_step(
+                payload, selected_specialist, response_content, response_source
             ),
         ],
     )
@@ -753,6 +762,28 @@ def specialist_text_response(
 
 def _debug_prompts_enabled(payload: ChatwootRuntimeRequest) -> bool:
     return bool(payload.runtime_config.get("debug_prompts", False))
+
+
+def _specialist_response_trace_step(
+    payload: ChatwootRuntimeRequest,
+    selected_specialist: SpecialistConfig,
+    response_content: str,
+    response_source: str,
+) -> TraceStep:
+    usage = _accumulated_usage.get().consume_specialist_usage()
+    return TraceStep(
+        step=3,
+        type="specialist_response",
+        specialist_id=selected_specialist.id,
+        input={"role_prompt": selected_specialist.role_prompt},
+        output={"response_type": "text", "source": response_source},
+        tokens=TraceTokens(
+            input=usage.input_tokens if usage else 0,
+            output=usage.output_tokens if usage else 0,
+        ),
+        latency_ms=usage.latency_ms if usage else 0,
+        ts=datetime.now(UTC),
+    )
 
 
 def run_specialist_with_tool_calling(
@@ -908,6 +939,7 @@ def specialist_text_with_tool_calls(
         specialist_response_input["debug_system_prompt"] = debug_prompt.get("system", "")
         specialist_response_input["debug_human_prompt"] = debug_prompt.get("human", "")
 
+    usage = _accumulated_usage.get().consume_specialist_usage()
     base_trace.append(
         TraceStep(
             step=next_step,
@@ -915,6 +947,11 @@ def specialist_text_with_tool_calls(
             specialist_id=selected_specialist.id,
             input=specialist_response_input,
             output={"response_type": "text", "source": "tool_loop"},
+            tokens=TraceTokens(
+                input=usage.input_tokens if usage else 0,
+                output=usage.output_tokens if usage else 0,
+            ),
+            latency_ms=usage.latency_ms if usage else 0,
             ts=datetime.now(UTC),
         )
     )
@@ -977,6 +1014,7 @@ def resolution_response_from_tool_call(
         resolution_input["debug_system_prompt"] = debug_prompt.get("system", "")
         resolution_input["debug_human_prompt"] = debug_prompt.get("human", "")
 
+    usage = _accumulated_usage.get().consume_specialist_usage()
     base_trace.append(
         TraceStep(
             step=next_step,
@@ -984,6 +1022,11 @@ def resolution_response_from_tool_call(
             specialist_id=selected_specialist.id,
             input=resolution_input,
             output={"response_type": "text", "source": "resolve_tool"},
+            tokens=TraceTokens(
+                input=usage.input_tokens if usage else 0,
+                output=usage.output_tokens if usage else 0,
+            ),
+            latency_ms=usage.latency_ms if usage else 0,
             ts=datetime.now(UTC),
         )
     )
