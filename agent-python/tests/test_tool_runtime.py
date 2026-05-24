@@ -20,6 +20,7 @@ def make_ctx(contact_id: int | None = 7) -> ToolRuntimeContext:
         specialist_id=5,
         contact_id=contact_id,
         conversation_id=99,
+        thread_id="workspace:1:account:5:conversation:99",
     )
 
 
@@ -42,6 +43,92 @@ def test_build_specialist_tools_returns_empty_without_contact() -> None:
     )
 
     assert tools == []
+
+
+def test_build_specialist_tools_builds_resolve_without_contact() -> None:
+    tools = build_specialist_tools(
+        ["resolve_conversation"],
+        make_ctx(contact_id=None),
+        terminal_state={},
+    )
+
+    names = sorted(tool.name for tool in tools)
+    assert names == ["resolve_conversation"]
+
+
+def test_build_specialist_tools_skips_resolve_without_terminal_state() -> None:
+    tools = build_specialist_tools(
+        ["resolve_conversation"],
+        make_ctx(),
+    )
+
+    assert tools == []
+
+
+def test_tool_loop_short_circuits_when_resolve_tool_runs(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_resolve(payload):
+        captured["payload"] = payload
+
+        class FakeResponse:
+            status = "resolution_dispatched"
+            resolution_id = 42
+
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "oryntra_agent.agent.tool_runtime.resolve_conversation",
+        fake_resolve,
+    )
+
+    terminal_state: dict[str, Any] = {}
+    tools = build_specialist_tools(
+        ["resolve_conversation"],
+        make_ctx(contact_id=None),
+        terminal_state=terminal_state,
+    )
+
+    first = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": "call_resolve",
+                "name": "resolve_conversation",
+                "args": {
+                    "reason": "Cliente confirmou.",
+                    "resolution_summary": "Cliente entendeu o processo.",
+                    "customer_message": "Otimo, ate breve!",
+                    "label_name": "resolved-by-ia",
+                },
+            }
+        ],
+    )
+    follow_up = AIMessage(content="texto que nao deve ser usado")
+
+    chat_model = MagicMock()
+    bound = MagicMock()
+    bound.invoke.side_effect = [first, follow_up]
+    chat_model.bind_tools.return_value = bound
+
+    result = run_specialist_tool_loop(
+        chat_model=chat_model,
+        tools=tools,
+        system_prompt="system",
+        user_prompt="obrigado",
+        terminal_state=terminal_state,
+    )
+
+    assert result.resolved is True
+    assert result.text is None
+    assert result.resolution is not None
+    assert result.resolution["customer_message"] == "Otimo, ate breve!"
+    assert result.resolution["label_name"] == "resolved-by-ia"
+    assert result.resolution["resolution_id"] == 42
+    assert terminal_state["resolved"] is True
+    assert captured["payload"].agent_run_id == 55
+    assert captured["payload"].thread_id == "workspace:1:account:5:conversation:99"
+    assert bound.invoke.call_count == 1
 
 
 def test_tool_loop_dispatches_tool_then_returns_text(monkeypatch) -> None:

@@ -25,10 +25,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from oryntra_agent.agent.tools import (
     GetContactRequest,
+    ResolveConversationRequest,
     UpdateContactMemoryRequest,
     UpdateContactRequest,
     chatwoot_get_contact,
     chatwoot_update_contact,
+    resolve_conversation,
     update_contact_memory,
 )
 
@@ -36,6 +38,16 @@ logger = logging.getLogger(__name__)
 
 
 EXECUTABLE_TOOLS: frozenset[str] = frozenset(
+    {
+        "chatwoot_update_contact",
+        "chatwoot_get_contact",
+        "update_contact_memory",
+        "resolve_conversation",
+    }
+)
+
+
+CONTACT_TOOLS: frozenset[str] = frozenset(
     {
         "chatwoot_update_contact",
         "chatwoot_get_contact",
@@ -56,6 +68,7 @@ class ToolRuntimeContext:
     specialist_id: int | None
     contact_id: int | None
     conversation_id: int
+    thread_id: str = ""
 
 
 class ChatwootUpdateContactArgs(BaseModel):
@@ -83,22 +96,44 @@ class UpdateContactMemoryArgs(BaseModel):
     )
 
 
+class ResolveConversationArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(
+        description="Motivo interno curto pra registro no AgentRun (ex.: 'Cliente confirmou resolucao').",
+    )
+    resolution_summary: str = Field(
+        description="O que foi resolvido. 1-2 frases descrevendo a duvida e a resposta dada.",
+    )
+    customer_message: str | None = Field(
+        default=None,
+        description="Mensagem final ao cliente antes do encerramento. Opcional; usa default do especialista quando vazio.",
+    )
+    label_name: str | None = Field(
+        default=None,
+        description="Label opcional pra aplicar antes do encerramento. Sobrescreve o default do especialista.",
+    )
+
+
 def build_specialist_tools(
-    allowed_tools: list[str], ctx: ToolRuntimeContext
+    allowed_tools: list[str],
+    ctx: ToolRuntimeContext,
+    terminal_state: dict[str, Any] | None = None,
 ) -> list[StructuredTool]:
     tools: list[StructuredTool] = []
 
-    if ctx.contact_id is None:
-        return tools
+    if ctx.contact_id is not None:
+        if "chatwoot_update_contact" in allowed_tools:
+            tools.append(_make_update_contact_tool(ctx))
 
-    if "chatwoot_update_contact" in allowed_tools:
-        tools.append(_make_update_contact_tool(ctx))
+        if "chatwoot_get_contact" in allowed_tools:
+            tools.append(_make_get_contact_tool(ctx))
 
-    if "chatwoot_get_contact" in allowed_tools:
-        tools.append(_make_get_contact_tool(ctx))
+        if "update_contact_memory" in allowed_tools:
+            tools.append(_make_update_memory_tool(ctx))
 
-    if "update_contact_memory" in allowed_tools:
-        tools.append(_make_update_memory_tool(ctx))
+    if "resolve_conversation" in allowed_tools and terminal_state is not None:
+        tools.append(_make_resolve_conversation_tool(ctx, terminal_state))
 
     return tools
 
@@ -200,11 +235,69 @@ def _make_update_memory_tool(ctx: ToolRuntimeContext) -> StructuredTool:
     )
 
 
+def _make_resolve_conversation_tool(
+    ctx: ToolRuntimeContext,
+    terminal_state: dict[str, Any],
+) -> StructuredTool:
+    def run(
+        reason: str,
+        resolution_summary: str,
+        customer_message: str | None = None,
+        label_name: str | None = None,
+    ) -> str:
+        if terminal_state.get("resolved"):
+            return "ok: resolve_conversation ja foi chamado neste turno."
+
+        try:
+            response = resolve_conversation(
+                ResolveConversationRequest(
+                    workspace_id=ctx.workspace_id,
+                    agent_id=ctx.agent_id,
+                    agent_run_id=ctx.agent_run_id,
+                    thread_id=ctx.thread_id,
+                    conversation_id=ctx.conversation_id,
+                    specialist_id=ctx.specialist_id,
+                    reason=reason,
+                    resolution_summary=resolution_summary,
+                    customer_message=customer_message,
+                    label_name=label_name,
+                )
+            )
+        except Exception as exc:
+            logger.exception("resolve_conversation tool call failed")
+            return f"error: resolve_conversation failed ({exc})."
+
+        terminal_state["resolved"] = True
+        terminal_state["resolution"] = {
+            "reason": reason,
+            "resolution_summary": resolution_summary,
+            "customer_message": customer_message,
+            "label_name": label_name,
+            "resolution_id": response.resolution_id,
+            "status": response.status,
+        }
+
+        return f"ok: conversa marcada como resolvida no Chatwoot. resolution_id={response.resolution_id}."
+
+    return StructuredTool.from_function(
+        name="resolve_conversation",
+        description=(
+            "Encerra a conversa marcando como resolvida no Chatwoot. "
+            "Chame quando o cliente confirmar que a duvida foi sanada e nao "
+            "precisar de mais nada. Apos essa tool, nao gere mais texto."
+        ),
+        args_schema=ResolveConversationArgs,
+        func=run,
+    )
+
+
 @dataclass(frozen=True)
 class ToolLoopResult:
     text: str | None
     tool_calls: list[dict[str, Any]]
     debug_prompt: dict[str, str] | None = None
+    resolved: bool = False
+    resolution: dict[str, Any] | None = None
 
 
 def run_specialist_tool_loop(
@@ -213,9 +306,11 @@ def run_specialist_tool_loop(
     system_prompt: str,
     user_prompt: str,
     max_iterations: int = MAX_TOOL_ITERATIONS,
+    terminal_state: dict[str, Any] | None = None,
 ) -> ToolLoopResult:
     """Run a bounded ReAct loop: invoke the model, dispatch any tool calls,
-    feed back ``ToolMessage``s, and repeat until the model returns plain text
+    feed back ``ToolMessage``s, and repeat until the model returns plain text,
+    a terminal tool (e.g. ``resolve_conversation``) flips ``terminal_state``,
     or we hit ``max_iterations`` (clamped to ``TOOL_ITERATIONS_HARD_CAP``).
     """
 
@@ -231,6 +326,16 @@ def run_specialist_tool_loop(
         HumanMessage(content=user_prompt),
     ]
     tool_calls_trace: list[dict[str, Any]] = []
+
+    def _terminal_result() -> ToolLoopResult:
+        state = terminal_state or {}
+        resolution = state.get("resolution") if isinstance(state, dict) else None
+        return ToolLoopResult(
+            text=None,
+            tool_calls=tool_calls_trace,
+            resolved=True,
+            resolution=resolution if isinstance(resolution, dict) else None,
+        )
 
     for _ in range(iterations):
         try:
@@ -276,6 +381,9 @@ def run_specialist_tool_loop(
                     tool_call_id=str(call_id) if call_id else "",
                 )
             )
+
+        if terminal_state is not None and terminal_state.get("resolved"):
+            return _terminal_result()
 
     logger.warning(
         "specialist tool loop exhausted iterations",
