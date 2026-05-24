@@ -110,6 +110,29 @@ class UpdateContactMemoryResponse(BaseModel):
     memory_id: int
 
 
+class ResolveConversationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_id: int
+    agent_run_id: int
+    thread_id: str
+    conversation_id: int
+    specialist_id: int | None = None
+    reason: str
+    resolution_summary: str
+    customer_message: str | None = None
+    label_name: str | None = None
+
+
+class ResolveConversationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["resolution_dispatched"]
+    resolution_id: int
+    message: str
+
+
 def _post(path: str, payload: BaseModel) -> dict[str, Any]:
     base_url = settings.laravel_internal_base_url.rstrip("/")
 
@@ -157,4 +180,10 @@ def chatwoot_update_contact(payload: UpdateContactRequest) -> ContactResponse:
 def update_contact_memory(payload: UpdateContactMemoryRequest) -> UpdateContactMemoryResponse:
     return UpdateContactMemoryResponse.model_validate(
         _post("/api/internal/agent-tools/update-contact-memory", payload)
+    )
+
+
+def resolve_conversation(payload: ResolveConversationRequest) -> ResolveConversationResponse:
+    return ResolveConversationResponse.model_validate(
+        _post("/api/internal/agent-tools/resolve-conversation", payload)
     )

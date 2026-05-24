@@ -56,6 +56,26 @@ class HandoffConfig(BaseModel):
     rules: list[HandoffRuleConfig] = Field(default_factory=list)
 
 
+class ResolutionRuleConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    enabled: bool = True
+    keywords: list[str] = Field(default_factory=list)
+    reason: str
+    customer_message: str | None = None
+    label_name: str | None = None
+
+
+class ResolutionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    customer_message: str | None = None
+    label_name: str | None = None
+    rules: list[ResolutionRuleConfig] = Field(default_factory=list)
+
+
 class MemoryConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -92,6 +112,7 @@ class SpecialistConfig(BaseModel):
     tools: list[str] = Field(default_factory=list)
     handoff_config: HandoffConfig = Field(default_factory=HandoffConfig)
     memory_config: MemoryConfig = Field(default_factory=MemoryConfig)
+    resolution_config: ResolutionConfig = Field(default_factory=ResolutionConfig)
     intent_keywords: list[str] = Field(default_factory=list)
     confidence_threshold: float = Field(ge=0, le=1)
     fallback_specialist_id: int | None = None
