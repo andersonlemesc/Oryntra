@@ -4,6 +4,7 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -1592,6 +1593,68 @@ def supervisor_opening_messages(payload: ChatwootRuntimeRequest) -> list[tuple[s
     ]
 
 
+def contact_basics_section(payload: ChatwootRuntimeRequest) -> str | None:
+    contact = payload.contact if isinstance(payload.contact, dict) else {}
+
+    if not contact:
+        return None
+
+    pairs: list[tuple[str, str]] = []
+
+    name = contact.get("name")
+    if isinstance(name, str) and name.strip():
+        pairs.append(("Nome", name.strip()))
+
+    email = contact.get("email")
+    if isinstance(email, str) and email.strip():
+        pairs.append(("Email", email.strip()))
+
+    phone = contact.get("phone_number")
+    if isinstance(phone, str) and phone.strip():
+        pairs.append(("Telefone", phone.strip()))
+
+    lead_status = contact.get("lead_status")
+    if isinstance(lead_status, str) and lead_status.strip():
+        pairs.append(("Etapa do funil", lead_status.strip()))
+
+    if not pairs:
+        return None
+
+    lines = ["Dados do cliente em atendimento:"]
+    lines.extend(f"- {label}: {value}" for label, value in pairs)
+    lines.append(
+        "Use esses dados quando relevante. Nao pergunte de novo informacao que ja consta aqui."
+    )
+
+    return "\n".join(lines)
+
+
+def current_datetime_section(payload: ChatwootRuntimeRequest) -> str | None:
+    raw_tz = payload.runtime_config.get("workspace_timezone")
+    tz_name = raw_tz if isinstance(raw_tz, str) and raw_tz else "UTC"
+
+    try:
+        tz = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        tz_name = "UTC"
+        tz = ZoneInfo("UTC")
+
+    now = datetime.now(tz)
+    weekday_pt = [
+        "segunda-feira",
+        "terca-feira",
+        "quarta-feira",
+        "quinta-feira",
+        "sexta-feira",
+        "sabado",
+        "domingo",
+    ][now.weekday()]
+
+    return (
+        f"Data e hora atuais:\n- {now.isoformat(timespec='seconds')} ({weekday_pt}, fuso {tz_name})"
+    )
+
+
 def contact_memory_section(
     payload: ChatwootRuntimeRequest,
     selected_specialist: SpecialistConfig,
@@ -1632,12 +1695,37 @@ def system_prompt_with_memories(
     selected_specialist: SpecialistConfig,
     base_lines: list[str],
 ) -> str:
-    memory_section = contact_memory_section(payload, selected_specialist)
+    sections: list[str] = []
 
-    if memory_section is None:
+    contact_section = contact_basics_section(payload)
+    if contact_section is not None:
+        sections.append(contact_section)
+
+    datetime_section = current_datetime_section(payload)
+    if datetime_section is not None:
+        sections.append(datetime_section)
+
+    memory_section = contact_memory_section(payload, selected_specialist)
+    if memory_section is not None:
+        sections.append(memory_section)
+
+    if not sections:
         return "\n".join(base_lines)
 
-    return "\n".join([*base_lines, "", memory_section])
+    return "\n".join([*base_lines, "", *_interleave_sections(sections)])
+
+
+def _interleave_sections(sections: list[str]) -> list[str]:
+    """Join sections with a blank line between each."""
+    if not sections:
+        return []
+
+    result: list[str] = [sections[0]]
+    for section in sections[1:]:
+        result.append("")
+        result.append(section)
+
+    return result
 
 
 def specialist_decision_messages(

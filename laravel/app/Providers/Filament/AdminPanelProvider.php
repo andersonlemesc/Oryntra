@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Tenancy\EditWorkspaceProfile;
 use App\Filament\Pages\Tenancy\RegisterWorkspace;
 use App\Filament\Widgets\AgentRunStatsOverview;
 use App\Filament\Widgets\RecentContactsTable;
@@ -41,6 +42,7 @@ class AdminPanelProvider extends PanelProvider
             ->brandName('Oryntra')
             ->tenant(Workspace::class)
             ->tenantRegistration(RegisterWorkspace::class)
+            ->tenantProfile(EditWorkspaceProfile::class)
             ->searchableTenantMenu()
             ->sidebarCollapsibleOnDesktop()
             ->colors([

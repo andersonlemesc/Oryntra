@@ -232,6 +232,10 @@ class AgentRuntimeClient
         $payload = is_array($base) ? $base : [];
         $payload['id'] = $contact->id;
         $payload['chatwoot_contact_id'] = $contact->chatwoot_contact_id;
+        $payload['name'] = $contact->name;
+        $payload['email'] = $contact->email;
+        $payload['phone_number'] = $contact->phone_number;
+        $payload['lead_status'] = $contact->lead_status;
         $payload['memories'] = $this->contactMemoriesPayload($run);
 
         return $payload;
@@ -359,7 +363,13 @@ class AgentRuntimeClient
             ...$inputConfig,
             'agent_run_id' => $run->id,
             'conversation_id' => $run->conversation_id,
+            'workspace_timezone' => $this->stringOrDefault($run->workspace?->timezone, 'UTC'),
         ];
+    }
+
+    private function stringOrDefault(mixed $value, string $default): string
+    {
+        return is_string($value) && trim($value) !== '' ? $value : $default;
     }
 
     /**
