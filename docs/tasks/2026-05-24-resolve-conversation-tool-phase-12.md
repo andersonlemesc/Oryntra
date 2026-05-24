@@ -140,3 +140,50 @@ Antes a label era TextInput livre - admin podia digitar nome de label que nao ex
 - `Schedule::call(...)` horario novo: `chatwoot:sync-labels-hourly`.
 - Filament `SpecialistsRelationManager`: TextInput `handoff_config.label_name`, `resolution_config.label_name` e `rules.*.label_name` -> Select com options `chatwootLabelOptions()` (pluck title from chatwoot_labels por workspace).
 - Tests `tests/Feature/Jobs/Chatwoot/SyncChatwootLabelsJobTest.php` (upsert + remove stale, skip blank titles, no-op missing connection, no-op missing admin token).
+
+## Fase 12.3 - Preservacao do payload de resolution no merge
+
+Bug em producao: `ApplyResolveConversationToChatwootJob` salvava `output.resolution = {side_effects.actions.{label:skipped, resolve:completed, customer_message:skipped}}` mesmo quando a Action `ResolveConversation` tinha gravado `reason`, `resolution_summary`, `customer_message` e `label_name` corretamente.
+
+Causa: `DispatchAgentRunJob` montava `$mergedOutput = $output` (resposta do Python) e preservava explicitamente apenas `$existingOutput['handoff']`. O bloco `resolution` escrito pela Action era sobrescrito antes do Job de side effects rodar.
+
+Fix: `DispatchAgentRunJob` agora preserva `resolution` simetrico a `handoff`, via `array_replace($existingResolution, $mergedOutput['resolution'] ?? [])`. Regressao coberta em `DispatchAgentRunJobTest::preserves_the_resolution_payload`.
+
+## Fase 12.4 - Injecao automatica de dados do cliente + datetime no system prompt
+
+Apesar de termos `contact_memories` injetada e `contacts.name/email/phone_number/lead_status` armazenados, a IA continuava perguntando o nome do cliente em toda conversa nova. Faltava o "primer" basico do contato e o relogio atual no prompt.
+
+- `AgentRuntimeClient::contactPayload` passou a expor `name`, `email`, `phone_number`, `lead_status` ao Python.
+- `AgentRuntimeClient::runtimeConfig` adiciona `workspace_timezone` (fallback UTC via helper `stringOrDefault`).
+- Filament `EditWorkspaceProfile` (novo) permite editar nome/timezone/locale do workspace; `AdminPanelProvider` registra com `->tenantProfile(EditWorkspaceProfile::class)`.
+- Python `supervisor.contact_basics_section` renderiza "Dados do cliente em atendimento:" com nome/email/telefone/etapa (so campos preenchidos).
+- Python `supervisor.current_datetime_section` usa `zoneinfo.ZoneInfo`, fallback UTC pra TZ desconhecida, formato ISO + dia da semana pt-BR.
+- `system_prompt_with_memories` agora intercala `contact_basics` + `datetime` + `contact_memories` antes da linha em branco que separa do role_prompt.
+- `supervisor_opening_messages` (saudacao inicial, sem especialista escolhido) tambem recebe os blocos injetados, e a instrucao "Se fizer sentido, pergunte o nome" foi trocada por "Se ja souber o nome use-o naturalmente; so pergunte se nao houver nome no contexto".
+- Tests `tests/test_prompt_context.py` cobrem o branch da saudacao + branches existentes (campo vazio, TZ invalida, etc).
+
+## Fase 12.5 - Label via Admin API (agent bot bloqueado por design)
+
+Conversa real fechou via `resolve_conversation` mas a label ficou `failed` com `Chatwoot addConversationLabel({id}) failed: HTTP 401`. Teste lado a lado:
+
+- Agent bot token: 401 `{"error":"Access to this endpoint is not authorized for bots"}`
+- Admin user token: 200 OK
+
+Chatwoot bloqueia agent_bot do endpoint de labels. Sem fallback - bot nunca vai funcionar.
+
+- `ChatwootAdminApiClient::addConversationLabel(id, label)` (novo): faz GET `/conversations/{id}/labels` pra pegar labels existentes, faz POST com merge (`array_unique([...existing, label])`) preservando labels anteriores.
+- `ApplyResolveConversationToChatwootJob`: label step usa admin client; sem admin token marca `actions.label = failed` + `action_errors.label = missing_admin_api_token` (resto da resolucao roda normal).
+- `ApplyHumanHandoffToChatwootJob`: mesmo swap; sem admin token marca `actions.label = skipped` pra nao falhar a chain.
+- Tests existentes recebem `admin_api_token` na connection factory + assertion `method() === 'POST'` no label (a chamada GET tambem casa com o mesmo URL na `Http::fake`). Novo test `marks_label_failed_with_missing_admin_api_token` cobre o branch sem admin.
+
+## Fase 12.6 - Nome do especialista na timeline
+
+Trace ja carregava `specialist_id`; UI Filament mostrava so o ID puro. Mudanca pequena:
+
+- `AgentRunInfolist::traceSteps` faz pluck de `agent_specialists` pelo `agent_id` do run e injeta `specialist_label = "Nome (#id)"` em cada step (fallback pro `output.specialist_name` que ja vem do Python, fallback final pro id puro).
+- Coluna `Especialista` do RepeatableEntry usa `specialist_label`.
+
+## Pendencias conhecidas (UX / observabilidade)
+
+- Latencia real: hoje todo `TraceStep` em Python carrega `latency_ms=0`. Falta instrumentar `time.perf_counter()` em volta dos `chat_model.invoke()` e dos `_post()` em `agent/tools.py`.
+- Outras candidates do roadmap (phase 13+) seguem como estavam.

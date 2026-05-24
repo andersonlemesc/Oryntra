@@ -162,7 +162,7 @@ class AgentRunInfolist
                                                     ->formatStateUsing(fn (string $state): string => self::stepTypeLabel($state))
                                                     ->color(fn (string $state): string => self::stepTypeColor($state)),
                                                 TextEntry::make('tool')->label('Ferramenta')->placeholder('-'),
-                                                TextEntry::make('specialist_id')->label('Especialista')->placeholder('-'),
+                                                TextEntry::make('specialist_label')->label('Especialista')->placeholder('-'),
                                                 TextEntry::make('latency_ms')->label('Latencia (ms)')->placeholder('-'),
                                                 TextEntry::make('ts')->label('Timestamp')->placeholder('-'),
                                             ])
@@ -250,15 +250,58 @@ class AgentRunInfolist
             return [];
         }
 
+        $specialistNames = self::specialistNamesForRun($record);
+
         $steps = [];
         foreach ($trace as $item) {
-            if (is_array($item)) {
-                /** @var array<string, mixed> $item */
-                $steps[] = $item;
+            if (! is_array($item)) {
+                continue;
             }
+
+            /** @var array<string, mixed> $item */
+            $specialistId = $item['specialist_id'] ?? null;
+            $specialistName = null;
+
+            if (is_int($specialistId) || (is_string($specialistId) && ctype_digit($specialistId))) {
+                $specialistName = $specialistNames[(int) $specialistId] ?? null;
+            }
+
+            $traceName = data_get($item, 'output.specialist_name');
+
+            if ($specialistName === null && is_string($traceName) && $traceName !== '') {
+                $specialistName = $traceName;
+            }
+
+            if ($specialistName !== null && $specialistId !== null) {
+                $item['specialist_label'] = sprintf('%s (#%s)', $specialistName, $specialistId);
+            } elseif ($specialistName !== null) {
+                $item['specialist_label'] = $specialistName;
+            } elseif ($specialistId !== null) {
+                $item['specialist_label'] = (string) $specialistId;
+            } else {
+                $item['specialist_label'] = null;
+            }
+
+            $steps[] = $item;
         }
 
         return $steps;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function specialistNamesForRun(AgentRun $record): array
+    {
+        if ($record->agent_id === null) {
+            return [];
+        }
+
+        return \App\Models\AgentSpecialist::query()
+            ->where('agent_id', $record->agent_id)
+            ->pluck('name', 'id')
+            ->map(fn (mixed $name): string => (string) $name)
+            ->all();
     }
 
     private static function stepTypeLabel(string $type): string

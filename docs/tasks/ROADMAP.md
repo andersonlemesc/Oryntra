@@ -5,7 +5,7 @@
 
 ## Estado atual (2026-05-24)
 
-Branch ativa: `feature/resolve-conversation-tool` (pronta pra merge em `develop`/`main`).
+Branch ativa: `feature/resolve-conversation-tool` com fases 12, 12.1, 12.2, 12.3, 12.4, 12.5 e 12.6 entregues. Pronta pra merge em `develop`/`main`.
 
 ## Fases entregues
 
@@ -26,6 +26,10 @@ Branch ativa: `feature/resolve-conversation-tool` (pronta pra merge em `develop`
 | 12 | `2026-05-24-resolve-conversation-tool-phase-12.md` | Tool `resolve_conversation` permite IA encerrar conversa Chatwoot quando resolve sozinha. Nova coluna `agent_specialists.resolution_config` (jsonb) com `enabled`, `customer_message`, `label_name` e `rules` (keyword-triggered). Action + Job idempotente (no-op se conversa ja `resolved`), ordem `msg -> label -> toggle_status=resolved`. Supervisor Python: `matching_resolution_rule` + acao `resolve_conversation` no `SpecialistDecision`. Filament tab "Encerramento" com toggle, label, mensagem padrao e repeater de regras. Allowlist obrigatoria (`resolve_conversation` no `tools_allowlist`). |
 | 12.1 | mesmo plano | `resolve_conversation` virou StructuredTool real em `EXECUTABLE_TOOLS`. `build_specialist_tools` aceita `terminal_state` opcional; `run_specialist_tool_loop` curto-circuita o loop quando a tool dispara. Permite IA invocar resolve sem depender de regras de keyword e sem precisar de `contact_id`. Supervisor monta `resolution_response_from_tool_call` quando o loop sinaliza `resolved`. `ToolRuntimeContext.thread_id` adicionado pra payload Laravel. |
 | 12.2 | mesmo plano | Sync de labels Chatwoot. Tabela `chatwoot_labels`, `ChatwootAdminApiClient::listLabels()`, `SyncChatwootLabelsJob` (upsert + remove stale, no-op sem admin token), schedule horario `chatwoot:sync-labels-hourly` + chain `SyncChatwootMetadataJob`. Filament `handoff_config.label_name`, `resolution_config.label_name` e `rules.*.label_name` viraram Select alimentado por `chatwootLabelOptions()`. Elimina erro de digitar label inexistente. |
+| 12.3 | mesmo plano | Fix em `DispatchAgentRunJob`: preserva `output.resolution` escrito pela Action no merge da resposta do Python, simetrico ao `handoff` que ja era preservado. Sem o fix, `reason`/`resolution_summary`/`customer_message`/`label_name` desapareciam e o Job de side effects marcava label e customer_message como `skipped`. |
+| 12.4 | mesmo plano | System prompt agora carrega `Dados do cliente em atendimento:` (name/email/phone_number/lead_status) + `Data e hora atuais:` (ISO + dia da semana em pt-BR, no `workspace.timezone`). `AgentRuntimeClient::contactPayload` expoe os campos basicos; `runtimeConfig` injeta `workspace_timezone`. Filament ganha `EditWorkspaceProfile` (nome/TZ/locale). `supervisor_opening_messages` tambem recebe os blocos injetados, e a instrucao "pergunte o nome" virou "use o nome ja injetado, so pergunte se nao houver". Resolve o caso em que IA pedia nome a cada conversa. |
+| 12.5 | mesmo plano | Aplicacao de label da conversa via Admin API. Chatwoot bloqueia agent_bot do `POST /conversations/{id}/labels` (`Access to this endpoint is not authorized for bots`). `ChatwootAdminApiClient::addConversationLabel` faz GET das labels existentes + POST com merge. `ApplyResolveConversationToChatwootJob` e `ApplyHumanHandoffToChatwootJob` usam admin client pro label step; sem admin token marcam `label=failed/skipped` com error claro. |
+| 12.6 | mesmo plano | Timeline Filament mostra nome do especialista (`Nome (#id)`) em vez do id puro. `AgentRunInfolist::traceSteps` faz pluck de `agent_specialists` e injeta `specialist_label` em cada step, com fallback pro `output.specialist_name` ja existente. |
 
 ## Fases pendentes
 
@@ -43,8 +47,10 @@ Branch ativa: `feature/resolve-conversation-tool` (pronta pra merge em `develop`
 
 | # | Fase | Escopo | Complexidade | Pre-req |
 |---|---|---|---|---|
-| 13 | **Send document via MinIO** | Tool `send_document(document_id, caption)`. Admin sobe arquivos pre-prontos no MinIO. IA escolhe enviar PDF/imagem ao cliente via Chatwoot (upload multipart). | Media | Nenhum |
-| 14 | **Vision / Audio** | `transcribe_audio` (Whisper API) + `vision_describe` (GPT-4o / Claude vision). Cliente manda audio ou foto via WhatsApp, IA processa o conteudo. | Media-alta | LLM com vision habilitado |
+| 13 | **Trace latency real** | Instrumentar `time.perf_counter()` em volta de `chat_model.invoke()` (supervisor opening / specialist decision / specialist response) e dos `_post()` em `agent/tools.py`. Hoje todo TraceStep grava `latency_ms=0`. | Baixa | Nenhum |
+| 13.1 | **Tabela de produtos + tool query_products** | Hoje catalogo BikePulse vive embed no `role_prompt` do Vendas (Fase 12 prompts). Mover pra tabela `products` por workspace + tool whitelisted `query_products(filter)`. Casa com Fase 15 (DB query tools whitelisted). | Media | Nenhum |
+| 14 | **Send document via MinIO** | Tool `send_document(document_id, caption)`. Admin sobe arquivos pre-prontos no MinIO. IA escolhe enviar PDF/imagem ao cliente via Chatwoot (upload multipart). | Media | Nenhum |
+| 14.1 | **Vision / Audio** | `transcribe_audio` (Whisper API) + `vision_describe` (GPT-4o / Claude vision). Cliente manda audio ou foto via WhatsApp, IA processa o conteudo. | Media-alta | LLM com vision habilitado |
 | 15 | **DB query tools whitelisted** | Tools `query_*` parametrizadas por workspace. Ex: `query_orders(customer_email)`, `query_invoice(invoice_id)`. Laravel valida payload + executa SELECT escopado + retorna rows tipadas. | Alta | Schema do DB externo + politica de seguranca |
 | 16 | **MCP servers por workspace** | Tabela `workspace_mcp_servers`. Admin cadastra URL + auth. Tools do MCP viram disponiveis no allowlist dos especialistas. Laravel atua como proxy + valida scopes. | Alta | Nenhum |
 | 17 | **Notificacao de handoff** | Email / Slack / Chatwoot notification quando run cai em `waiting_human`. Hoje admin so ve no painel. | Baixa-media | Conta SMTP ou webhook Slack |
