@@ -33,6 +33,7 @@ class SyncChatwootMetadataJob implements ShouldQueue
             new SyncChatwootTeamsJob($this->chatwootConnectionId),
             new SyncChatwootAgentsJob($this->chatwootConnectionId),
             new SyncChatwootTeamMembersJob($this->chatwootConnectionId),
+            new SyncChatwootLabelsJob($this->chatwootConnectionId),
         ])->onQueue('chatwoot-sync')->dispatch();
     }
 }

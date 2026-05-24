@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Jobs\Chatwoot\SyncChatwootAccountsJob;
 use App\Jobs\Chatwoot\SyncChatwootContactsJob;
+use App\Jobs\Chatwoot\SyncChatwootLabelsJob;
 use App\Jobs\Chatwoot\SyncChatwootMetadataJob;
 use App\Models\ChatwootConnection;
 use Illuminate\Foundation\Inspiring;
@@ -39,4 +40,15 @@ Schedule::call(function (): void {
 })
     ->hourly()
     ->name('chatwoot:sync-contacts-hourly')
+    ->onOneServer();
+
+Schedule::call(function (): void {
+    ChatwootConnection::query()
+        ->whereNotNull('admin_api_token')
+        ->whereNotNull('base_url')
+        ->pluck('id')
+        ->each(fn (int $connectionId) => SyncChatwootLabelsJob::dispatch($connectionId));
+})
+    ->hourly()
+    ->name('chatwoot:sync-labels-hourly')
     ->onOneServer();

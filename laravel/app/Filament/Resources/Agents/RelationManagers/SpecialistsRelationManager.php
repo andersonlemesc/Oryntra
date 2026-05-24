@@ -196,12 +196,13 @@ class SpecialistsRelationManager extends RelationManager
                                             ->rows(2)
                                             ->default('Vou transferir voce para um atendente.')
                                             ->columnSpanFull(),
-                                        TextInput::make('handoff_config.label_name')
+                                        Select::make('handoff_config.label_name')
                                             ->label('Label Chatwoot')
-                                            ->maxLength(120)
+                                            ->options(fn (): array => self::chatwootLabelOptions())
+                                            ->searchable()
                                             ->visible(fn (Get $get): bool => (bool) $get('handoff_config.enabled'))
                                             ->placeholder('Herda do bot quando vazio')
-                                            ->helperText('Opcional. Sobrescreve a label configurada no bot. Use para diferenciar vendas/suporte/financeiro.'),
+                                            ->helperText('Lista das labels do Chatwoot (sincronizadas via job). Sobrescreve a label do bot. Crie novas em Chatwoot > Settings > Labels.'),
                                         Textarea::make('handoff_config.private_note_template')
                                             ->label('Template da nota privada')
                                             ->rows(3)
@@ -280,12 +281,13 @@ class SpecialistsRelationManager extends RelationManager
                                             ->live()
                                             ->default(false)
                                             ->helperText('Quando habilitado, a tool resolve_conversation sera adicionada automaticamente ao especialista.'),
-                                        TextInput::make('resolution_config.label_name')
+                                        Select::make('resolution_config.label_name')
                                             ->label('Label Chatwoot')
-                                            ->maxLength(120)
-                                            ->placeholder('resolved-by-ai')
+                                            ->options(fn (): array => self::chatwootLabelOptions())
+                                            ->searchable()
                                             ->visible(fn (Get $get): bool => (bool) $get('resolution_config.enabled'))
-                                            ->helperText('Opcional. Aplicada antes do toggle_status=resolved. Deixe vazio para nao adicionar label.'),
+                                            ->placeholder('Sem label')
+                                            ->helperText('Lista das labels do Chatwoot (sincronizadas via job). Aplicada antes do toggle_status=resolved. Crie novas em Chatwoot > Settings > Labels.'),
                                         Textarea::make('resolution_config.customer_message')
                                             ->label('Mensagem de despedida')
                                             ->rows(2)
@@ -326,9 +328,11 @@ class SpecialistsRelationManager extends RelationManager
                                                     ->rows(2)
                                                     ->columnSpanFull()
                                                     ->helperText('Opcional. Sobrescreve a mensagem geral so para esta situacao.'),
-                                                TextInput::make('label_name')
+                                                Select::make('label_name')
                                                     ->label('Label especifica')
-                                                    ->maxLength(120)
+                                                    ->options(fn (): array => self::chatwootLabelOptions())
+                                                    ->searchable()
+                                                    ->placeholder('Usa label geral')
                                                     ->helperText('Opcional. Sobrescreve a label geral so para esta situacao.'),
                                             ])
                                             ->columns(2)
@@ -704,6 +708,25 @@ class SpecialistsRelationManager extends RelationManager
             ->orderBy('name')
             ->pluck('name', 'chatwoot_team_id')
             ->map(fn (mixed $name): string => (string) $name)
+            ->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function chatwootLabelOptions(): array
+    {
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return [];
+        }
+
+        return DB::table('chatwoot_labels')
+            ->where('workspace_id', $tenant->getKey())
+            ->orderBy('title')
+            ->pluck('title', 'title')
+            ->map(fn (mixed $title): string => (string) $title)
             ->all();
     }
 

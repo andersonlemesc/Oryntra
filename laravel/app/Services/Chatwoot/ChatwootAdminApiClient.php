@@ -57,6 +57,23 @@ class ChatwootAdminApiClient
     /**
      * @return array<int, array<string, mixed>>
      */
+    public function listLabels(): array
+    {
+        $response = Http::withHeaders($this->connection->chatwootAdminHeaders())
+            ->get($this->url('labels'));
+
+        if ($response->failed()) {
+            throw new RuntimeException("Chatwoot admin listLabels failed: HTTP {$response->status()}");
+        }
+
+        $payload = $response->json('payload');
+
+        return is_array($payload) ? array_values($payload) : [];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
     public function listTeamMembers(int $teamId): array
     {
         $response = Http::withHeaders($this->connection->chatwootAdminHeaders())

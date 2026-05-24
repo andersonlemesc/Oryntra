@@ -109,3 +109,34 @@ Fluxo desejado: IA atende suporte. Resolveu → chama `resolve_conversation` →
 - Re-engagement automatico apos reopen pelo cliente (Chatwoot reabre default).
 - Analytics dashboard de taxa de resolucao IA (vira em phase posterior).
 - Notificacao admin quando IA resolve (similar a Phase 15 do roadmap).
+
+## Fase 12.1 - Tool sempre invocavel via tool_loop (follow-up)
+
+Detectado depois que a IA, mesmo com `resolve_conversation` no allowlist e `resolution_config.enabled=true`, **nunca disparava a tool** quando o especialista tinha contact tools. Causa: o caminho `run_specialist_with_tool_calling` so expoe `EXECUTABLE_TOOLS` (contact tools) e retorna texto direto - o `generate_specialist_decision_with_llm` (que entendia `action=resolve_conversation`) era inalcancavel.
+
+Mudancas:
+
+- `tool_runtime.py`: `resolve_conversation` agora pertence a `EXECUTABLE_TOOLS` (separado de `CONTACT_TOOLS`). Factory `_make_resolve_conversation_tool(ctx, terminal_state)` cria StructuredTool com schema Pydantic (reason, resolution_summary, customer_message opt, label_name opt). Tool dispara `resolve_conversation()` -> Laravel e marca `terminal_state["resolved"] = True` + captura dados.
+- `build_specialist_tools`: aceita `terminal_state` opcional. Contact tools so quando `contact_id` presente; resolve tool sempre que `resolve_conversation` no allowlist + terminal_state nao-nulo.
+- `run_specialist_tool_loop`: aceita `terminal_state`. Apos cada batch de tool calls, checa `terminal_state["resolved"]` e curto-circuita o loop retornando `ToolLoopResult(resolved=True, resolution=...)`.
+- `ToolLoopResult`: gain `resolved: bool` + `resolution: dict | None`.
+- `ToolRuntimeContext`: gain `thread_id: str` (resolve_conversation precisa pra payload Laravel).
+- `supervisor.run_specialist_with_tool_calling`: nao retorna mais None quando `contact_id is None` - permite executar so com resolve_conversation. Cria `terminal_state` e passa pra `build_specialist_tools` + loop.
+- `supervisor.routed_specialist_response`: antes do branch de texto, checa `tool_result.resolved` -> retorna `resolution_response_from_tool_call` com `customer_message` capturado (ou fallback do specialist).
+- Nova funcao `resolution_response_from_tool_call` que monta trace contendo o tool_call do resolve + step `specialist_response` com source `resolve_tool`.
+- Prompt do especialista no tool_loop ganha linha explicita instruindo quando chamar resolve_conversation e que nao gere mais texto apos.
+
+Tests: `tests/test_tool_runtime.py` ganha 3 cenarios novos (resolve sem contact_id, sem terminal_state, short-circuit do loop quando resolve chama).
+
+## Fase 12.2 - Sync de labels Chatwoot
+
+Antes a label era TextInput livre - admin podia digitar nome de label que nao existia no Chatwoot, causando falha silenciosa no `POST /labels`. Agora label vem de tabela sincronizada.
+
+- Migration `chatwoot_labels` (id, workspace_id, chatwoot_connection_id, chatwoot_label_id, title, description, color, show_on_sidebar, synced_at, timestamps). Unique `(chatwoot_connection_id, title)`.
+- `ChatwootLabel` model.
+- `ChatwootAdminApiClient::listLabels()`.
+- `SyncChatwootLabelsJob` (upsert por title, remove stale, no-op se sem admin token).
+- `SyncChatwootMetadataJob` adicionado ao chain (sync manual via botao Filament tambem dispara labels).
+- `Schedule::call(...)` horario novo: `chatwoot:sync-labels-hourly`.
+- Filament `SpecialistsRelationManager`: TextInput `handoff_config.label_name`, `resolution_config.label_name` e `rules.*.label_name` -> Select com options `chatwootLabelOptions()` (pluck title from chatwoot_labels por workspace).
+- Tests `tests/Feature/Jobs/Chatwoot/SyncChatwootLabelsJobTest.php` (upsert + remove stale, skip blank titles, no-op missing connection, no-op missing admin token).
