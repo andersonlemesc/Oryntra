@@ -36,6 +36,14 @@ class ContactsTable
                     ->label('Telefone')
                     ->searchable()
                     ->toggleable(),
+                TextColumn::make('address_city')
+                    ->label('Cidade')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('address_state')
+                    ->label('Estado')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('lead_status')
                     ->label('Status')
                     ->badge()

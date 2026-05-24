@@ -34,6 +34,39 @@ class ContactForm
                             ->disabled()
                             ->dehydrated(false),
                     ]),
+                Section::make('Endereco de entrega')
+                    ->columns(3)
+                    ->schema([
+                        TextInput::make('address_postal_code')
+                            ->label('CEP')
+                            ->maxLength(20),
+                        TextInput::make('address_street')
+                            ->label('Rua / Avenida')
+                            ->maxLength(255)
+                            ->columnSpan(2),
+                        TextInput::make('address_number')
+                            ->label('Numero')
+                            ->maxLength(40),
+                        TextInput::make('address_complement')
+                            ->label('Complemento')
+                            ->maxLength(255),
+                        TextInput::make('address_neighborhood')
+                            ->label('Bairro')
+                            ->maxLength(120),
+                        TextInput::make('address_city')
+                            ->label('Cidade')
+                            ->maxLength(120),
+                        TextInput::make('address_state')
+                            ->label('Estado')
+                            ->maxLength(80),
+                        TextInput::make('address_country')
+                            ->label('Pais')
+                            ->maxLength(80),
+                        TextInput::make('address_reference')
+                            ->label('Ponto de referencia / observacoes')
+                            ->maxLength(500)
+                            ->columnSpanFull(),
+                    ]),
                 Section::make('Lead')
                     ->columns(2)
                     ->schema([

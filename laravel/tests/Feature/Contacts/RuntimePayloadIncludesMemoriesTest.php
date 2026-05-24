@@ -40,6 +40,11 @@ it('includes contact memories in the runtime payload when any specialist enables
     $contact = Contact::factory()->create([
         'workspace_id' => $workspace->id,
         'chatwoot_connection_id' => $connection->id,
+        'address_street' => 'Praca da Se',
+        'address_number' => '100',
+        'address_city' => 'Sao Paulo',
+        'address_state' => 'SP',
+        'address_postal_code' => '01001-000',
     ]);
 
     foreach (['memoria mais antiga', 'memoria do meio', 'memoria mais nova'] as $i => $content) {
@@ -87,6 +92,8 @@ it('includes contact memories in the runtime payload when any specialist enables
 
     expect($captured['contact'])->toBeArray()
         ->and($captured['contact']['memories'])->toHaveCount(3)
+        ->and($captured['contact']['address_street'])->toBe('Praca da Se')
+        ->and($captured['contact']['address_city'])->toBe('Sao Paulo')
         ->and($captured['contact']['memories'][0]['content'])->toBe('memoria mais nova')
         ->and($captured['contact']['memories'][2]['content'])->toBe('memoria mais antiga')
         ->and($captured['specialists'][0]['memory_config']['injection_enabled'])->toBeTrue()

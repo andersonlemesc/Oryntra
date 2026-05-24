@@ -81,6 +81,15 @@ class ChatwootUpdateContactArgs(BaseModel):
     name: str | None = Field(default=None, description="Novo nome do contato.")
     email: str | None = Field(default=None, description="Novo email do contato.")
     phone_number: str | None = Field(default=None, description="Novo telefone do contato (E.164).")
+    address_postal_code: str | None = Field(default=None, description="CEP/codigo postal do endereco de entrega.")
+    address_street: str | None = Field(default=None, description="Rua ou avenida do endereco de entrega.")
+    address_number: str | None = Field(default=None, description="Numero do endereco de entrega.")
+    address_complement: str | None = Field(default=None, description="Complemento do endereco de entrega.")
+    address_neighborhood: str | None = Field(default=None, description="Bairro do endereco de entrega.")
+    address_city: str | None = Field(default=None, description="Cidade do endereco de entrega.")
+    address_state: str | None = Field(default=None, description="Estado/UF do endereco de entrega.")
+    address_country: str | None = Field(default=None, description="Pais do endereco de entrega.")
+    address_reference: str | None = Field(default=None, description="Ponto de referencia ou observacoes de entrega.")
 
 
 class ChatwootGetContactArgs(BaseModel):
@@ -150,9 +159,33 @@ def _make_update_contact_tool(ctx: ToolRuntimeContext) -> StructuredTool:
         name: str | None = None,
         email: str | None = None,
         phone_number: str | None = None,
+        address_postal_code: str | None = None,
+        address_street: str | None = None,
+        address_number: str | None = None,
+        address_complement: str | None = None,
+        address_neighborhood: str | None = None,
+        address_city: str | None = None,
+        address_state: str | None = None,
+        address_country: str | None = None,
+        address_reference: str | None = None,
     ) -> str:
-        if not any([name, email, phone_number]):
-            return "error: provide at least one of name, email, phone_number."
+        if not any(
+            [
+                name,
+                email,
+                phone_number,
+                address_postal_code,
+                address_street,
+                address_number,
+                address_complement,
+                address_neighborhood,
+                address_city,
+                address_state,
+                address_country,
+                address_reference,
+            ]
+        ):
+            return "error: provide at least one contact or address field."
 
         try:
             response = chatwoot_update_contact(
@@ -165,19 +198,29 @@ def _make_update_contact_tool(ctx: ToolRuntimeContext) -> StructuredTool:
                     name=name,
                     email=email,
                     phone_number=phone_number,
+                    address_postal_code=address_postal_code,
+                    address_street=address_street,
+                    address_number=address_number,
+                    address_complement=address_complement,
+                    address_neighborhood=address_neighborhood,
+                    address_city=address_city,
+                    address_state=address_state,
+                    address_country=address_country,
+                    address_reference=address_reference,
                 )
             )
         except Exception as exc:
             logger.exception("chatwoot_update_contact tool call failed")
             return f"error: chatwoot_update_contact failed ({exc})."
 
-        return f"ok: contato atualizado no Chatwoot. status={response.status}."
+        return f"ok: contato atualizado. status={response.status}."
 
     return StructuredTool.from_function(
         name="chatwoot_update_contact",
         description=(
-            "Atualiza nome, email ou telefone do contato no Chatwoot e na base local. "
-            "Use quando o cliente informar um novo dado de contato."
+            "Atualiza nome, email ou telefone do contato no Chatwoot e na base local, "
+            "e salva endereco de entrega somente na base local Oryntra. "
+            "Use quando o cliente informar um novo dado de contato ou endereco."
         ),
         args_schema=ChatwootUpdateContactArgs,
         func=run,

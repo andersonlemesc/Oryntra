@@ -84,6 +84,67 @@ it('updates whitelisted fields and ignores extras', function () {
         && ! isset($request['custom_attributes']));
 });
 
+it('updates local delivery address without calling Chatwoot', function () {
+    Config::set('services.agent_runtime.internal_token', 'ci-token');
+
+    $workspace = Workspace::factory()->create();
+    $agent = Agent::factory()->active()->for($workspace)->create();
+    $connection = ChatwootConnection::factory()->for($workspace)->create([
+        'base_url' => 'http://chatwoot.test',
+        'account_id' => 5,
+        'api_access_token' => 'agent-bot-token',
+        'admin_api_token' => null,
+    ]);
+    $specialist = AgentSpecialist::factory()
+        ->for($workspace)
+        ->for($agent)
+        ->create(['tools_allowlist' => ['chatwoot_update_contact']]);
+    $contact = Contact::factory()->create([
+        'workspace_id' => $workspace->id,
+        'chatwoot_connection_id' => $connection->id,
+        'chatwoot_contact_id' => 42,
+    ]);
+    $run = AgentRun::factory()->create([
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $connection->id,
+        'chatwoot_account_id' => 5,
+        'contact_id' => $contact->id,
+        'conversation_id' => 99,
+    ]);
+
+    Http::fake();
+
+    postJson('/api/internal/agent-tools/chatwoot-update-contact', [
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'agent_run_id' => $run->id,
+        'specialist_id' => $specialist->id,
+        'contact_id' => $contact->id,
+        'address_postal_code' => '01001-000',
+        'address_street' => 'Praca da Se',
+        'address_number' => '100',
+        'address_neighborhood' => 'Se',
+        'address_city' => 'Sao Paulo',
+        'address_state' => 'SP',
+        'address_country' => 'Brasil',
+        'address_reference' => 'Portaria azul',
+    ], ['X-Internal-Token' => 'ci-token'])
+        ->assertOk()
+        ->assertJsonPath('contact.address_city', 'Sao Paulo')
+        ->assertJsonPath('contact.address_reference', 'Portaria azul');
+
+    Http::assertNothingSent();
+
+    $contact->refresh();
+
+    expect($contact->address_postal_code)->toBe('01001-000')
+        ->and($contact->address_street)->toBe('Praca da Se')
+        ->and($contact->address_number)->toBe('100')
+        ->and($contact->address_city)->toBe('Sao Paulo')
+        ->and($contact->address_state)->toBe('SP');
+});
+
 it('rejects update when no whitelisted field is provided', function () {
     Config::set('services.agent_runtime.internal_token', 'ci-token');
 

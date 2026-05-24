@@ -55,6 +55,22 @@ class ContactInfolist
                                         TextEntry::make('last_message_at')->label('Ultima mensagem')->dateTime()->placeholder('—'),
                                         TextEntry::make('synced_at')->label('Ultima sync Chatwoot')->dateTime()->placeholder('—'),
                                     ]),
+                                Section::make('Endereco de entrega')
+                                    ->columns(2)
+                                    ->schema([
+                                        TextEntry::make('address_postal_code')->label('CEP')->placeholder('—'),
+                                        TextEntry::make('address_street')->label('Rua / Avenida')->placeholder('—'),
+                                        TextEntry::make('address_number')->label('Numero')->placeholder('—'),
+                                        TextEntry::make('address_complement')->label('Complemento')->placeholder('—'),
+                                        TextEntry::make('address_neighborhood')->label('Bairro')->placeholder('—'),
+                                        TextEntry::make('address_city')->label('Cidade')->placeholder('—'),
+                                        TextEntry::make('address_state')->label('Estado')->placeholder('—'),
+                                        TextEntry::make('address_country')->label('Pais')->placeholder('—'),
+                                        TextEntry::make('address_reference')
+                                            ->label('Ponto de referencia / observacoes')
+                                            ->placeholder('—')
+                                            ->columnSpanFull(),
+                                    ]),
                                 TextEntry::make('deleted_at')
                                     ->label('Removido em')
                                     ->dateTime()

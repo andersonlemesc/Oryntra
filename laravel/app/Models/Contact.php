@@ -22,6 +22,15 @@ use Illuminate\Support\Carbon;
  * @property string|null          $name
  * @property string|null          $email
  * @property string|null          $phone_number
+ * @property string|null          $address_postal_code
+ * @property string|null          $address_street
+ * @property string|null          $address_number
+ * @property string|null          $address_complement
+ * @property string|null          $address_neighborhood
+ * @property string|null          $address_city
+ * @property string|null          $address_state
+ * @property string|null          $address_country
+ * @property string|null          $address_reference
  * @property string|null          $thumbnail
  * @property array<string, mixed> $additional_attributes
  * @property array<string, mixed> $chatwoot_custom_attributes
@@ -43,6 +52,15 @@ use Illuminate\Support\Carbon;
     'name',
     'email',
     'phone_number',
+    'address_postal_code',
+    'address_street',
+    'address_number',
+    'address_complement',
+    'address_neighborhood',
+    'address_city',
+    'address_state',
+    'address_country',
+    'address_reference',
     'thumbnail',
     'additional_attributes',
     'chatwoot_custom_attributes',

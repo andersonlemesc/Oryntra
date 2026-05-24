@@ -235,6 +235,15 @@ class AgentRuntimeClient
         $payload['name'] = $contact->name;
         $payload['email'] = $contact->email;
         $payload['phone_number'] = $contact->phone_number;
+        $payload['address_postal_code'] = $contact->address_postal_code;
+        $payload['address_street'] = $contact->address_street;
+        $payload['address_number'] = $contact->address_number;
+        $payload['address_complement'] = $contact->address_complement;
+        $payload['address_neighborhood'] = $contact->address_neighborhood;
+        $payload['address_city'] = $contact->address_city;
+        $payload['address_state'] = $contact->address_state;
+        $payload['address_country'] = $contact->address_country;
+        $payload['address_reference'] = $contact->address_reference;
         $payload['lead_status'] = $contact->lead_status;
         $payload['memories'] = $this->contactMemoriesPayload($run);
 
