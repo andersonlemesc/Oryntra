@@ -76,6 +76,53 @@ it('sends the runtime payload with internal token', function () {
     });
 });
 
+it('sends media_config with LLM credentials when agent has media_llm_key', function () {
+    Config::set('services.agent_runtime.base_url', 'http://agent-python:8000');
+    Config::set('services.agent_runtime.internal_token', 'ci-token');
+    Config::set('services.agent_runtime.timeout', 30);
+
+    Http::fake([
+        'http://agent-python:8000/internal/chatwoot/messages' => Http::response([
+            'status' => 'completed',
+            'response' => ['type' => 'text', 'content' => '[mock]', 'document_id' => null, 'handoff_reason' => null, 'confidence' => 1.0],
+            'specialist_id' => null,
+            'trace' => [],
+            'usage' => ['supervisor' => ['input_tokens' => 0, 'output_tokens' => 0], 'specialist' => ['input_tokens' => 0, 'output_tokens' => 0], 'total_cost_cents' => 0],
+        ]),
+    ]);
+
+    $workspace = Workspace::factory()->create();
+    $connection = ChatwootConnection::factory()->for($workspace)->create();
+    $agent = Agent::factory()->active()->for($workspace)->create([
+        'media_policy' => ['max_audio_seconds' => 60],
+    ]);
+
+    $run = AgentRun::factory()->create([
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $connection->id,
+        'chatwoot_account_id' => 5,
+        'conversation_id' => 99,
+        'thread_id' => "workspace:{$workspace->id}:account:5:conversation:99",
+        'input' => [
+            'messages' => [['id' => '123', 'content' => 'oi']],
+        ],
+    ]);
+
+    app(AgentRuntimeClient::class)->run($run);
+
+    Http::assertSent(function (Request $request) use ($agent) {
+        $mediaConfig = $request['media_config'];
+
+        return is_array($mediaConfig)
+            && array_key_exists('policy', $mediaConfig)
+            && ($mediaConfig['policy']['max_audio_seconds'] ?? null) === 60
+            && array_key_exists('llm_key_id', $mediaConfig)
+            && array_key_exists('llm_provider', $mediaConfig)
+            && array_key_exists('llm_api_key', $mediaConfig);
+    });
+});
+
 it('rejects runtime responses that do not match the contract', function () {
     Config::set('services.agent_runtime.base_url', 'http://agent-python:8000');
     Config::set('services.agent_runtime.internal_token', 'ci-token');
