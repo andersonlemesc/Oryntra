@@ -50,9 +50,9 @@ class DocumentForm
                             ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
                             ->maxSize(20480)
                             ->required()
-                            ->storeFileName('original_filename')
                             ->afterStateUpdated(function ($state, $set): void {
                                 if ($state) {
+                                    $set('original_filename', $state->getClientOriginalName());
                                     $set('mime_type', $state->getMimeType());
                                     $set('size_bytes', $state->getSize());
                                 }

@@ -20,5 +20,6 @@ it('lists native Chatwoot tools available to specialists', function () {
         NativeTool::ChatwootAssignAgent->value => 'Atribuir atendente',
         NativeTool::ResolveConversation->value => 'Encerrar conversa',
         NativeTool::QueryProducts->value => 'Consultar produtos',
+        NativeTool::SendDocument->value => 'Enviar documento',
     ]);
 });
