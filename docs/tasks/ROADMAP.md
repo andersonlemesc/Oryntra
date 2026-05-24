@@ -5,7 +5,7 @@
 
 ## Estado atual (2026-05-24)
 
-Branch ativa: `feature/resolve-conversation-tool` com fases 12, 12.1, 12.2, 12.3, 12.4, 12.5 e 12.6 entregues. Pronta pra merge em `develop`/`main`.
+Branch ativa: `develop` com fases 4–14.2 entregues. Pronta para testar em Chatwoot real.
 
 ## Fases entregues
 
@@ -33,11 +33,12 @@ Branch ativa: `feature/resolve-conversation-tool` com fases 12, 12.1, 12.2, 12.3
 
 ## Fases pendentes
 
+| 14.1 | `2026-05-24-vision-audio-phase-14-1.md` | Pipeline de mídia: audio → Whisper/Gemini, imagem → GPT-4o/Claude/Gemini Vision. `media_policy` por tipo (enabled + fallback_message). `audio_llm_key_id` + `vision_llm_key_id` no Agent. Filament: tab Mídia com 4 seções. `preprocess_media` async → short-circuit ou inject text. Trace steps + `usage.media` para cobrar tokens. Migração `media_config` → `audio/vision_llm_key`. `ProductSearchService` com unaccent + pg_trgm word_similarity. |
+| 14.2 | mesmo plano | Busca fuzzy de produtos com unaccent + token-by-token + pg_trgm word_similarity. "bicicleta eletrica" retorna 5 bikes, "bike" retorna 6 via similarity. Migração para ativar extensions unaccent e pg_trgm. |
+
 ### Em andamento
 
-| Fase | Plano | Resumo |
-|---|---|---|
-| 14.1 | `2026-05-24-vision-audio-phase-14-1.md` | Tools `transcribe_audio` + `vision_describe`. Media preprocessing inline (audio via Whisper, image via vision LLM). `media_config` toggles per agent. Filament toggles. Async supervisor pipeline. |
+(nenhuma)
 
 ### Adiada — decisão do usuário
 
