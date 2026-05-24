@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs\Agent;
 
+use App\Actions\AgentTools\SendDocument;
 use App\Enums\AgentRunStatus;
 use App\Models\AgentRun;
 use App\Services\AgentRuntime\AgentRuntimeClient;
@@ -158,8 +159,62 @@ class DispatchAgentRunJob implements ShouldQueue
         $responseType = $this->stringValue($response['type'] ?? null);
         $content = $this->stringValue($response['content'] ?? null);
 
-        if (! in_array($responseType, ['text', 'clarify'], true)) {
+        if (! in_array($responseType, ['text', 'clarify', 'send_document'], true)) {
             $output['response_delivery'] = $this->skippedResponseDelivery('unsupported_response_type');
+
+            return $output;
+        }
+
+        if ($responseType === 'send_document') {
+            $documentId = intval($response['document_id'] ?? 0);
+            $caption = $content;
+
+            if ($documentId <= 0) {
+                $output['response_delivery'] = $this->skippedResponseDelivery('missing_document_id');
+
+                return $output;
+            }
+
+            $run->loadMissing('chatwootConnection');
+            $connection = $run->chatwootConnection;
+
+            if ($connection === null) {
+                $output['response_delivery'] = $this->failedResponseDelivery('missing_chatwoot_connection');
+                $run->forceFill(['output' => $output])->save();
+
+                throw new RuntimeException('Cannot deliver send_document response without a Chatwoot connection.');
+            }
+
+            try {
+                $result = app(SendDocument::class)->execute([
+                    'workspace_id' => $run->workspace_id,
+                    'agent_run_id' => $run->id,
+                    'document_id' => $documentId,
+                    'caption' => $caption,
+                    'conversation_id' => (int) $run->conversation_id,
+                ]);
+
+                if (($result['sent'] ?? false) === false) {
+                    $output['response_delivery'] = $this->failedResponseDelivery($result['error'] ?? 'send_document_failed');
+                    $run->forceFill(['output' => $output])->save();
+
+                    throw new RuntimeException('send_document failed: ' . ($result['error'] ?? 'unknown'));
+                }
+
+                $output['response_delivery'] = [
+                    'status' => 'completed',
+                    'sent_at' => (string) Carbon::now()->toISOString(),
+                    'conversation_id' => (int) $run->conversation_id,
+                    'response_type' => 'send_document',
+                    'document_id' => $documentId,
+                    'filename' => $result['filename'] ?? '',
+                ];
+            } catch (Throwable $exception) {
+                $output['response_delivery'] = $this->failedResponseDelivery($exception->getMessage());
+                $run->forceFill(['output' => $output])->save();
+
+                throw $exception;
+            }
 
             return $output;
         }
