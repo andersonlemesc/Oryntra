@@ -53,6 +53,26 @@ class AgentRunInfolist
                                             ->state(fn (AgentRun $record): string => self::duration($record))
                                             ->placeholder('-'),
                                     ]),
+                                Section::make('Tokens')
+                                    ->columns(2)
+                                    ->schema([
+                                        TextEntry::make('supervisor_input_tokens')
+                                            ->label('Supervisor In')
+                                            ->state(fn (AgentRun $record): int => data_get($record->output, 'usage.supervisor.input_tokens', 0))
+                                            ->placeholder('-'),
+                                        TextEntry::make('supervisor_output_tokens')
+                                            ->label('Supervisor Out')
+                                            ->state(fn (AgentRun $record): int => data_get($record->output, 'usage.supervisor.output_tokens', 0))
+                                            ->placeholder('-'),
+                                        TextEntry::make('specialist_input_tokens')
+                                            ->label('Especialista In')
+                                            ->state(fn (AgentRun $record): int => data_get($record->output, 'usage.specialist.input_tokens', 0))
+                                            ->placeholder('-'),
+                                        TextEntry::make('specialist_output_tokens')
+                                            ->label('Especialista Out')
+                                            ->state(fn (AgentRun $record): int => data_get($record->output, 'usage.specialist.output_tokens', 0))
+                                            ->placeholder('-'),
+                                    ]),
                             ]),
 
                         Tab::make('Handoff')
@@ -164,9 +184,11 @@ class AgentRunInfolist
                                                 TextEntry::make('tool')->label('Ferramenta')->placeholder('-'),
                                                 TextEntry::make('specialist_label')->label('Especialista')->placeholder('-'),
                                                 TextEntry::make('latency_ms')->label('Latencia (ms)')->placeholder('-'),
+                                                TextEntry::make('tokens_input')->label('In Tok')->placeholder('-'),
+                                                TextEntry::make('tokens_output')->label('Out Tok')->placeholder('-'),
                                                 TextEntry::make('ts')->label('Timestamp')->placeholder('-'),
                                             ])
-                                            ->columns(3),
+                                            ->columns(5),
                                     ]),
                             ]),
 
@@ -281,6 +303,10 @@ class AgentRunInfolist
             } else {
                 $item['specialist_label'] = null;
             }
+
+            $tokens = $item['tokens'] ?? [];
+            $item['tokens_input'] = $tokens['input'] ?? 0;
+            $item['tokens_output'] = $tokens['output'] ?? 0;
 
             $steps[] = $item;
         }

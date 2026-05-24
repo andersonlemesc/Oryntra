@@ -11,6 +11,7 @@ invoke them mid-turn instead of just describing the action in plain text.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -291,6 +292,13 @@ def _make_resolve_conversation_tool(
     )
 
 
+@dataclass
+class LlmUsage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: int = 0
+
+
 @dataclass(frozen=True)
 class ToolLoopResult:
     text: str | None
@@ -298,6 +306,7 @@ class ToolLoopResult:
     debug_prompt: dict[str, str] | None = None
     resolved: bool = False
     resolution: dict[str, Any] | None = None
+    total_usage: LlmUsage = Field(default_factory=LlmUsage)
 
 
 def run_specialist_tool_loop(
@@ -327,6 +336,8 @@ def run_specialist_tool_loop(
     ]
     tool_calls_trace: list[dict[str, Any]] = []
 
+    total_usage = LlmUsage()
+
     def _terminal_result() -> ToolLoopResult:
         state = terminal_state or {}
         resolution = state.get("resolution") if isinstance(state, dict) else None
@@ -335,14 +346,18 @@ def run_specialist_tool_loop(
             tool_calls=tool_calls_trace,
             resolved=True,
             resolution=resolution if isinstance(resolution, dict) else None,
+            total_usage=total_usage,
         )
 
     for _ in range(iterations):
         try:
-            ai_message: AIMessage = chat_with_tools.invoke(messages)
+            ai_message, usage = track_llm_invoke(chat_with_tools, messages)
+            total_usage.input_tokens += usage.input_tokens
+            total_usage.output_tokens += usage.output_tokens
+            total_usage.latency_ms += usage.latency_ms
         except Exception:
             logger.exception("specialist tool loop invoke failed")
-            return ToolLoopResult(text=None, tool_calls=tool_calls_trace)
+            return ToolLoopResult(text=None, tool_calls=tool_calls_trace, total_usage=total_usage)
 
         messages.append(ai_message)
         pending_calls = getattr(ai_message, "tool_calls", None) or []
@@ -350,7 +365,7 @@ def run_specialist_tool_loop(
         if not pending_calls:
             content = ai_message.content
             text = _extract_text(content)
-            return ToolLoopResult(text=text, tool_calls=tool_calls_trace)
+            return ToolLoopResult(text=text, tool_calls=tool_calls_trace, total_usage=total_usage)
 
         for call in pending_calls:
             name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
@@ -389,7 +404,7 @@ def run_specialist_tool_loop(
         "specialist tool loop exhausted iterations",
         extra={"max_iterations": iterations},
     )
-    return ToolLoopResult(text=None, tool_calls=tool_calls_trace)
+    return ToolLoopResult(text=None, tool_calls=tool_calls_trace, total_usage=total_usage)
 
 
 def _extract_text(content: Any) -> str | None:
@@ -415,11 +430,52 @@ def _truncate(value: str, limit: int) -> str:
     return value[: limit - 3] + "..."
 
 
+@dataclass
+class LlmUsage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: int = 0
+
+
+@dataclass(frozen=True)
+class ToolLoopResult:
+    text: str | None
+    tool_calls: list[dict[str, Any]]
+    debug_prompt: dict[str, str] | None = None
+    resolved: bool = False
+    resolution: dict[str, Any] | None = None
+    total_usage: LlmUsage = Field(default_factory=LlmUsage)
+
+
+def track_llm_invoke(
+    chat_with_tools: Any,
+    messages: list[Any],
+) -> tuple[AIMessage, LlmUsage]:
+    start = time.perf_counter()
+    ai_message: AIMessage = chat_with_tools.invoke(messages)
+    latency_ms = int((time.perf_counter() - start) * 1000)
+
+    input_tokens = 0
+    output_tokens = 0
+    usage_metadata = getattr(ai_message, "usage_metadata", None)
+    if usage_metadata:
+        input_tokens = usage_metadata.get("input_tokens", 0)
+        output_tokens = usage_metadata.get("output_tokens", 0)
+
+    return ai_message, LlmUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        latency_ms=latency_ms,
+    )
+
+
 __all__ = [
     "EXECUTABLE_TOOLS",
+    "LlmUsage",
     "MAX_TOOL_ITERATIONS",
     "ToolLoopResult",
     "ToolRuntimeContext",
     "build_specialist_tools",
     "run_specialist_tool_loop",
+    "track_llm_invoke",
 ]

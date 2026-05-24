@@ -7,6 +7,7 @@ namespace App\Filament\Resources\AgentRuns\Tables;
 use App\Enums\AgentRunStatus;
 use App\Filament\Resources\AgentRuns\Support\AgentRunHitlActions;
 use App\Models\Agent;
+use App\Models\AgentRun;
 use Filament\Actions\ViewAction;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
@@ -52,6 +53,10 @@ class AgentRunsTable
                     ->dateTime()
                     ->since()
                     ->sortable()
+                    ->toggleable(),
+                TextColumn::make('total_tokens')
+                    ->label('Tokens')
+                    ->state(fn ($record): int => self::totalTokens($record))
                     ->toggleable(),
             ])
             ->defaultSort('started_at', 'desc')
@@ -107,5 +112,17 @@ class AgentRunsTable
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
+    }
+
+    private static function totalTokens(AgentRun $record): int
+    {
+        $usage = $record->output['usage'] ?? [];
+
+        $supervisorInput = $usage['supervisor']['input_tokens'] ?? 0;
+        $supervisorOutput = $usage['supervisor']['output_tokens'] ?? 0;
+        $specialistInput = $usage['specialist']['input_tokens'] ?? 0;
+        $specialistOutput = $usage['specialist']['output_tokens'] ?? 0;
+
+        return $supervisorInput + $supervisorOutput + $specialistInput + $specialistOutput;
     }
 }

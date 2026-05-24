@@ -1,4 +1,5 @@
 import logging
+import time
 from contextlib import AbstractContextManager
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -17,10 +18,12 @@ from typing_extensions import TypedDict
 
 from oryntra_agent.agent.tool_runtime import (
     EXECUTABLE_TOOLS,
+    LlmUsage,
     ToolLoopResult,
     ToolRuntimeContext,
     build_specialist_tools,
     run_specialist_tool_loop,
+    track_llm_invoke,
 )
 from oryntra_agent.agent.tools import (
     HumanHandoffRequest,
@@ -35,8 +38,11 @@ from oryntra_agent.api.schemas import (
     HandoffRuleConfig,
     ResolutionRuleConfig,
     RuntimeResponsePayload,
+    RuntimeUsage,
     SpecialistConfig,
     TraceStep,
+    TraceTokens,
+    UsageBucket,
 )
 from oryntra_agent.settings import settings
 
@@ -49,7 +55,44 @@ _supervisor_llm_credential: ContextVar["LlmCredential | None"] = ContextVar(
     "supervisor_llm_credential",
     default=None,
 )
+_accumulated_usage: ContextVar["AccumulatedUsage"] = ContextVar(
+    "accumulated_usage",
+    default=None,
+)
 logger = logging.getLogger(__name__)
+
+
+class AccumulatedUsage:
+    def __init__(self) -> None:
+        self.supervisor_input_tokens: int = 0
+        self.supervisor_output_tokens: int = 0
+        self.supervisor_latency_ms: int = 0
+        self.specialist_input_tokens: int = 0
+        self.specialist_output_tokens: int = 0
+        self.specialist_latency_ms: int = 0
+
+    def add_supervisor(self, usage: LlmUsage) -> None:
+        self.supervisor_input_tokens += usage.input_tokens
+        self.supervisor_output_tokens += usage.output_tokens
+        self.supervisor_latency_ms += usage.latency_ms
+
+    def add_specialist(self, usage: LlmUsage) -> None:
+        self.specialist_input_tokens += usage.input_tokens
+        self.specialist_output_tokens += usage.output_tokens
+        self.specialist_latency_ms += usage.latency_ms
+
+    def to_runtime_usage(self) -> "RuntimeUsage":
+        return RuntimeUsage(
+            supervisor=UsageBucket(
+                input_tokens=self.supervisor_input_tokens,
+                output_tokens=self.supervisor_output_tokens,
+            ),
+            specialist=UsageBucket(
+                input_tokens=self.specialist_input_tokens,
+                output_tokens=self.specialist_output_tokens,
+            ),
+            total_cost_cents=0,
+        )
 HUMAN_HANDOFF_SENTINEL = "__REQUEST_HUMAN_HANDOFF__"
 MAX_CONVERSATION_MESSAGES = 20
 
@@ -110,6 +153,7 @@ def run_chatwoot_runtime(payload: ChatwootRuntimeRequest) -> ChatwootRuntimeResp
     credentials = runtime_llm_credentials_from_payload(payload)
     credentials_token = _runtime_llm_credentials.set(credentials)
     supervisor_credential_token = _supervisor_llm_credential.set(credentials.supervisor)
+    usage_token = _accumulated_usage.set(AccumulatedUsage())
     graph = get_runtime_graph()
 
     try:
@@ -122,8 +166,11 @@ def run_chatwoot_runtime(payload: ChatwootRuntimeRequest) -> ChatwootRuntimeResp
         if not isinstance(response, dict):
             raise RuntimeError("Supervisor graph did not produce a runtime response.")
 
-        return ChatwootRuntimeResponse.model_validate(response)
+        full_response = ChatwootRuntimeResponse.model_validate(response)
+        full_response.usage = _accumulated_usage.get().to_runtime_usage()
+        return full_response
     finally:
+        _accumulated_usage.reset(usage_token)
         _supervisor_llm_credential.reset(supervisor_credential_token)
         _runtime_llm_credentials.reset(credentials_token)
 
@@ -771,6 +818,9 @@ def run_specialist_with_tool_calling(
         terminal_state=terminal_state,
     )
 
+    specialist_usage = result.total_usage
+    _accumulated_usage.get().add_specialist(specialist_usage)
+
     if _debug_prompts_enabled(payload):
         return ToolLoopResult(
             text=result.text,
@@ -781,6 +831,7 @@ def run_specialist_with_tool_calling(
             },
             resolved=result.resolved,
             resolution=result.resolution,
+            total_usage=result.total_usage,
         )
 
     return result
@@ -1294,7 +1345,14 @@ def choose_specialist_with_llm(payload: ChatwootRuntimeRequest) -> SpecialistCho
     structured_model = chat_model.with_structured_output(SpecialistChoice)
 
     try:
+        start = time.perf_counter()
         choice = structured_model.invoke(supervisor_route_messages(payload))
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        usage = LlmUsage(latency_ms=latency_ms)
+        _accumulated_usage.get().add_supervisor(usage)
+        if isinstance(choice, SpecialistChoice):
+            return choice
+        return SpecialistChoice.model_validate(choice)
     except Exception:
         logger.exception(
             "supervisor llm routing failed; falling back to deterministic routing",
@@ -1407,7 +1465,11 @@ def generate_specialist_response_with_llm(
         return None
 
     try:
+        start = time.perf_counter()
         response = chat_model.invoke(specialist_response_messages(payload, selected_specialist))
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        usage = LlmUsage(latency_ms=latency_ms)
+        _accumulated_usage.get().add_specialist(usage)
     except Exception:
         logger.exception(
             "specialist llm response failed; falling back to mock response",
@@ -1475,9 +1537,13 @@ def generate_specialist_decision_with_llm(
     structured_model = chat_model.with_structured_output(SpecialistDecision)
 
     try:
+        start = time.perf_counter()
         decision = structured_model.invoke(
             specialist_decision_messages(payload, selected_specialist)
         )
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        usage = LlmUsage(latency_ms=latency_ms)
+        _accumulated_usage.get().add_specialist(usage)
     except Exception:
         logger.exception(
             "specialist structured decision failed; falling back to text response",
@@ -1511,7 +1577,11 @@ def generate_supervisor_opening_with_llm(payload: ChatwootRuntimeRequest) -> str
         return None
 
     try:
+        start = time.perf_counter()
         response = chat_model.invoke(supervisor_opening_messages(payload))
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        usage = LlmUsage(latency_ms=latency_ms)
+        _accumulated_usage.get().add_supervisor(usage)
     except Exception:
         logger.exception(
             "supervisor opening response failed; falling back to default opening",
