@@ -6,8 +6,9 @@ use App\Models\Product;
 use App\Models\ProductDocument;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 uses(RefreshDatabase::class);
 
 it('creates a product document', function () {

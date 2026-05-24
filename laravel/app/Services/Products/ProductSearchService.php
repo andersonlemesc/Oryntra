@@ -49,7 +49,7 @@ class ProductSearchService
 
                         // token-by-token OR
                         foreach ($tokens as $token) {
-                            $like = '%'.$token.'%';
+                            $like = '%' . $token . '%';
                             if ($isPgsql) {
                                 $match->orWhereRaw('unaccent(lower(name)) ILIKE unaccent(lower(?))', [$like])
                                     ->orWhereRaw('unaccent(lower(slug)) ILIKE unaccent(lower(?))', [$like]);
@@ -83,7 +83,7 @@ class ProductSearchService
 
             $q->where(function (Builder $sub) use ($tokens, $isPgsql): void {
                 foreach (array_unique($tokens) as $token) {
-                    $search = '%'.$token.'%';
+                    $search = '%' . $token . '%';
                     if ($isPgsql) {
                         $sub->orWhereRaw('unaccent(lower(name)) ILIKE unaccent(lower(?))', [$search])
                             ->orWhereRaw('unaccent(lower(description)) ILIKE unaccent(lower(?))', [$search])

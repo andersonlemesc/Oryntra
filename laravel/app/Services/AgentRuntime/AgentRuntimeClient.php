@@ -422,7 +422,7 @@ class AgentRuntimeClient
     }
 
     /**
-     * @param  array<string,mixed> $raw
+     * @param  array<string,mixed>                          $raw
      * @return array{enabled:bool, fallback_message:string}
      */
     private function mediaTypeSlice(array $raw, string $key): array

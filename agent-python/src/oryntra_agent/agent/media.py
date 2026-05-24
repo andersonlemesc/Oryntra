@@ -11,13 +11,12 @@ Pipeline:
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import logging
 import re
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 from urllib.parse import urlparse
 
@@ -211,7 +210,7 @@ def _make_trace_step(
             "output": usage.output_tokens if usage else 0,
         },
         "latency_ms": latency_ms,
-        "ts": datetime.now(tz=timezone.utc).isoformat(),
+        "ts": datetime.now(tz=UTC).isoformat(),
     }
 
 

@@ -16,7 +16,9 @@ use Illuminate\Support\Facades\Storage;
 
 use function Pest\Laravel\postJson;
 
-uses(Tests\TestCase::class);
+use Tests\TestCase;
+
+uses(TestCase::class);
 uses(RefreshDatabase::class);
 
 it('rejects send_document without the internal runtime token', function () {

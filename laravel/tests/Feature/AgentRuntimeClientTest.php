@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Enums\AgentLlmKeyStatus;
+use App\Enums\AgentLlmProvider;
 use App\Models\Agent;
+use App\Models\AgentLlmKey;
 use App\Models\AgentRun;
 use App\Models\ChatwootConnection;
 use App\Models\Workspace;
@@ -94,9 +97,9 @@ it('sends media_policy with four buckets and audio/vision keys derived from agen
 
     $workspace = Workspace::factory()->create();
     $connection = ChatwootConnection::factory()->for($workspace)->create();
-    $audioKey = \App\Models\AgentLlmKey::factory()->for($workspace)->create([
-        'provider' => \App\Enums\AgentLlmProvider::OpenAI->value,
-        'status' => \App\Enums\AgentLlmKeyStatus::Active->value,
+    $audioKey = AgentLlmKey::factory()->for($workspace)->create([
+        'provider' => AgentLlmProvider::OpenAI->value,
+        'status' => AgentLlmKeyStatus::Active->value,
     ]);
     $agent = Agent::factory()->active()->for($workspace)->create([
         'media_policy' => [

@@ -5,8 +5,9 @@ declare(strict_types=1);
 use App\Models\Document;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 uses(RefreshDatabase::class);
 
 it('creates a standalone document', function () {

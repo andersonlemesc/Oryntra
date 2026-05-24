@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Actions\AgentTools;
 
 use App\Models\AgentRun;
-use App\Models\ChatwootConnection;
 use App\Models\Document;
 use App\Models\ProductDocument;
 use App\Services\Chatwoot\ChatwootAgentBotClient;
