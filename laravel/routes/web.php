@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Auth\InvitationController;
+use App\Http\Controllers\Products\DownloadTemplateController;
 use App\Http\Controllers\Setup\PlatformSetupController;
 use App\Http\Middleware\EnsurePlatformSetupNeeded;
 use App\Models\User;
@@ -25,6 +26,9 @@ Route::get(config('invitations.accept_path') . '/{token}', [InvitationController
     ->name('invitation.show');
 Route::post(config('invitations.accept_path') . '/{token}', [InvitationController::class, 'accept'])
     ->name('invitation.accept');
+
+Route::get('/download/products-template', DownloadTemplateController::class)
+    ->name('download.products-template');
 
 Route::middleware(['auth', EnsurePlatformSetupNeeded::class])
     ->prefix('setup')

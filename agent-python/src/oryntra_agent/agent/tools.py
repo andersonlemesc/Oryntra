@@ -133,6 +133,27 @@ class ResolveConversationResponse(BaseModel):
     message: str
 
 
+class QueryProductsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_id: int
+    agent_run_id: int
+    specialist_id: int | None = None
+    query: str | None = None
+    category: str | None = None
+    min_price: float | None = None
+    max_price: float | None = None
+    limit: int = 20
+
+
+class QueryProductsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    products: list[dict[str, Any]]
+    total: int
+
+
 def _post(path: str, payload: BaseModel) -> dict[str, Any]:
     base_url = settings.laravel_internal_base_url.rstrip("/")
 
@@ -186,4 +207,10 @@ def update_contact_memory(payload: UpdateContactMemoryRequest) -> UpdateContactM
 def resolve_conversation(payload: ResolveConversationRequest) -> ResolveConversationResponse:
     return ResolveConversationResponse.model_validate(
         _post("/api/internal/agent-tools/resolve-conversation", payload)
+    )
+
+
+def query_products(payload: QueryProductsRequest) -> QueryProductsResponse:
+    return QueryProductsResponse.model_validate(
+        _post("/api/internal/agent-tools/query-products", payload)
     )
