@@ -66,26 +66,6 @@ def test_build_specialist_tools_builds_query_products_without_contact() -> None:
     assert names == ["query_products"]
 
 
-def test_build_specialist_tools_builds_transcribe_audio_without_contact() -> None:
-    tools = build_specialist_tools(
-        ["transcribe_audio"],
-        make_ctx(contact_id=None),
-    )
-
-    names = sorted(tool.name for tool in tools)
-    assert names == ["transcribe_audio"]
-
-
-def test_build_specialist_tools_builds_vision_describe_without_contact() -> None:
-    tools = build_specialist_tools(
-        ["vision_describe"],
-        make_ctx(contact_id=None),
-    )
-
-    names = sorted(tool.name for tool in tools)
-    assert names == ["vision_describe"]
-
-
 def test_build_specialist_tools_skips_resolve_without_terminal_state() -> None:
     tools = build_specialist_tools(
         ["resolve_conversation"],

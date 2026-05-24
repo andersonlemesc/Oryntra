@@ -307,7 +307,10 @@ it('sends admin-configured supervisor and specialist credentials to the runtime 
             && $body->contact instanceof stdClass
             && $body->inbox instanceof stdClass
             && $body->guard_config instanceof stdClass
-            && $body->media_config instanceof stdClass
+            && isset($body->media_policy->audio->enabled)
+            && isset($body->media_policy->image->enabled)
+            && isset($body->media_policy->document->enabled)
+            && isset($body->media_policy->video->enabled)
             && $body->runtime_config instanceof stdClass;
     });
 });

@@ -13,7 +13,6 @@ use App\Models\Agent;
 use App\Models\AgentLlmKey;
 use App\Models\AgentSpecialist;
 use Filament\Facades\Filament;
-use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -219,22 +218,6 @@ class AgentForm
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Forca a IA a responder somente usando os trechos encontrados. Se nao achar nada relevante, dispara handoff em vez de inventar resposta.'),
                                     ]),
 
-                                Section::make('Politica de midia')
-                                    ->description('Regras para audio, imagem e documentos enviados pelo cliente.')
-                                    ->schema([
-                                        KeyValue::make('media_policy')
-                                            ->label('Configuracao')
-                                            ->keyLabel('Chave')
-                                            ->valueLabel('Valor')
-                                            ->columnSpanFull()
-                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Pares chave/valor livres para configurar limites de midia. Exemplos: max_audio_seconds=60, accept_pdf=true, transcribe_audio=true.'),
-                                        Select::make('media_llm_key_id')
-                                            ->label('Chave LLM para midia')
-                                            ->options(fn (): array => self::llmKeyOptions(null))
-                                            ->searchable()
-                                            ->nullable()
-                                            ->helperText('Chave usada pelo supervisor para processar audio e imagem (transcricao, descricao). Se vazia, midia nao sera processada.'),
-                                    ]),
                             ]),
 
                         Tab::make('Execucao')
@@ -296,8 +279,110 @@ class AgentForm
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Quando ativo, cada trace step de specialist_response e tool_call salva o system + human prompt completo. Util para depurar o que a IA esta vendo. Aumenta o tamanho do trace e expoe prompts no UI; desligar em producao quando nao precisar.'),
                                     ]),
                             ]),
+
+                        Tab::make('Midia')
+                            ->icon('heroicon-o-photo')
+                            ->schema([
+                                Section::make('Audio')
+                                    ->description('Transcricao de audio enviado pelo cliente (Whisper / Gemini). Quando desabilitado, o bot envia a mensagem de fallback configurada.')
+                                    ->schema([
+                                        Toggle::make('media_policy.audio.enabled')
+                                            ->label('Transcrever audio')
+                                            ->live()
+                                            ->default(false),
+                                        Select::make('audio_llm_key_id')
+                                            ->label('Chave LLM (audio)')
+                                            ->options(fn (): array => self::llmKeyOptionsForProviders(['openai', 'gemini']))
+                                            ->searchable()
+                                            ->nullable()
+                                            ->visible(fn (Get $get): bool => (bool) $get('media_policy.audio.enabled'))
+                                            ->helperText('Apenas chaves OpenAI ou Gemini suportam transcricao de audio.'),
+                                        TextInput::make('audio_llm_model')
+                                            ->label('Modelo')
+                                            ->maxLength(128)
+                                            ->placeholder('whisper-1, gemini-2.0-flash')
+                                            ->visible(fn (Get $get): bool => (bool) $get('media_policy.audio.enabled')),
+                                        Textarea::make('media_policy.audio.fallback_message')
+                                            ->label('Mensagem de fallback')
+                                            ->rows(2)
+                                            ->default('Desculpe, nao consigo processar audios no momento. Pode enviar em texto?')
+                                            ->helperText('Enviada ao cliente quando a transcricao esta desabilitada ou falha.'),
+                                    ]),
+
+                                Section::make('Imagem')
+                                    ->description('Descricao de imagens enviadas pelo cliente (GPT-4o / Claude / Gemini). Sem chave dedicada, usa a LLM do especialista se ele suportar visao.')
+                                    ->schema([
+                                        Toggle::make('media_policy.image.enabled')
+                                            ->label('Descrever imagem')
+                                            ->live()
+                                            ->default(false),
+                                        Select::make('vision_llm_key_id')
+                                            ->label('Chave LLM (visao)')
+                                            ->options(fn (): array => self::llmKeyOptionsForProviders(['openai', 'anthropic', 'gemini']))
+                                            ->searchable()
+                                            ->nullable()
+                                            ->visible(fn (Get $get): bool => (bool) $get('media_policy.image.enabled'))
+                                            ->helperText('Se vazia, tenta usar a chave do especialista quando o provedor dele suportar visao.'),
+                                        TextInput::make('vision_llm_model')
+                                            ->label('Modelo')
+                                            ->maxLength(128)
+                                            ->placeholder('gpt-4o, claude-sonnet-4-20250514, gemini-2.0-flash')
+                                            ->visible(fn (Get $get): bool => (bool) $get('media_policy.image.enabled')),
+                                        Textarea::make('media_policy.image.fallback_message')
+                                            ->label('Mensagem de fallback')
+                                            ->rows(2)
+                                            ->default('Desculpe, nao consigo processar imagens no momento. Pode descrever em texto?'),
+                                    ]),
+
+                                Section::make('Documento')
+                                    ->description('Processamento ainda nao disponivel. Configure a mensagem que o bot envia quando o cliente mandar um documento.')
+                                    ->schema([
+                                        Toggle::make('media_policy.document.enabled')
+                                            ->label('Processar documento (em breve)')
+                                            ->disabled()
+                                            ->default(false),
+                                        Textarea::make('media_policy.document.fallback_message')
+                                            ->label('Mensagem de fallback')
+                                            ->rows(2)
+                                            ->default('Desculpe, ainda nao processo documentos. Pode resumir o conteudo em texto?'),
+                                    ]),
+
+                                Section::make('Video')
+                                    ->description('Processamento ainda nao disponivel. Configure a mensagem fallback.')
+                                    ->schema([
+                                        Toggle::make('media_policy.video.enabled')
+                                            ->label('Processar video (em breve)')
+                                            ->disabled()
+                                            ->default(false),
+                                        Textarea::make('media_policy.video.fallback_message')
+                                            ->label('Mensagem de fallback')
+                                            ->rows(2)
+                                            ->default('Desculpe, ainda nao processo videos. Pode descrever em texto?'),
+                                    ]),
+                            ]),
                     ]),
             ]);
+    }
+
+    /**
+     * @param  array<int, string> $providers
+     * @return array<int, string>
+     */
+    private static function llmKeyOptionsForProviders(array $providers): array
+    {
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return [];
+        }
+
+        return AgentLlmKey::query()
+            ->where('workspace_id', $tenant->getKey())
+            ->where('status', AgentLlmKeyStatus::Active->value)
+            ->whereIn('provider', $providers)
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
     }
 
     /**

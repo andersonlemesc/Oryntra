@@ -76,10 +76,11 @@ it('sends the runtime payload with internal token', function () {
     });
 });
 
-it('sends media_config with LLM credentials when agent has media_llm_key', function () {
+it('sends media_policy with four buckets and audio/vision keys derived from agent', function () {
     Config::set('services.agent_runtime.base_url', 'http://agent-python:8000');
     Config::set('services.agent_runtime.internal_token', 'ci-token');
     Config::set('services.agent_runtime.timeout', 30);
+    Config::set('services.chatwoot.internal_base_url', 'http://host.docker.internal:3000');
 
     Http::fake([
         'http://agent-python:8000/internal/chatwoot/messages' => Http::response([
@@ -93,8 +94,19 @@ it('sends media_config with LLM credentials when agent has media_llm_key', funct
 
     $workspace = Workspace::factory()->create();
     $connection = ChatwootConnection::factory()->for($workspace)->create();
+    $audioKey = \App\Models\AgentLlmKey::factory()->for($workspace)->create([
+        'provider' => \App\Enums\AgentLlmProvider::OpenAI->value,
+        'status' => \App\Enums\AgentLlmKeyStatus::Active->value,
+    ]);
     $agent = Agent::factory()->active()->for($workspace)->create([
-        'media_policy' => ['max_audio_seconds' => 60],
+        'media_policy' => [
+            'audio' => ['enabled' => true, 'fallback_message' => 'sem audio'],
+            'image' => ['enabled' => false, 'fallback_message' => 'sem imagem'],
+            'document' => ['enabled' => false, 'fallback_message' => 'sem doc'],
+            'video' => ['enabled' => false, 'fallback_message' => 'sem video'],
+        ],
+        'audio_llm_key_id' => $audioKey->id,
+        'audio_llm_model' => 'whisper-1',
     ]);
 
     $run = AgentRun::factory()->create([
@@ -111,15 +123,21 @@ it('sends media_config with LLM credentials when agent has media_llm_key', funct
 
     app(AgentRuntimeClient::class)->run($run);
 
-    Http::assertSent(function (Request $request) use ($agent) {
-        $mediaConfig = $request['media_config'];
+    Http::assertSent(function (Request $request) {
+        $policy = $request['media_policy'];
+        $audioKey = $request['audio_llm_key'];
 
-        return is_array($mediaConfig)
-            && array_key_exists('policy', $mediaConfig)
-            && ($mediaConfig['policy']['max_audio_seconds'] ?? null) === 60
-            && array_key_exists('llm_key_id', $mediaConfig)
-            && array_key_exists('llm_provider', $mediaConfig)
-            && array_key_exists('llm_api_key', $mediaConfig);
+        return is_array($policy)
+            && ($policy['audio']['enabled'] ?? null) === true
+            && ($policy['audio']['fallback_message'] ?? null) === 'sem audio'
+            && ($policy['image']['enabled'] ?? null) === false
+            && ($policy['document']['enabled'] ?? null) === false
+            && ($policy['video']['enabled'] ?? null) === false
+            && is_array($audioKey)
+            && ($audioKey['provider'] ?? null) === 'openai'
+            && ($audioKey['model'] ?? null) === 'whisper-1'
+            && $request['vision_llm_key'] === null
+            && ($request['runtime_config']['chatwoot_internal_base_url'] ?? null) === 'http://host.docker.internal:3000';
     });
 });
 

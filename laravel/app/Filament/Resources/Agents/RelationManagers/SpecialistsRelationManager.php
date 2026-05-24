@@ -410,25 +410,6 @@ class SpecialistsRelationManager extends RelationManager
                                             ->helperText('Padrao 4. Cada iteracao = 1 chamada extra ao LLM. Subir so se o especialista precisa encadear muitas tools.'),
                                     ]),
                             ]),
-
-                        Tab::make('Midia')
-                            ->icon('heroicon-o-photograph')
-                            ->schema([
-                                Section::make('Ferramentas de midia')
-                                    ->description('Ferramentas para processar midia enviada pelo cliente.')
-                                    ->schema([
-                                        Toggle::make('media_tools_config.transcribe_enabled')
-                                            ->label('Permitir transcrever audio')
-                                            ->live()
-                                            ->default(false)
-                                            ->helperText('Adiciona a tool transcribe_audio automaticamente. Quando o cliente enviar audio, voce pode transcrever antes de responder.'),
-                                        Toggle::make('media_tools_config.vision_enabled')
-                                            ->label('Permitir descrever imagens')
-                                            ->live()
-                                            ->default(false)
-                                            ->helperText('Adiciona a tool vision_describe automaticamente. Quando o cliente enviar imagem, voce pode descreve-la antes de responder.'),
-                                    ]),
-                            ]),
                     ]),
             ]);
     }
@@ -565,9 +546,6 @@ class SpecialistsRelationManager extends RelationManager
         $resolutionConfig = is_array($data['resolution_config'] ?? null)
             ? $data['resolution_config']
             : [];
-        $mediaToolsConfig = is_array($data['media_tools_config'] ?? null)
-            ? $data['media_tools_config']
-            : [];
 
         $humanEnabled = (bool) ($handoffConfig['enabled'] ?? false);
         $teamEnabled = (bool) ($handoffConfig['team_enabled'] ?? false);
@@ -653,20 +631,12 @@ class SpecialistsRelationManager extends RelationManager
             $resolutionConfig['rules'],
         );
 
-        $transcribeEnabled = (bool) ($mediaToolsConfig['transcribe_enabled'] ?? false);
-        $visionEnabled = (bool) ($mediaToolsConfig['vision_enabled'] ?? false);
-        $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::TranscribeAudio->value, $transcribeEnabled);
-        $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::VisionDescribe->value, $visionEnabled);
-        $mediaToolsConfig['transcribe_enabled'] = $transcribeEnabled;
-        $mediaToolsConfig['vision_enabled'] = $visionEnabled;
-
         $data['tools_allowlist'] = $toolsAllowlist;
         $data['handoff_config'] = $handoffConfig;
         $data['contact_tools_config'] = $contactConfig;
         $data['product_tools_config'] = $productConfig;
         $data['memory_config'] = $memoryConfig;
         $data['resolution_config'] = $resolutionConfig;
-        $data['media_tools_config'] = $mediaToolsConfig;
         $data['intent_keywords'] = self::normalizeKeywordList($data['intent_keywords'] ?? null);
 
         return $data;

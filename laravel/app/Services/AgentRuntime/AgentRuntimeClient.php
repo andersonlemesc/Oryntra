@@ -114,6 +114,8 @@ class AgentRuntimeClient
         $run->loadMissing([
             'agent',
             'agent.supervisorLlmKey',
+            'agent.audioLlmKey',
+            'agent.visionLlmKey',
             'agent.specialists' => fn ($query) => $query
                 ->with('llmKey')
                 ->where('workspace_id', $run->workspace_id)
@@ -167,7 +169,6 @@ class AgentRuntimeClient
                         'tools' => $specialist->tools_allowlist,
                         'handoff_config' => $specialist->handoff_config,
                         'memory_config' => $this->normalizedMemoryConfig($specialist),
-                        'media_tools_config' => $specialist->media_tools_config,
                         'intent_keywords' => $specialist->intent_keywords,
                         'confidence_threshold' => $specialist->confidence_threshold,
                         'fallback_specialist_id' => $specialist->fallback_specialist_id,
@@ -179,7 +180,17 @@ class AgentRuntimeClient
             'contact' => $this->contactPayload($run, $input),
             'inbox' => $this->objectInput($input, 'inbox'),
             'guard_config' => $this->objectInput($input, 'guard_config'),
-            'media_config' => $this->normalizedMediaConfig($run, $input),
+            'media_policy' => $this->mediaPolicyPayload($agent),
+            'audio_llm_key' => $this->mediaCredentialFromKey(
+                $agent->audioLlmKey,
+                $run->workspace_id,
+                $agent->audio_llm_model,
+            ),
+            'vision_llm_key' => $this->mediaCredentialFromKey(
+                $agent->visionLlmKey,
+                $run->workspace_id,
+                $agent->vision_llm_model,
+            ),
             'runtime_config' => $this->runtimeConfig($run, $input),
         ];
     }
@@ -374,6 +385,7 @@ class AgentRuntimeClient
             'agent_run_id' => $run->id,
             'conversation_id' => $run->conversation_id,
             'workspace_timezone' => $this->stringOrDefault($run->workspace?->timezone, 'UTC'),
+            'chatwoot_internal_base_url' => (string) config('services.chatwoot.internal_base_url', ''),
         ];
     }
 
@@ -383,47 +395,84 @@ class AgentRuntimeClient
     }
 
     /**
-     * @param  array<string, mixed>           $input
-     * @return array<string, mixed>|\stdClass
+     * @return array{
+     *   audio:    array{enabled:bool, fallback_message:string},
+     *   image:    array{enabled:bool, fallback_message:string},
+     *   document: array{enabled:bool, fallback_message:string},
+     *   video:    array{enabled:bool, fallback_message:string},
+     * }
      */
-    private function normalizedMediaConfig(AgentRun $run, array $input): array|\stdClass
+    private function mediaPolicyPayload(Agent $agent): array
     {
-        $inputConfig = $this->objectInput($input, 'media_config');
-        $agent = $run->agent;
+        $raw = is_array($agent->media_policy) ? $agent->media_policy : [];
 
-        if (! is_array($inputConfig)) {
-            $inputConfig = [];
-        }
-
-        if ($agent instanceof Agent) {
-            $agentPolicy = is_array($agent->media_policy) ? $agent->media_policy : [];
-            $inputPolicy = is_array(($input['media_config']['policy'] ?? null)) ? $input['media_config']['policy'] : $inputConfig['policy'] ?? null;
-
-            $effectivePolicy = is_array($inputPolicy) ? $inputPolicy : $agentPolicy;
-            $mediaCred = $this->mediaCredential($agent, $run->workspace_id);
-
-            return [
-                'policy' => $effectivePolicy,
-                'llm_key_id' => $agent->media_llm_key_id,
-                'llm_provider' => $mediaCred['provider'] ?? null,
-                'llm_api_key' => $mediaCred['api_key'] ?? null,
-                ...$inputConfig,
-            ];
-        }
-
-        if ($inputConfig === []) {
-            return new \stdClass;
-        }
-
-        return $inputConfig;
+        return [
+            'audio' => $this->mediaTypeSlice($raw, 'audio'),
+            'image' => $this->mediaTypeSlice($raw, 'image'),
+            // document/video processing not implemented this phase — force enabled=false
+            'document' => [
+                'enabled' => false,
+                'fallback_message' => $this->fallbackSlice($raw, 'document'),
+            ],
+            'video' => [
+                'enabled' => false,
+                'fallback_message' => $this->fallbackSlice($raw, 'video'),
+            ],
+        ];
     }
 
     /**
-     * @return array{provider: string|null, api_key: string|null}
+     * @param  array<string,mixed> $raw
+     * @return array{enabled:bool, fallback_message:string}
      */
-    private function mediaCredential(Agent $agent, int $workspaceId): array
+    private function mediaTypeSlice(array $raw, string $key): array
     {
-        return $this->credentialFromKey($agent->mediaLlmKey, $workspaceId);
+        $slice = is_array($raw[$key] ?? null) ? $raw[$key] : [];
+
+        return [
+            'enabled' => (bool) ($slice['enabled'] ?? false),
+            'fallback_message' => (string) ($slice['fallback_message'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $raw
+     */
+    private function fallbackSlice(array $raw, string $key): string
+    {
+        $slice = is_array($raw[$key] ?? null) ? $raw[$key] : [];
+
+        return (string) ($slice['fallback_message'] ?? '');
+    }
+
+    /**
+     * @return array{provider: string, model: string, api_key: string}|null
+     */
+    private function mediaCredentialFromKey(?AgentLlmKey $llmKey, int $workspaceId, ?string $model): ?array
+    {
+        if (
+            ! $llmKey instanceof AgentLlmKey
+            || $llmKey->workspace_id !== $workspaceId
+            || $llmKey->status !== AgentLlmKeyStatus::Active
+            || $model === null
+            || trim($model) === ''
+        ) {
+            return null;
+        }
+
+        $provider = $llmKey->getAttribute('provider');
+        if ($provider instanceof AgentLlmProvider) {
+            $provider = $provider->value;
+        }
+        if (! is_string($provider) || $provider === '') {
+            return null;
+        }
+
+        return [
+            'provider' => $provider,
+            'model' => $model,
+            'api_key' => (string) $llmKey->api_key,
+        ];
     }
 
     /**

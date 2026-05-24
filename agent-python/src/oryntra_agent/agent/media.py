@@ -1,186 +1,306 @@
-"""Media preprocessing: audio transcription and image description.
+"""Media preprocessing: classify attachments, transcribe audio, describe images,
+build fallback prefix, and decide short-circuit responses.
 
-Downloads attachments from Chatwoot presigned URLs, dispatches to the
-correct provider API based on the media LLM key, and returns text
-transcripts/descriptions.
-
-Provider dispatch:
-- Audio: OpenAI (Whisper) or Gemini (inline audio)
-- Vision: OpenAI (GPT-4o), Anthropic (Claude), or Gemini
-  Falls back to media_llm_key if specialist model lacks vision.
+Pipeline:
+- classify each attachment as audio | image | document | video | other
+- if its type is enabled and a key is configured: download + transcribe/describe
+- otherwise: queue the type's fallback_message (deduped per type)
+- if all messages end up with no text content AND we have any fallback: short-circuit
+  the LLM by returning a ChatwootRuntimeResponse directly
 """
 
 from __future__ import annotations
 
+import base64
 import logging
-from typing import TYPE_CHECKING, Any
+import re
+from dataclasses import dataclass
+from typing import Any, Literal
+from urllib.parse import urlparse
 
 import httpx
 
-from oryntra_agent.api.schemas import LlmCredential, MediaAttachment, MediaConfig
-
-if TYPE_CHECKING:
-    from oryntra_agent.api.schemas import ChatwootMessage
+from oryntra_agent.api.schemas import (
+    ChatwootMessage,
+    ChatwootRuntimeRequest,
+    ChatwootRuntimeResponse,
+    LlmCredentialPayload,
+    MediaAttachment,
+    MediaPolicy,
+    RuntimeResponsePayload,
+    RuntimeUsage,
+)
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_AUDIO_MIME_TYPES: frozenset[str] = frozenset(
-    {
-        "audio/ogg",
-        "audio/mp4",
-        "audio/mpeg",
-        "audio/webm",
-        "audio/amr",
-        "audio/wav",
-        "audio/x-m4a",
-    }
-)
-
-SUPPORTED_IMAGE_MIME_TYPES: frozenset[str] = frozenset(
-    {
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-        "image/gif",
-    }
-)
+MediaKind = Literal["audio", "image", "document", "video", "other"]
 
 AUDIO_FILE_EXTENSIONS: dict[str, str] = {
     "audio/ogg": ".ogg",
+    "audio/opus": ".ogg",
     "audio/mp4": ".m4a",
     "audio/mpeg": ".mp3",
     "audio/webm": ".webm",
-    "audio/amr": ".amr",
     "audio/wav": ".wav",
     "audio/x-m4a": ".m4a",
 }
 
-MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
-
 VISION_PROVIDERS: frozenset[str] = frozenset({"openai", "anthropic", "gemini"})
 AUDIO_PROVIDERS: frozenset[str] = frozenset({"openai", "gemini"})
 
+MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
+DOWNLOAD_TIMEOUT_SECONDS = 30
 
-def _is_audio(mime_type: str, file_type: str | None) -> bool:
-    if mime_type in SUPPORTED_AUDIO_MIME_TYPES:
-        return True
-    if file_type and file_type in {"audio", "voice", "ogg", "mp3", "m4a", "webm_audio"}:
-        return True
-    return False
+LOCALHOST_URL_RE = re.compile(r"^(https?)://localhost(:\d+)?", re.IGNORECASE)
 
 
-def _is_image(mime_type: str, file_type: str | None) -> bool:
-    if mime_type in SUPPORTED_IMAGE_MIME_TYPES:
-        return True
-    if file_type and file_type in {"image", "png", "jpeg", "jpg", "gif", "webp"}:
-        return True
-    return False
+def rewrite_localhost_url(url: str, internal_base_url: str | None) -> str:
+    """Rewrite `http(s)://localhost(:port)/...` to `internal_base_url/...`.
+
+    Used in dev: Chatwoot stores URLs with its public host (localhost:3000) but
+    Oryntra containers cannot reach the host's localhost. In production with a
+    real domain this is a no-op.
+    """
+    if not internal_base_url:
+        return url
+    if not LOCALHOST_URL_RE.match(url):
+        return url
+    base = internal_base_url.rstrip("/")
+    parsed = urlparse(url)
+    suffix = parsed.path + (("?" + parsed.query) if parsed.query else "")
+    return base + suffix
 
 
-def _resolve_audio_key(media_llm_key: LlmCredential | None) -> LlmCredential | None:
-    if media_llm_key is None:
-        return None
-    if media_llm_key.provider not in AUDIO_PROVIDERS:
-        return None
-    return media_llm_key
+def classify_attachment(att: MediaAttachment) -> MediaKind:
+    mime = (att.content_type or "").lower()
+    ftype = (att.file_type or "").lower()
+
+    if mime.startswith("audio/") or ftype in {"audio", "voice"}:
+        return "audio"
+    if mime.startswith("image/") or ftype in {"image", "photo"}:
+        return "image"
+    if mime.startswith("video/") or ftype == "video":
+        return "video"
+    if mime.startswith("application/") or mime.startswith("text/") or ftype in {"file", "document"}:
+        return "document"
+    return "other"
 
 
-def _resolve_vision_key(
-    specialist_llm_key: LlmCredential | None,
-    media_llm_key: LlmCredential | None,
-) -> LlmCredential | None:
-    if specialist_llm_key is not None and specialist_llm_key.provider in VISION_PROVIDERS:
-        return specialist_llm_key
-    if media_llm_key is not None and media_llm_key.provider in VISION_PROVIDERS:
-        return media_llm_key
+@dataclass(frozen=True)
+class PreprocessResult:
+    payload: ChatwootRuntimeRequest
+    fallback_prefix: str | None
+    short_circuit_response: ChatwootRuntimeResponse | None
+
+
+def _build_short_circuit_response(fallback_prefix: str) -> ChatwootRuntimeResponse:
+    return ChatwootRuntimeResponse(
+        status="completed",
+        response=RuntimeResponsePayload(
+            type="text",
+            content=fallback_prefix,
+            confidence=1.0,
+        ),
+        specialist_id=None,
+        trace=[],
+        usage=RuntimeUsage(),
+    )
+
+
+def _internal_base_url(payload: ChatwootRuntimeRequest) -> str | None:
+    cfg = payload.runtime_config or {}
+    val = cfg.get("chatwoot_internal_base_url")
+    return val if isinstance(val, str) and val.strip() else None
+
+
+def _first_vision_capable_specialist(
+    payload: ChatwootRuntimeRequest,
+) -> LlmCredentialPayload | None:
+    for spec in payload.specialists:
+        if (
+            spec.llm_provider in VISION_PROVIDERS
+            and spec.llm_model
+            and spec.llm_api_key is not None
+        ):
+            return LlmCredentialPayload(
+                provider=spec.llm_provider,
+                model=spec.llm_model,
+                api_key=spec.llm_api_key,
+            )
     return None
 
 
-async def _download_attachment(
-    attachment: MediaAttachment,
-    max_bytes: int = MAX_DOWNLOAD_BYTES,
-) -> bytes | None:
-    url = attachment.data_url
-    if not url:
-        return None
-
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(url, follow_redirects=True)
-            response.raise_for_status()
-
-            if len(response.content) > max_bytes:
-                logger.warning(
-                    "attachment exceeds max size",
-                    extra={"url": url[:100] if url else "none", "size": len(response.content)},
-                )
-                return None
-
-            return response.content
-    except httpx.HTTPError:
-        logger.exception("failed to download attachment", extra={"url": url[:100] if url else "none"})
-        return None
+def _maybe_add_fallback(
+    snippets: list[str],
+    seen: set[MediaKind],
+    kind: MediaKind,
+    policy: MediaPolicy,
+) -> None:
+    if kind in seen:
+        return
+    type_policy = getattr(policy, kind, None)
+    if type_policy is None:
+        return
+    msg = (type_policy.fallback_message or "").strip()
+    if msg:
+        snippets.append(msg)
+        seen.add(kind)
 
 
-async def _transcribe_with_openai(
+async def preprocess_media(payload: ChatwootRuntimeRequest) -> PreprocessResult:
+    policy: MediaPolicy = payload.media_policy
+    internal_base = _internal_base_url(payload)
+    specialist_vision = _first_vision_capable_specialist(payload)
+
+    fallback_snippets: list[str] = []
+    seen_fallback_types: set[MediaKind] = set()
+
+    new_messages: list[ChatwootMessage] = []
+
+    for message in payload.messages:
+        if not message.attachments:
+            new_messages.append(message)
+            continue
+
+        extracted_for_message: list[str] = []
+
+        for att in message.attachments:
+            kind = classify_attachment(att)
+
+            if kind == "audio":
+                if policy.audio.enabled and payload.audio_llm_key is not None:
+                    text = await _process_audio(
+                        att, payload.audio_llm_key, internal_base, payload.workspace_id
+                    )
+                    if text:
+                        extracted_for_message.append(text)
+                else:
+                    _maybe_add_fallback(fallback_snippets, seen_fallback_types, "audio", policy)
+
+            elif kind == "image":
+                if policy.image.enabled:
+                    text = await _process_image(
+                        att,
+                        payload.vision_llm_key,
+                        specialist_vision,
+                        internal_base,
+                        payload.workspace_id,
+                    )
+                    if text:
+                        extracted_for_message.append(text)
+                else:
+                    _maybe_add_fallback(fallback_snippets, seen_fallback_types, "image", policy)
+
+            elif kind == "document":
+                # Not implemented this phase: always fallback regardless of stored enabled flag.
+                _maybe_add_fallback(fallback_snippets, seen_fallback_types, "document", policy)
+
+            elif kind == "video":
+                _maybe_add_fallback(fallback_snippets, seen_fallback_types, "video", policy)
+
+        if extracted_for_message:
+            base = (message.content or "").strip()
+            joined = "\n\n".join(extracted_for_message)
+            new_content = f"{base}\n\n{joined}".strip() if base else joined
+            new_messages.append(message.model_copy(update={"content": new_content}))
+        else:
+            new_messages.append(message)
+
+    new_payload = payload.model_copy(update={"messages": new_messages})
+    fallback_prefix = "\n\n".join(fallback_snippets).strip() or None
+
+    has_any_content = any((m.content or "").strip() for m in new_messages)
+    if fallback_prefix and not has_any_content:
+        logger.info(
+            "media.short_circuit_fallback",
+            extra={"workspace_id": payload.workspace_id, "agent_id": payload.agent_id},
+        )
+        return PreprocessResult(
+            payload=new_payload,
+            fallback_prefix=fallback_prefix,
+            short_circuit_response=_build_short_circuit_response(fallback_prefix),
+        )
+
+    return PreprocessResult(
+        payload=new_payload,
+        fallback_prefix=fallback_prefix,
+        short_circuit_response=None,
+    )
+
+
+# ---- audio ----------------------------------------------------------------
+
+
+async def _process_audio(
+    att: MediaAttachment,
+    key: LlmCredentialPayload,
+    internal_base: str | None,
+    workspace_id: int,
+) -> str:
+    if att.transcribed_text and att.transcribed_text.strip():
+        return f"[Transcrição de áudio]: {att.transcribed_text.strip()}"
+
+    if key.provider not in AUDIO_PROVIDERS:
+        return f"[Áudio: provedor '{key.provider}' não suporta transcrição]"
+
+    data = await _download(att, internal_base)
+    if data is None:
+        return "[Áudio: não foi possível baixar o arquivo]"
+
+    if key.provider == "openai":
+        return await _whisper(data, att, key, workspace_id)
+    if key.provider == "gemini":
+        return await _gemini_audio(data, att, key, workspace_id)
+    return ""
+
+
+async def _whisper(
     data: bytes,
-    attachment: MediaAttachment,
-    key: LlmCredential,
+    att: MediaAttachment,
+    key: LlmCredentialPayload,
     workspace_id: int,
 ) -> str:
     import openai
 
-    content_type = attachment.content_type or "audio/ogg"
+    content_type = att.content_type or "audio/ogg"
     ext = AUDIO_FILE_EXTENSIONS.get(content_type, ".ogg")
     filename = f"audio{ext}"
 
     try:
-        client = openai.AsyncOpenAI(api_key=key.api_key)
+        client = openai.AsyncOpenAI(api_key=key.api_key.get_secret_value())
         transcript = await client.audio.transcriptions.create(
-            model="whisper-1",
+            model=key.model or "whisper-1",
             file=(filename, data, content_type),
             response_format="text",
         )
         text = transcript.strip() if isinstance(transcript, str) else str(transcript).strip()
-        if not text:
-            return "[Áudio: transcrição vazia]"
-        return f"[Transcrição de áudio]: {text}"
-    except openai.APIError as exc:
-        logger.exception(
-            "whisper transcription failed",
-            extra={"workspace_id": workspace_id, "error": str(exc)},
-        )
-        return f"[Áudio: erro na transcrição — status {exc.status_code}]"
+        return f"[Transcrição de áudio]: {text}" if text else "[Áudio: transcrição vazia]"
     except Exception as exc:
         logger.exception(
-            "whisper transcription failed unexpectedly",
+            "media.whisper_failed",
             extra={"workspace_id": workspace_id, "error": str(exc)},
         )
         return "[Áudio: erro inesperado na transcrição]"
 
 
-async def _transcribe_with_gemini(
+async def _gemini_audio(
     data: bytes,
-    attachment: MediaAttachment,
-    key: LlmCredential,
+    att: MediaAttachment,
+    key: LlmCredentialPayload,
     workspace_id: int,
 ) -> str:
-    import base64
-
     from langchain_core.messages import HumanMessage
     from langchain_google_genai import ChatGoogleGenerativeAI
 
-    content_type = attachment.content_type or "audio/ogg"
-    model_name = key.model or "gemini-2.0-flash"
+    content_type = att.content_type or "audio/ogg"
 
     try:
         llm = ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=key.api_key,
+            model=key.model or "gemini-2.0-flash",
+            google_api_key=key.api_key.get_secret_value(),
             temperature=0,
         )
-        b64_audio = base64.b64encode(data).decode("utf-8")
-
+        b64 = base64.b64encode(data).decode("utf-8")
         message = HumanMessage(
             content=[
                 {
@@ -189,75 +309,52 @@ async def _transcribe_with_gemini(
                 },
                 {
                     "type": "media",
-                    "data": f"data:{content_type};base64,{b64_audio}",
+                    "data": f"data:{content_type};base64,{b64}",
                     "mimeType": content_type,
                 },
             ]
         )
         response = await llm.ainvoke([message])
-        text = (response.content or "").strip()
-        if not text:
-            return "[Áudio: transcrição vazia]"
-        return f"[Transcrição de áudio]: {text}"
+        text = response.content if isinstance(response.content, str) else ""
+        text = (text or "").strip()
+        return f"[Transcrição de áudio]: {text}" if text else "[Áudio: transcrição vazia]"
     except Exception as exc:
         logger.exception(
-            "gemini audio transcription failed",
+            "media.gemini_audio_failed",
             extra={"workspace_id": workspace_id, "error": str(exc)},
         )
-        return f"[Áudio: erro na transcrição Gemini — {type(exc).__name__}]"
+        return f"[Áudio: erro Gemini — {type(exc).__name__}]"
 
 
-async def _transcribe_audio(
-    attachment: MediaAttachment,
-    media_llm_key: LlmCredential | None,
-    workspace_id: int = 0,
+# ---- image ----------------------------------------------------------------
+
+
+async def _process_image(
+    att: MediaAttachment,
+    vision_key: LlmCredentialPayload | None,
+    specialist_vision_key: LlmCredentialPayload | None,
+    internal_base: str | None,
+    workspace_id: int,
 ) -> str:
-    key = _resolve_audio_key(media_llm_key)
+    key = (
+        vision_key
+        if (vision_key is not None and vision_key.provider in VISION_PROVIDERS)
+        else specialist_vision_key
+    )
+    if key is None or key.provider not in VISION_PROVIDERS:
+        return "[Imagem: nenhuma chave LLM com visão disponível]"
 
-    if key is None:
-        return (
-            "[Áudio: nenhuma chave LLM configurada para transcrição. "
-            "Configure uma chave OpenAI ou Gemini em Mídia.]"
-        )
-
-    data = await _download_attachment(attachment)
-    if data is None:
-        return "[Áudio: não foi possível baixar o arquivo]"
-
-    if key.provider == "openai":
-        return await _transcribe_with_openai(data, attachment, key, workspace_id)
-    if key.provider == "gemini":
-        return await _transcribe_with_gemini(data, attachment, key, workspace_id)
-
-    return f"[Áudio: provedor '{key.provider}' não suporta transcrição]"
-
-
-async def _describe_image(
-    attachment: MediaAttachment,
-    media_llm_key: LlmCredential | None,
-    specialist_llm_key: LlmCredential | None = None,
-) -> str:
-    from oryntra_agent.agent.supervisor import chat_model_for_credential
-
-    key = _resolve_vision_key(specialist_llm_key, media_llm_key)
-
-    if key is None:
-        return (
-            "[Imagem: nenhuma chave LLM com visão disponível. "
-            "Configure uma chave em Mídia.]"
-        )
-
-    url = attachment.data_url
-    if not url:
+    if not att.data_url:
         return "[Imagem: URL não disponível]"
 
-    try:
-        chat_model = chat_model_for_credential(key, temperature=0.1)
+    url = rewrite_localhost_url(att.data_url, internal_base)
 
+    try:
+        from langchain_core.messages import HumanMessage
+
+        chat_model = _build_vision_chat_model(key)
         if chat_model is None:
             return f"[Imagem: provedor '{key.provider}' não suporta visão]"
-
-        from langchain_core.messages import HumanMessage
 
         message = HumanMessage(
             content=[
@@ -272,121 +369,75 @@ async def _describe_image(
             ]
         )
         response = await chat_model.ainvoke([message])
-        description = (response.content or "").strip()
-
-        if not description:
-            return "[Imagem: descrição vazia]"
-
-        return f"[Descrição de imagem]: {description}"
+        description = response.content if isinstance(response.content, str) else ""
+        description = (description or "").strip()
+        return f"[Descrição de imagem]: {description}" if description else "[Imagem: descrição vazia]"
     except Exception as exc:
-        logger.exception("vision description failed", extra={"error": str(exc)})
+        logger.exception(
+            "media.vision_failed",
+            extra={"workspace_id": workspace_id, "error": str(exc)},
+        )
         return f"[Imagem: erro na descrição — {type(exc).__name__}]"
 
 
-async def preprocess_message_attachments(
-    messages: list[ChatwootMessage],
-    media_config: MediaConfig,
-    media_llm_key: LlmCredential | None,
-    specialist_llm_key: LlmCredential | None = None,
-    workspace_id: int = 0,
-    agent_id: int = 0,
-) -> list[ChatwootMessage]:
-    if not media_config.vision_enabled and not media_config.audio_enabled:
-        return messages
+def _build_vision_chat_model(key: LlmCredentialPayload) -> Any | None:
+    if key.provider == "openai":
+        from langchain_openai import ChatOpenAI
 
-    processed: list[ChatwootMessage] = []
+        return ChatOpenAI(
+            model=key.model,
+            api_key=key.api_key,
+            temperature=0,
+        )
+    if key.provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
 
-    for message in messages:
-        if not message.attachments:
-            processed.append(message)
-            continue
+        return ChatAnthropic(
+            model_name=key.model,
+            api_key=key.api_key,
+            temperature=0,
+            timeout=None,
+            stop=None,
+        )
+    if key.provider == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
 
-        extra_parts: list[str] = []
-
-        for attachment in message.attachments:
-            content_type = attachment.content_type or ""
-            file_type = attachment.file_type
-
-            if _is_audio(content_type, file_type) and media_config.audio_enabled:
-                result = await _transcribe_audio(
-                    attachment=attachment,
-                    media_llm_key=media_llm_key,
-                    workspace_id=workspace_id,
-                )
-                extra_parts.append(result)
-                continue
-
-            if _is_image(content_type, file_type) and media_config.vision_enabled:
-                result = await _describe_image(
-                    attachment=attachment,
-                    media_llm_key=media_llm_key,
-                    specialist_llm_key=specialist_llm_key,
-                )
-                extra_parts.append(result)
-                continue
-
-        if extra_parts:
-            existing_content = message.content or ""
-            combined = existing_content
-            if combined:
-                combined += "\n\n"
-            combined += "\n\n".join(extra_parts)
-            processed.append(message.model_copy(update={"content": combined}))
-        else:
-            processed.append(message)
-
-    return processed
+        return ChatGoogleGenerativeAI(
+            model=key.model,
+            google_api_key=key.api_key.get_secret_value(),
+            temperature=0,
+        )
+    return None
 
 
-def transcribe_audio_sync(
-    attachment_url: str,
-    content_type: str,
-    media_llm_key: LlmCredential | None,
-    workspace_id: int = 0,
-) -> str:
-    import asyncio
+# ---- download -------------------------------------------------------------
 
-    attachment = MediaAttachment(content_type=content_type, data_url=attachment_url)
+
+async def _download(att: MediaAttachment, internal_base: str | None) -> bytes | None:
+    if not att.data_url:
+        return None
+    url = rewrite_localhost_url(att.data_url, internal_base)
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(
-                    asyncio.run,
-                    _transcribe_audio(attachment, media_llm_key, workspace_id),
+        async with httpx.AsyncClient(timeout=DOWNLOAD_TIMEOUT_SECONDS) as client:
+            response = await client.get(url, follow_redirects=True)
+            response.raise_for_status()
+            if len(response.content) > MAX_DOWNLOAD_BYTES:
+                logger.warning(
+                    "media.too_large",
+                    extra={"size": len(response.content), "max": MAX_DOWNLOAD_BYTES},
                 )
-                return future.result(timeout=60)
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+                return None
+            return response.content
+    except httpx.HTTPError:
+        logger.exception("media.download_failed", extra={"url_head": url[:120]})
+        return None
 
-    return loop.run_until_complete(_transcribe_audio(attachment, media_llm_key, workspace_id))
 
-
-def describe_image_sync(
-    attachment_url: str,
-    prompt: str | None,
-    media_llm_key: LlmCredential | None,
-    specialist_llm_key: LlmCredential | None = None,
-) -> str:
-    import asyncio
-
-    attachment = MediaAttachment(content_type="image/jpeg", data_url=attachment_url)
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(
-                    asyncio.run,
-                    _describe_image(attachment, media_llm_key, specialist_llm_key),
-                )
-                return future.result(timeout=60)
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    return loop.run_until_complete(_describe_image(attachment, media_llm_key, specialist_llm_key))
+__all__ = [
+    "AUDIO_PROVIDERS",
+    "VISION_PROVIDERS",
+    "PreprocessResult",
+    "classify_attachment",
+    "preprocess_media",
+    "rewrite_localhost_url",
+]

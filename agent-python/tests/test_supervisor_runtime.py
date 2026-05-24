@@ -1,6 +1,5 @@
 from types import SimpleNamespace
 
-import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import SecretStr
 
@@ -14,10 +13,7 @@ from oryntra_agent.agent.supervisor import (
     runtime_checkpointer,
     runtime_config,
 )
-from oryntra_agent.api.schemas import (
-    ChatwootRuntimeRequest,
-    MediaAttachment,
-)
+from oryntra_agent.api.schemas import ChatwootRuntimeRequest
 
 
 def supervisor_payload(
@@ -362,6 +358,3 @@ def test_single_agent_path_stays_compatible() -> None:
     assert response.status == "completed"
     assert response.specialist_id is None
     assert response.response.content == "[mock] Recebi 1 mensagem(ns)."
-
-# NOTE: async test pending — run_chatwoot_runtime was recently made async
-# def test_supervisor_skips_media_when_not_enabled() -> None: ...

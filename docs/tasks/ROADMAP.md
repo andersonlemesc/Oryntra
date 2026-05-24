@@ -35,22 +35,23 @@ Branch ativa: `feature/resolve-conversation-tool` com fases 12, 12.1, 12.2, 12.3
 
 ### Em andamento
 
-(nenhuma)
+| Fase | Plano | Resumo |
+|---|---|---|
+| 14.1 | `2026-05-24-vision-audio-phase-14-1.md` | Tools `transcribe_audio` + `vision_describe`. Media preprocessing inline (audio via Whisper, image via vision LLM). `media_config` toggles per agent. Filament toggles. Async supervisor pipeline. |
 
-### Adiada — decisao do usuario
+### Adiada — decisão do usuário
 
 | Fase | Plano | Motivo da pausa |
 |---|---|---|
-| 10 | `2026-05-20-rag-knowledge-base-phase-10.md` | Estrategia de extracao PDF revisada: `spatie/pdf-to-text` + `poppler-utils` no container (mais leve em memoria que `smalot/pdfparser`). Decisao registrada em `docs/integrations/chatwoot/captain-rag-reference.md`. Plano principal a ser refeito antes de iniciar. |
+| 10 | `2026-05-20-rag-knowledge-base-phase-10.md` | Estratégia de extração PDF revisada: `spatie/pdf-to-text` + `poppler-utils` no container (mais leve em memória que `smalot/pdfparser`). Decisão registrada em `docs/integrations/chatwoot/captain-rag-reference.md`. Plano principal a ser refeito antes de iniciar. |
 
 ### Candidatas (ordenadas por prioridade sugerida)
 
 | # | Fase | Escopo | Complexidade | Pre-req |
 |---|---|---|---|---|
-| 13 | **Trace latency real** | Instrumentar `time.perf_counter()` em volta de `chat_model.invoke()` (supervisor opening / specialist decision / specialist response) e dos `_post()` em `agent/tools.py`. Hoje todo TraceStep grava `latency_ms=0`. | Baixa | Nenhum |
-| 13.1 | **Tabela de produtos + tool query_products** | Hoje catalogo BikePulse vive embed no `role_prompt` do Vendas (Fase 12 prompts). Mover pra tabela `products` por workspace + tool whitelisted `query_products(filter)`. Casa com Fase 15 (DB query tools whitelisted). | Media | Nenhum |
+| 13 | **Trace latency real** | ✅ Entregue — `latency_ms` e `tokens` já populados nos trace steps. | Baixa | Nenhum |
+| 13.1 | **Tabela de produtos + tool query_products** | ✅ Entregue — Fase 13.1 completa com Filament resource, CSV import e tool. | Media | Nenhum |
 | 14 | **Send document via MinIO** | Tool `send_document(document_id, caption)`. Admin sobe arquivos pre-prontos no MinIO. IA escolhe enviar PDF/imagem ao cliente via Chatwoot (upload multipart). | Media | Nenhum |
-| 14.1 | **Vision / Audio** | `transcribe_audio` (Whisper API) + `vision_describe` (GPT-4o / Claude vision). Cliente manda audio ou foto via WhatsApp, IA processa o conteudo. | Media-alta | LLM com vision habilitado |
 | 15 | **DB query tools whitelisted** | Tools `query_*` parametrizadas por workspace. Ex: `query_orders(customer_email)`, `query_invoice(invoice_id)`. Laravel valida payload + executa SELECT escopado + retorna rows tipadas. | Alta | Schema do DB externo + politica de seguranca |
 | 16 | **MCP servers por workspace** | Tabela `workspace_mcp_servers`. Admin cadastra URL + auth. Tools do MCP viram disponiveis no allowlist dos especialistas. Laravel atua como proxy + valida scopes. | Alta | Nenhum |
 | 17 | **Notificacao de handoff** | Email / Slack / Chatwoot notification quando run cai em `waiting_human`. Hoje admin so ve no painel. | Baixa-media | Conta SMTP ou webhook Slack |

@@ -43,4 +43,8 @@ return [
         'timeout' => (int) env('AGENT_RUNTIME_TIMEOUT', 30),
     ],
 
+    'chatwoot' => [
+        'internal_base_url' => env('CHATWOOT_PLATFORM_BASE_URL'),
+    ],
+
 ];

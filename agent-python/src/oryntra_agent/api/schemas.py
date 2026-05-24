@@ -7,32 +7,45 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 class MediaAttachment(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    id: int | None = None
     file_type: str | None = None
     content_type: str | None = None
     data_url: str | None = None
     thumb_url: str | None = None
+    extension: str | None = None
+    file_size: int | None = None
+    transcribed_text: str | None = None
 
 
-class MediaConfig(BaseModel):
+class MediaTypePolicy(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    vision_enabled: bool = False
-    audio_enabled: bool = False
-    max_attachment_bytes: int = 20_971_520
-    supported_mime_types: list[str] = Field(default_factory=lambda: [
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-        "image/gif",
-        "audio/ogg",
-        "audio/mp4",
-        "audio/mpeg",
-        "audio/webm",
-        "audio/amr",
-    ])
+    enabled: bool = False
+    fallback_message: str = ""
+
+
+class MediaPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    audio: MediaTypePolicy = Field(default_factory=MediaTypePolicy)
+    image: MediaTypePolicy = Field(default_factory=MediaTypePolicy)
+    document: MediaTypePolicy = Field(default_factory=MediaTypePolicy)
+    video: MediaTypePolicy = Field(default_factory=MediaTypePolicy)
+
+
+class LlmCredentialPayload(BaseModel):
+    """Transport-only credential. Supervisor keeps its own internal LlmCredential."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: Literal["openai", "anthropic", "gemini", "local"]
+    model: str
+    api_key: SecretStr = Field(exclude=True)
 
 
 class LlmCredential(BaseModel):
+    """Internal credential used by supervisor.py (plain string api_key)."""
+
     provider: Literal["openai", "anthropic", "gemini", "local"]
     model: str
     api_key: str
@@ -171,8 +184,9 @@ class ChatwootRuntimeRequest(BaseModel):
     contact: dict[str, Any] = Field(default_factory=dict)
     inbox: dict[str, Any] = Field(default_factory=dict)
     guard_config: dict[str, Any] = Field(default_factory=dict)
-    media_config: MediaConfig = Field(default_factory=MediaConfig)
-    media_llm_key: LlmCredential | None = Field(default=None, exclude=True)
+    media_policy: MediaPolicy = Field(default_factory=MediaPolicy)
+    audio_llm_key: LlmCredentialPayload | None = Field(default=None, exclude=True)
+    vision_llm_key: LlmCredentialPayload | None = Field(default=None, exclude=True)
     runtime_config: dict[str, Any] = Field(default_factory=dict)
 
 
