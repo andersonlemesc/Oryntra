@@ -52,6 +52,10 @@ final class NativeToolRegistry
                 'label' => 'Registrar memoria',
                 'description' => 'Registra um fato sobre o contato (preferencia, restricao, historico) para uso em conversas futuras.',
             ],
+            NativeTool::ResolveConversation->value => [
+                'label' => 'Encerrar conversa',
+                'description' => 'Encerra a conversa marcando como resolvida no Chatwoot quando a IA solucionou a duvida do cliente.',
+            ],
         ];
     }
 

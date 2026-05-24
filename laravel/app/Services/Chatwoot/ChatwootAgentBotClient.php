@@ -88,6 +88,20 @@ class ChatwootAgentBotClient
         }
     }
 
+    public function getConversationStatus(int $conversationId): ?string
+    {
+        $response = Http::withHeaders($this->connection->chatwootHeaders())
+            ->get($this->url("conversations/{$conversationId}"));
+
+        if ($response->failed()) {
+            throw new RuntimeException("Chatwoot getConversationStatus({$conversationId}) failed: HTTP {$response->status()}");
+        }
+
+        $status = $response->json('status');
+
+        return is_string($status) ? $status : null;
+    }
+
     private function url(string $path): string
     {
         $baseUrl = rtrim((string) $this->connection->base_url, '/');

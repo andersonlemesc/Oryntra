@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property array<string, mixed>  $handoff_config
  * @property array<string, mixed>  $contact_tools_config
  * @property array<string, mixed>  $memory_config
+ * @property array<string, mixed>  $resolution_config
  * @property int                   $priority
  * @property float                 $confidence_threshold
  * @property int|null              $fallback_specialist_id
@@ -46,6 +47,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'handoff_config',
     'contact_tools_config',
     'memory_config',
+    'resolution_config',
     'priority',
     'confidence_threshold',
     'fallback_specialist_id',
@@ -107,6 +109,7 @@ class AgentSpecialist extends Model
             'handoff_config' => 'array',
             'contact_tools_config' => 'array',
             'memory_config' => 'array',
+            'resolution_config' => 'array',
             'llm_temperature' => 'float',
             'priority' => 'integer',
             'confidence_threshold' => 'float',
