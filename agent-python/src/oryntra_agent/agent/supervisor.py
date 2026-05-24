@@ -16,6 +16,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
+from oryntra_agent.agent.media import preprocess_message_attachments
 from oryntra_agent.agent.tool_runtime import (
     EXECUTABLE_TOOLS,
     LlmUsage,
@@ -36,6 +37,8 @@ from oryntra_agent.api.schemas import (
     ChatwootRuntimeResponse,
     HandoffRuleConfig,
     LlmCredential,
+    MediaAttachment,
+    MediaConfig,
     ResolutionRuleConfig,
     RuntimeLlmCredentials,
     RuntimeResponsePayload,
@@ -154,12 +157,24 @@ class SupervisorState(TypedDict, total=False):
     turn_count: int
 
 
-def run_chatwoot_runtime(payload: ChatwootRuntimeRequest) -> ChatwootRuntimeResponse:
+async def run_chatwoot_runtime(payload: ChatwootRuntimeRequest) -> ChatwootRuntimeResponse:
     credentials = runtime_llm_credentials_from_payload(payload)
     credentials_token = _runtime_llm_credentials.set(credentials)
     supervisor_credential_token = _supervisor_llm_credential.set(credentials.supervisor)
     usage_token = _accumulated_usage.set(AccumulatedUsage())
     graph = get_runtime_graph()
+
+    if payload.media_config.vision_enabled or payload.media_config.audio_enabled:
+        specialist_key = credentials.supervisor
+        processed_messages = await preprocess_message_attachments(
+            messages=payload.messages,
+            media_config=payload.media_config,
+            media_llm_key=payload.media_llm_key,
+            specialist_llm_key=specialist_key,
+            workspace_id=payload.workspace_id,
+            agent_id=payload.agent_id,
+        )
+        payload = payload.model_copy(update={"messages": processed_messages})
 
     try:
         result = graph.invoke(

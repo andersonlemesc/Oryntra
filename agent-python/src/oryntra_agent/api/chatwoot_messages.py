@@ -15,4 +15,4 @@ router = APIRouter(
 async def handle_chatwoot_messages(
     payload: ChatwootRuntimeRequest,
 ) -> ChatwootRuntimeResponse:
-    return run_chatwoot_runtime(payload)
+    return await run_chatwoot_runtime(payload)
