@@ -11,7 +11,30 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int                  $id
+ * @property int                  $workspace_id
+ * @property int                  $chatwoot_connection_id
+ * @property int                  $chatwoot_contact_id
+ * @property string|null          $identifier
+ * @property string|null          $name
+ * @property string|null          $email
+ * @property string|null          $phone_number
+ * @property string|null          $thumbnail
+ * @property array<string, mixed> $additional_attributes
+ * @property array<string, mixed> $chatwoot_custom_attributes
+ * @property string               $lead_status
+ * @property int|null             $lead_score
+ * @property Carbon|null          $first_seen_at
+ * @property Carbon|null          $last_seen_at
+ * @property Carbon|null          $last_message_at
+ * @property Carbon|null          $synced_at
+ * @property Carbon|null          $created_at
+ * @property Carbon|null          $updated_at
+ * @property Carbon|null          $deleted_at
+ */
 #[Fillable([
     'workspace_id',
     'chatwoot_connection_id',

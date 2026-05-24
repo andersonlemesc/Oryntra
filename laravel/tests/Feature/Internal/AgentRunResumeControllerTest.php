@@ -68,7 +68,9 @@ it('approves the run without calling the runtime back when triggered from the in
             'run_id' => $run->id,
         ]);
 
-    expect($run->fresh()->status)->toBe(AgentRunStatus::Completed);
+    $fresh = $run->fresh();
+    assert($fresh instanceof AgentRun);
+    expect($fresh->status)->toBe(AgentRunStatus::Completed);
     Http::assertNothingSent();
 });
 
@@ -86,6 +88,7 @@ it('rejects the run with the provided reason', function () {
         ->assertJson(['status' => AgentRunStatus::Failed->value]);
 
     $fresh = $run->fresh();
+    assert($fresh instanceof AgentRun);
     expect($fresh->status)->toBe(AgentRunStatus::Failed);
     expect($fresh->error_message)->toBe('resposta errada');
 });
@@ -107,6 +110,7 @@ it('edits the response content when decision is edited', function () {
         ->assertJson(['status' => AgentRunStatus::Completed->value]);
 
     $fresh = $run->fresh();
+    assert($fresh instanceof AgentRun);
     expect(data_get($fresh->output, 'response.content'))->toBe('corrigido');
     expect(data_get($fresh->output, 'hitl.original_content'))->toBe('original');
     Http::assertNothingSent();

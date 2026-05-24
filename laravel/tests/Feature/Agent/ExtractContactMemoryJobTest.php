@@ -64,7 +64,7 @@ it('persists extracted memories with source agent_extracted', function () {
         ],
     ]);
 
-    $this->app->instance(MemoryExtractionClient::class, new class extends MemoryExtractionClient
+    app()->instance(MemoryExtractionClient::class, new class extends MemoryExtractionClient
     {
         public function extract(array $payload): array
         {
@@ -82,13 +82,17 @@ it('persists extracted memories with source agent_extracted', function () {
     (new ExtractContactMemoryJob($run->id))->handle(app(MemoryExtractionClient::class));
 
     $memories = ContactMemory::query()->where('contact_id', $contact->id)->orderBy('id')->get();
+    $first = $memories->first();
+    $last = $memories->last();
+    assert($first instanceof ContactMemory);
+    assert($last instanceof ContactMemory);
 
     expect($memories)->toHaveCount(2)
-        ->and($memories[0]->type->value)->toBe('preference')
-        ->and($memories[0]->source->value)->toBe('agent_extracted')
-        ->and($memories[0]->conversation_id)->toBe(99)
-        ->and($memories[0]->agent_run_id)->toBe($run->id)
-        ->and($memories[1]->content)->toBe('Altura 1,72m, peso 80kg');
+        ->and($first->type->value)->toBe('preference')
+        ->and($first->source->value)->toBe('agent_extracted')
+        ->and($first->conversation_id)->toBe(99)
+        ->and($first->agent_run_id)->toBe($run->id)
+        ->and($last->content)->toBe('Altura 1,72m, peso 80kg');
 });
 
 it('skips when specialist memory extraction is disabled', function () {

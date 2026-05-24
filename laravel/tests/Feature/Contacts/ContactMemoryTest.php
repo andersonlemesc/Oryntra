@@ -23,10 +23,13 @@ it('persists a manual memory linked to a contact', function () {
         'source' => ContactMemorySource::Manual->value,
     ]);
 
+    $relatedContact = $memory->contact;
+    assert($relatedContact instanceof Contact);
+
     expect($memory->type)->toBe(ContactMemoryType::Preference)
         ->and($memory->source)->toBe(ContactMemorySource::Manual)
         ->and($memory->content)->toBe('Cliente prefere bike eletrica urbana')
-        ->and($memory->contact->is($contact))->toBeTrue();
+        ->and($relatedContact->is($contact))->toBeTrue();
 });
 
 it('cascades delete when the contact is removed', function () {

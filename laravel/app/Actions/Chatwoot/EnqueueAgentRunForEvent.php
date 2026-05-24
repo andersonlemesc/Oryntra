@@ -95,18 +95,28 @@ class EnqueueAgentRunForEvent
         });
     }
 
+    /**
+     * @param array<string, mixed> $normalized
+     */
     private function resolveContact(ChatwootWebhookEvent $event, array $normalized): ?Contact
     {
-        $payload = is_array($event->payload) ? $event->payload : [];
-        $sender = $payload['conversation']['meta']['sender'] ?? $payload['sender'] ?? null;
+        $payload = $event->payload;
+        $sender = data_get($payload, 'conversation.meta.sender') ?? data_get($payload, 'sender');
 
         if (! is_array($sender) || ! isset($sender['id'])) {
             return null;
         }
 
-        $messageAt = isset($normalized['created_at'])
-            ? Carbon::parse((string) $normalized['created_at'])
-            : ($event->received_at ?? Carbon::now());
+        $createdAt = $normalized['created_at'] ?? null;
+        if (is_string($createdAt) && $createdAt !== '') {
+            $messageAt = Carbon::parse($createdAt);
+        } elseif ($event->received_at instanceof Carbon) {
+            $messageAt = $event->received_at;
+        } elseif (is_string($event->received_at) && $event->received_at !== '') {
+            $messageAt = Carbon::parse($event->received_at);
+        } else {
+            $messageAt = Carbon::now();
+        }
 
         try {
             return $this->resolveContact->execute(

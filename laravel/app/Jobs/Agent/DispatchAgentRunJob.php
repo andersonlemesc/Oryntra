@@ -187,7 +187,7 @@ class DispatchAgentRunJob implements ShouldQueue
 
         $output['response_delivery'] = [
             'status' => 'completed',
-            'sent_at' => Carbon::now()->toISOString(),
+            'sent_at' => (string) Carbon::now()->toISOString(),
             'conversation_id' => (int) $run->conversation_id,
             'response_type' => $responseType,
         ];
@@ -214,7 +214,7 @@ class DispatchAgentRunJob implements ShouldQueue
         return [
             'status' => 'skipped',
             'reason' => $reason,
-            'skipped_at' => Carbon::now()->toISOString(),
+            'skipped_at' => (string) Carbon::now()->toISOString(),
         ];
     }
 
@@ -226,7 +226,7 @@ class DispatchAgentRunJob implements ShouldQueue
         return [
             'status' => 'failed',
             'error' => $error,
-            'failed_at' => Carbon::now()->toISOString(),
+            'failed_at' => (string) Carbon::now()->toISOString(),
         ];
     }
 

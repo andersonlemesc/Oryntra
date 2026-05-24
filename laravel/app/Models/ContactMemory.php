@@ -11,7 +11,23 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int                 $id
+ * @property int                 $contact_id
+ * @property int                 $workspace_id
+ * @property ContactMemoryType   $type
+ * @property string              $content
+ * @property ContactMemorySource $source
+ * @property float|null          $confidence
+ * @property int|null            $conversation_id
+ * @property int|null            $agent_run_id
+ * @property int|null            $author_user_id
+ * @property Carbon|null         $expires_at
+ * @property Carbon|null         $created_at
+ * @property Carbon|null         $updated_at
+ */
 #[Fillable([
     'contact_id',
     'workspace_id',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs\Agent;
 
+use App\Models\AgentChatwootBinding;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
 use App\Services\Chatwoot\ChatwootAgentBotClient;
@@ -85,7 +86,7 @@ class ApplyHumanHandoffToChatwootJob implements ShouldQueue
                     'specialist_id' => $this->integerValue($this->traceSpecialistId($run)),
                     'conversation_id' => $conversationId,
                     'customer_message' => $customerMessage,
-                    'agent_name' => (string) ($run->agent?->name ?? ''),
+                    'agent_name' => (string) ($run->agent->name ?? ''),
                     'recent_messages' => $this->formatRecentCustomerMessages($run, limit: 5),
                     'conversation_summary' => $this->stringValue($handoff['conversation_summary'] ?? null),
                     'key_fact' => $this->stringValue($handoff['key_fact'] ?? null),
@@ -242,10 +243,9 @@ class ApplyHumanHandoffToChatwootJob implements ShouldQueue
     }
 
     /**
-     * @param  mixed                           $binding
      * @return array{0: int|null, 1: int|null}
      */
-    private function resolveHandoffDestination(?AgentSpecialist $specialist, $binding): array
+    private function resolveHandoffDestination(?AgentSpecialist $specialist, ?AgentChatwootBinding $binding): array
     {
         $config = is_array($specialist?->handoff_config) ? $specialist->handoff_config : [];
 
@@ -274,7 +274,7 @@ class ApplyHumanHandoffToChatwootJob implements ShouldQueue
         return [$teamId, $agentId];
     }
 
-    private function resolveLabelName(?AgentSpecialist $specialist, $binding): ?string
+    private function resolveLabelName(?AgentSpecialist $specialist, ?AgentChatwootBinding $binding): ?string
     {
         $config = is_array($specialist?->handoff_config) ? $specialist->handoff_config : [];
         $specialistLabel = $config['label_name'] ?? null;
@@ -292,7 +292,7 @@ class ApplyHumanHandoffToChatwootJob implements ShouldQueue
         return null;
     }
 
-    private function resolvePrivateNoteTemplate(?AgentSpecialist $specialist, $binding): ?string
+    private function resolvePrivateNoteTemplate(?AgentSpecialist $specialist, ?AgentChatwootBinding $binding): ?string
     {
         $config = is_array($specialist?->handoff_config) ? $specialist->handoff_config : [];
         $specialistTemplate = $config['private_note_template'] ?? null;

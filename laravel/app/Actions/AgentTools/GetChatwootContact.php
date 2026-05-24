@@ -51,17 +51,11 @@ class GetChatwootContact
         }
 
         if (! $connection->hasAdminApiToken()) {
-            if ($cached !== null) {
-                return [
-                    'status' => 'ok',
-                    'contact' => $this->serializeCached($cached),
-                    'source' => 'cache_stale',
-                ];
-            }
-
-            throw ValidationException::withMessages([
-                'agent_run_id' => 'The Chatwoot connection has no admin_api_token configured.',
-            ]);
+            return [
+                'status' => 'ok',
+                'contact' => $this->serializeCached($cached),
+                'source' => 'cache_stale',
+            ];
         }
 
         $client = new ChatwootAdminApiClient($connection);

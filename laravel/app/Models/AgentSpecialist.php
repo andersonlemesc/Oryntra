@@ -12,6 +12,26 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int                   $id
+ * @property int                   $workspace_id
+ * @property int                   $agent_id
+ * @property string                $name
+ * @property string|null           $description
+ * @property string                $role_prompt
+ * @property array<int, string>    $intent_keywords
+ * @property int|null              $llm_key_id
+ * @property string|null           $llm_model
+ * @property float                 $llm_temperature
+ * @property array<int, string>    $tools_allowlist
+ * @property array<string, mixed>  $handoff_config
+ * @property array<string, mixed>  $contact_tools_config
+ * @property array<string, mixed>  $memory_config
+ * @property int                   $priority
+ * @property float                 $confidence_threshold
+ * @property int|null              $fallback_specialist_id
+ * @property AgentSpecialistStatus $status
+ */
 #[Fillable([
     'workspace_id',
     'agent_id',

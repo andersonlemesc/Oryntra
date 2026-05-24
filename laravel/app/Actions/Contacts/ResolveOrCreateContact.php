@@ -64,7 +64,7 @@ class ResolveOrCreateContact
             $contact->fill($payload);
             $contact->last_seen_at = $now;
 
-            if ($messageAt !== null && ($contact->last_message_at === null || $messageAt->greaterThan($contact->last_message_at))) {
+            if ($contact->last_message_at === null || $messageAt->greaterThan($contact->last_message_at)) {
                 $contact->last_message_at = $messageAt;
             }
 

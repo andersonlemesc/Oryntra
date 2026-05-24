@@ -11,7 +11,30 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int                       $id
+ * @property int                       $workspace_id
+ * @property int                       $agent_id
+ * @property int|null                  $chatwoot_connection_id
+ * @property int|null                  $contact_id
+ * @property int|null                  $chatwoot_webhook_event_id
+ * @property int|null                  $chatwoot_account_id
+ * @property int|null                  $conversation_id
+ * @property string|null               $chatwoot_message_id
+ * @property string|null               $thread_id
+ * @property AgentRunStatus            $status
+ * @property array<string, mixed>|null $input
+ * @property array<string, mixed>|null $output
+ * @property string|null               $error_message
+ * @property Carbon|null               $debounce_started_at
+ * @property Carbon|null               $debounce_until
+ * @property Carbon|null               $started_at
+ * @property Carbon|null               $finished_at
+ * @property Carbon|null               $created_at
+ * @property Carbon|null               $updated_at
+ */
 #[Fillable([
     'workspace_id',
     'agent_id',

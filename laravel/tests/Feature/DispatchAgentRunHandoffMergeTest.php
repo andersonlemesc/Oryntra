@@ -59,7 +59,7 @@ it('preserves full handoff payload after DispatchAgentRunJob merges runtime resp
                 'workspace_id' => $workspace->id,
                 'agent_id' => $agent->id,
                 'agent_run_id' => $run->id,
-                'thread_id' => $run->thread_id,
+                'thread_id' => (string) $run->thread_id,
                 'conversation_id' => 99,
                 'specialist_id' => $specialist->id,
                 'reason' => 'Cliente pediu humano',
