@@ -56,7 +56,6 @@ _supervisor_llm_credential: ContextVar["LlmCredential | None"] = ContextVar(
 )
 _accumulated_usage: ContextVar["AccumulatedUsage"] = ContextVar(
     "accumulated_usage",
-    default=None,
 )
 logger = logging.getLogger(__name__)
 
@@ -1410,11 +1409,6 @@ def choose_specialist_with_llm(payload: ChatwootRuntimeRequest) -> SpecialistCho
         )
 
         return None
-
-    if isinstance(choice, SpecialistChoice):
-        return choice
-
-    return SpecialistChoice.model_validate(choice)
 
 
 def runtime_llm_credentials_from_payload(payload: ChatwootRuntimeRequest) -> RuntimeLlmCredentials:
