@@ -141,6 +141,7 @@ class AgentRuntimeClient
             'workspace_id' => $run->workspace_id,
             'agent_id' => $run->agent_id,
             'agent_mode' => $agent->mode instanceof AgentMode ? $agent->mode->value : AgentMode::Single->value,
+            'fallback_specialist_id' => $agent->fallback_specialist_id,
             'thread_id' => $run->thread_id ?: $run->buildThreadId(),
             'supervisor' => [
                 'prompt' => $agent->supervisor_prompt,

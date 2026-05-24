@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'description',
     'status',
     'mode',
+    'fallback_specialist_id',
     'locale',
     'timezone',
     'response_mode',
@@ -84,6 +85,14 @@ class Agent extends Model
     public function supervisorLlmKey(): BelongsTo
     {
         return $this->belongsTo(AgentLlmKey::class, 'supervisor_llm_key_id');
+    }
+
+    /**
+     * @return BelongsTo<AgentSpecialist, $this>
+     */
+    public function fallbackSpecialist(): BelongsTo
+    {
+        return $this->belongsTo(AgentSpecialist::class, 'fallback_specialist_id');
     }
 
     /**

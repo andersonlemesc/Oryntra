@@ -272,6 +272,14 @@ def route_node(state: SupervisorState) -> SupervisorState:
 
     selected_specialist, confidence, reason = choose_specialist(routing_payload)
 
+    if selected_specialist is None and payload.fallback_specialist_id is not None:
+        fallback = specialist_by_id(payload, payload.fallback_specialist_id)
+
+        if fallback is not None:
+            selected_specialist = fallback
+            confidence = max(confidence, fallback.confidence_threshold)
+            reason = f"fallback_specialist:{reason}" if reason else "fallback_specialist"
+
     return {
         "selected_specialist": selected_specialist.model_dump(mode="json")
         if selected_specialist is not None

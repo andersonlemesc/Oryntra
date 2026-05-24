@@ -9,7 +9,9 @@ use App\Enums\AgentLlmProvider;
 use App\Enums\AgentMode;
 use App\Enums\AgentResponseMode;
 use App\Enums\AgentStatus;
+use App\Models\Agent;
 use App\Models\AgentLlmKey;
+use App\Models\AgentSpecialist;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
@@ -21,6 +23,7 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Model;
 
 class AgentForm
 {
@@ -119,6 +122,14 @@ class AgentForm
                                             ->rows(4)
                                             ->columnSpanFull()
                                             ->helperText('Instrua como escolher entre os especialistas. As respostas finais ficam com os especialistas.'),
+                                        Select::make('fallback_specialist_id')
+                                            ->label('Especialista fallback')
+                                            ->options(fn (Get $get, ?Model $record): array => self::specialistOptions($record))
+                                            ->searchable()
+                                            ->placeholder('Vazio = resposta generica do supervisor')
+                                            ->columnSpanFull()
+                                            ->helperText('Usado quando o supervisor LLM nao decide entre os especialistas (specialist_id=null). Tools e memorias do fallback ficam disponiveis em conversas sem intent claro.')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Especialista que assume conversas que o supervisor nao classificou. Recomenda-se escolher o que tem o escopo mais amplo (ex: Vendas, ou um "Atendimento Geral").'),
                                     ]),
 
                                 Section::make('LLM do agente unico')
@@ -341,5 +352,22 @@ class AgentForm
         }
 
         return $query->pluck('name', 'id')->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function specialistOptions(?Model $record): array
+    {
+        if (! $record instanceof Agent) {
+            return [];
+        }
+
+        return AgentSpecialist::query()
+            ->where('agent_id', $record->id)
+            ->where('workspace_id', $record->workspace_id)
+            ->orderBy('priority')
+            ->pluck('name', 'id')
+            ->all();
     }
 }

@@ -103,6 +103,7 @@ class ChatwootRuntimeRequest(BaseModel):
     workspace_id: int
     agent_id: int
     agent_mode: Literal["single", "supervisor"] = "single"
+    fallback_specialist_id: int | None = None
     thread_id: str
     supervisor: SupervisorConfig = Field(default_factory=SupervisorConfig)
     specialists: list[SpecialistConfig] = Field(default_factory=list)
