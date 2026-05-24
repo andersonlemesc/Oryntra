@@ -29,7 +29,7 @@ class ProductSearchService
         int $limit = 20,
     ): array {
         $q = Product::query()
-            ->with('category')
+            ->with('category', 'documents')
             ->where('workspace_id', $workspaceId);
 
         if ($activeOnly) {
