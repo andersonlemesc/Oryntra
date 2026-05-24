@@ -167,6 +167,7 @@ class AgentRuntimeClient
                         'tools' => $specialist->tools_allowlist,
                         'handoff_config' => $specialist->handoff_config,
                         'memory_config' => $this->normalizedMemoryConfig($specialist),
+                        'media_tools_config' => $specialist->media_tools_config,
                         'intent_keywords' => $specialist->intent_keywords,
                         'confidence_threshold' => $specialist->confidence_threshold,
                         'fallback_specialist_id' => $specialist->fallback_specialist_id,
