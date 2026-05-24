@@ -18,6 +18,8 @@ class RunsThroughputChart extends ChartWidget
 
     protected ?string $heading = 'Throughput por hora (24h)';
 
+    protected ?string $maxHeight = '300px';
+
     private const STATUSES = ['completed', 'failed', 'waiting_human'];
 
     private const COLORS = [
