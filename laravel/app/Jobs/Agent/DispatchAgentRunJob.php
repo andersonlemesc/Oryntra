@@ -80,10 +80,15 @@ class DispatchAgentRunJob implements ShouldQueue
                     $run->refresh();
                     $existingOutput = is_array($run->output) ? $run->output : [];
                     $existingHandoff = is_array($existingOutput['handoff'] ?? null) ? $existingOutput['handoff'] : null;
+                    $existingResolution = is_array($existingOutput['resolution'] ?? null) ? $existingOutput['resolution'] : null;
                     $mergedOutput = $output;
 
                     if ($existingHandoff !== null) {
                         $mergedOutput['handoff'] = array_replace($existingHandoff, $mergedOutput['handoff'] ?? []);
+                    }
+
+                    if ($existingResolution !== null) {
+                        $mergedOutput['resolution'] = array_replace($existingResolution, $mergedOutput['resolution'] ?? []);
                     }
 
                     $run->forceFill([
