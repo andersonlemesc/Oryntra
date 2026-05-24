@@ -106,6 +106,8 @@ class AccumulatedUsage:
             ),
             total_cost_cents=0,
         )
+
+
 HUMAN_HANDOFF_SENTINEL = "__REQUEST_HUMAN_HANDOFF__"
 MAX_CONVERSATION_MESSAGES = 20
 

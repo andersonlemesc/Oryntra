@@ -81,15 +81,25 @@ class ChatwootUpdateContactArgs(BaseModel):
     name: str | None = Field(default=None, description="Novo nome do contato.")
     email: str | None = Field(default=None, description="Novo email do contato.")
     phone_number: str | None = Field(default=None, description="Novo telefone do contato (E.164).")
-    address_postal_code: str | None = Field(default=None, description="CEP/codigo postal do endereco de entrega.")
-    address_street: str | None = Field(default=None, description="Rua ou avenida do endereco de entrega.")
+    address_postal_code: str | None = Field(
+        default=None, description="CEP/codigo postal do endereco de entrega."
+    )
+    address_street: str | None = Field(
+        default=None, description="Rua ou avenida do endereco de entrega."
+    )
     address_number: str | None = Field(default=None, description="Numero do endereco de entrega.")
-    address_complement: str | None = Field(default=None, description="Complemento do endereco de entrega.")
-    address_neighborhood: str | None = Field(default=None, description="Bairro do endereco de entrega.")
+    address_complement: str | None = Field(
+        default=None, description="Complemento do endereco de entrega."
+    )
+    address_neighborhood: str | None = Field(
+        default=None, description="Bairro do endereco de entrega."
+    )
     address_city: str | None = Field(default=None, description="Cidade do endereco de entrega.")
     address_state: str | None = Field(default=None, description="Estado/UF do endereco de entrega.")
     address_country: str | None = Field(default=None, description="Pais do endereco de entrega.")
-    address_reference: str | None = Field(default=None, description="Ponto de referencia ou observacoes de entrega.")
+    address_reference: str | None = Field(
+        default=None, description="Ponto de referencia ou observacoes de entrega."
+    )
 
 
 class ChatwootGetContactArgs(BaseModel):
@@ -344,7 +354,9 @@ def _make_resolve_conversation_tool(
 class QueryProductsArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    query: str | None = Field(default=None, description="Termo de busca pelo nome ou descricao do produto.")
+    query: str | None = Field(
+        default=None, description="Termo de busca pelo nome ou descricao do produto."
+    )
     category: str | None = Field(default=None, description="Filtrar por categoria.")
     min_price: float | None = Field(default=None, description="Preco minimo.")
     max_price: float | None = Field(default=None, description="Preco maximo.")

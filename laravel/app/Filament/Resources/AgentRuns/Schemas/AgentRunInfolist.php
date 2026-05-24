@@ -6,6 +6,7 @@ namespace App\Filament\Resources\AgentRuns\Schemas;
 
 use App\Enums\AgentRunStatus;
 use App\Models\AgentRun;
+use App\Models\AgentSpecialist;
 use Carbon\CarbonInterface;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -323,7 +324,7 @@ class AgentRunInfolist
             return [];
         }
 
-        return \App\Models\AgentSpecialist::query()
+        return AgentSpecialist::query()
             ->where('agent_id', $record->agent_id)
             ->pluck('name', 'id')
             ->map(fn (mixed $name): string => (string) $name)

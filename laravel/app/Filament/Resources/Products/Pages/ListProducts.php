@@ -9,8 +9,10 @@ use App\Jobs\Products\ImportProductsJob;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Database\Eloquent\Builder;
 
 class ListProducts extends ListRecords
 {
@@ -30,7 +32,7 @@ class ListProducts extends ListRecords
                 ->icon('heroicon-o-arrow-up-tray')
                 ->color('gray')
                 ->form([
-                    \Filament\Forms\Components\FileUpload::make('csv_file')
+                    FileUpload::make('csv_file')
                         ->label('Arquivo CSV')
                         ->disk('s3')
                         ->directory('products/imports')
@@ -58,6 +60,7 @@ class ListProducts extends ListRecords
                             ->body('Arquivo não encontrado.')
                             ->danger()
                             ->send();
+
                         return;
                     }
 
@@ -69,6 +72,7 @@ class ListProducts extends ListRecords
                             ->body('Arquivo inválido. Use CSV.')
                             ->danger()
                             ->send();
+
                         return;
                     }
 
@@ -87,7 +91,7 @@ class ListProducts extends ListRecords
         ];
     }
 
-    protected function getTableQuery(): \Illuminate\Database\Eloquent\Builder
+    protected function getTableQuery(): Builder
     {
         $tenant = Filament::getTenant();
 
