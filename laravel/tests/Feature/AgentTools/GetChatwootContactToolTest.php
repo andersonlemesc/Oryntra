@@ -6,6 +6,7 @@ use App\Models\Agent;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
 use App\Models\ChatwootConnection;
+use App\Models\Contact;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
@@ -33,11 +34,18 @@ it('returns contact payload from chatwoot', function () {
         ->for($workspace)
         ->for($agent)
         ->create(['tools_allowlist' => ['chatwoot_get_contact']]);
+    $contact = Contact::factory()->create([
+        'workspace_id' => $workspace->id,
+        'chatwoot_connection_id' => $connection->id,
+        'chatwoot_contact_id' => 42,
+        'synced_at' => null,
+    ]);
     $run = AgentRun::factory()->create([
         'workspace_id' => $workspace->id,
         'agent_id' => $agent->id,
         'chatwoot_connection_id' => $connection->id,
         'chatwoot_account_id' => 5,
+        'contact_id' => $contact->id,
         'conversation_id' => 99,
     ]);
 
@@ -52,7 +60,7 @@ it('returns contact payload from chatwoot', function () {
         'agent_id' => $agent->id,
         'agent_run_id' => $run->id,
         'specialist_id' => $specialist->id,
-        'contact_id' => 42,
+        'contact_id' => $contact->id,
     ], ['X-Internal-Token' => 'ci-token'])
         ->assertOk()
         ->assertJson([

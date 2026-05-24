@@ -55,7 +55,7 @@ it('reads chatwoot contact from local cache when fresh', function () {
         'agent_id' => $agent->id,
         'agent_run_id' => $run->id,
         'specialist_id' => $specialist->id,
-        'contact_id' => 42,
+        'contact_id' => $contact->id,
     ], ['X-Internal-Token' => 'ci-token'])
         ->assertOk()
         ->assertJson([
@@ -109,7 +109,7 @@ it('fetches chatwoot contact from API when cache is stale and updates local row'
         'agent_id' => $agent->id,
         'agent_run_id' => $run->id,
         'specialist_id' => $specialist->id,
-        'contact_id' => 42,
+        'contact_id' => $contact->id,
     ], ['X-Internal-Token' => 'ci-token'])
         ->assertOk()
         ->assertJson(['source' => 'chatwoot']);
@@ -164,7 +164,7 @@ it('updates local contact row when chatwoot_update_contact succeeds', function (
         'agent_id' => $agent->id,
         'agent_run_id' => $run->id,
         'specialist_id' => $specialist->id,
-        'contact_id' => 42,
+        'contact_id' => $contact->id,
         'name' => 'Maria',
         'email' => 'maria@example.com',
     ], ['X-Internal-Token' => 'ci-token'])
@@ -212,7 +212,7 @@ it('serves stale cache when admin token is missing and Chatwoot cannot be reache
         'agent_id' => $agent->id,
         'agent_run_id' => $run->id,
         'specialist_id' => $specialist->id,
-        'contact_id' => 42,
+        'contact_id' => $contact->id,
     ], ['X-Internal-Token' => 'ci-token'])
         ->assertOk()
         ->assertJson(['source' => 'cache_stale']);

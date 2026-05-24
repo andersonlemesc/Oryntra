@@ -32,10 +32,17 @@ class GetChatwootContact
             ]);
         }
 
-        $chatwootContactId = (int) $payload['contact_id'];
-        $cached = $this->loadCachedContact($payload['workspace_id'], $connection->id, $chatwootContactId);
+        $cached = $this->loadCachedContact($payload);
 
-        if ($cached !== null && $this->isFresh($cached)) {
+        if ($cached === null) {
+            throw ValidationException::withMessages([
+                'contact_id' => 'The contact does not belong to this workspace and Chatwoot connection.',
+            ]);
+        }
+
+        $chatwootContactId = (int) $cached->chatwoot_contact_id;
+
+        if ($this->isFresh($cached)) {
             return [
                 'status' => 'ok',
                 'contact' => $this->serializeCached($cached),
@@ -59,7 +66,7 @@ class GetChatwootContact
 
         $client = new ChatwootAdminApiClient($connection);
         $remote = $client->getContact($chatwootContactId);
-        $this->syncLocalContact($payload['workspace_id'], $connection->id, $chatwootContactId, $remote);
+        $this->syncLocalContact($cached, $remote);
 
         return [
             'status' => 'ok',
@@ -68,12 +75,14 @@ class GetChatwootContact
         ];
     }
 
-    private function loadCachedContact(int $workspaceId, int $connectionId, int $chatwootContactId): ?Contact
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function loadCachedContact(array $payload): ?Contact
     {
         return Contact::query()
-            ->where('workspace_id', $workspaceId)
-            ->where('chatwoot_connection_id', $connectionId)
-            ->where('chatwoot_contact_id', $chatwootContactId)
+            ->where('id', $payload['contact_id'])
+            ->where('workspace_id', $payload['workspace_id'])
             ->first();
     }
 
@@ -106,22 +115,8 @@ class GetChatwootContact
     /**
      * @param array<string, mixed> $remote
      */
-    private function syncLocalContact(int $workspaceId, int $connectionId, int $chatwootContactId, array $remote): void
+    private function syncLocalContact(Contact $contact, array $remote): void
     {
-        $contact = Contact::query()->firstOrNew([
-            'workspace_id' => $workspaceId,
-            'chatwoot_connection_id' => $connectionId,
-            'chatwoot_contact_id' => $chatwootContactId,
-        ]);
-
-        $now = Carbon::now();
-
-        if (! $contact->exists) {
-            $contact->first_seen_at = $now;
-            $contact->last_seen_at = $now;
-            $contact->lead_status = 'new';
-        }
-
         $contact->name = $this->stringValue($remote['name'] ?? null) ?? $contact->name;
         $contact->email = $this->stringValue($remote['email'] ?? null) ?? $contact->email;
         $contact->phone_number = $this->stringValue($remote['phone_number'] ?? null) ?? $contact->phone_number;
@@ -133,8 +128,7 @@ class GetChatwootContact
         $contact->chatwoot_custom_attributes = is_array($remote['custom_attributes'] ?? null)
             ? $remote['custom_attributes']
             : ($contact->chatwoot_custom_attributes ?? []);
-        $contact->synced_at = $now;
-
+        $contact->synced_at = Carbon::now();
         $contact->save();
     }
 

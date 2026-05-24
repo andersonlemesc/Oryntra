@@ -53,44 +53,53 @@ class UpdateChatwootContact
             ]);
         }
 
+        $localContact = $this->resolveLocalContact($payload, $connection->id);
+        $chatwootContactId = (int) $localContact->chatwoot_contact_id;
+
         $client = new ChatwootAdminApiClient($connection);
-        $remote = $client->updateContact((int) $payload['contact_id'], $attributes);
+        $remote = $client->updateContact($chatwootContactId, $attributes);
 
-        DB::transaction(function () use ($payload, $connection, $attributes, $remote): void {
-            $contact = Contact::query()->firstOrNew([
-                'workspace_id' => (int) $payload['workspace_id'],
-                'chatwoot_connection_id' => (int) $connection->id,
-                'chatwoot_contact_id' => (int) $payload['contact_id'],
-            ]);
-
-            $now = Carbon::now();
-
-            if (! $contact->exists) {
-                $contact->first_seen_at = $now;
-                $contact->last_seen_at = $now;
-                $contact->lead_status = 'new';
-            }
-
+        DB::transaction(function () use ($localContact, $attributes, $remote): void {
             foreach ($attributes as $field => $value) {
-                $contact->{$field} = $value;
+                $localContact->{$field} = $value;
             }
 
             if (is_array($remote['additional_attributes'] ?? null)) {
-                $contact->additional_attributes = $remote['additional_attributes'];
+                $localContact->additional_attributes = $remote['additional_attributes'];
             }
 
             if (is_array($remote['custom_attributes'] ?? null)) {
-                $contact->chatwoot_custom_attributes = $remote['custom_attributes'];
+                $localContact->chatwoot_custom_attributes = $remote['custom_attributes'];
             }
 
-            $contact->synced_at = $now;
-            $contact->save();
+            $localContact->synced_at = Carbon::now();
+            $localContact->save();
         });
 
         return [
             'status' => 'ok',
             'contact' => $remote,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function resolveLocalContact(array $payload, int $connectionId): Contact
+    {
+        $contact = Contact::query()
+            ->where('id', $payload['contact_id'])
+            ->where('workspace_id', $payload['workspace_id'])
+            ->where('chatwoot_connection_id', $connectionId)
+            ->first();
+
+        if (! $contact instanceof Contact) {
+            throw ValidationException::withMessages([
+                'contact_id' => 'The contact does not belong to this workspace and Chatwoot connection.',
+            ]);
+        }
+
+        return $contact;
     }
 
     /**

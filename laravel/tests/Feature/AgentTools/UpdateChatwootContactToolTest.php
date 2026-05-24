@@ -6,6 +6,7 @@ use App\Models\Agent;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
 use App\Models\ChatwootConnection;
+use App\Models\Contact;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -41,11 +42,17 @@ it('updates whitelisted fields and ignores extras', function () {
         ->for($workspace)
         ->for($agent)
         ->create(['tools_allowlist' => ['chatwoot_update_contact']]);
+    $contact = Contact::factory()->create([
+        'workspace_id' => $workspace->id,
+        'chatwoot_connection_id' => $connection->id,
+        'chatwoot_contact_id' => 42,
+    ]);
     $run = AgentRun::factory()->create([
         'workspace_id' => $workspace->id,
         'agent_id' => $agent->id,
         'chatwoot_connection_id' => $connection->id,
         'chatwoot_account_id' => 5,
+        'contact_id' => $contact->id,
         'conversation_id' => 99,
     ]);
 
@@ -60,7 +67,7 @@ it('updates whitelisted fields and ignores extras', function () {
         'agent_id' => $agent->id,
         'agent_run_id' => $run->id,
         'specialist_id' => $specialist->id,
-        'contact_id' => 42,
+        'contact_id' => $contact->id,
         'name' => 'Maria',
         'email' => 'maria@example.com',
     ], ['X-Internal-Token' => 'ci-token'])
@@ -87,10 +94,15 @@ it('rejects update when no whitelisted field is provided', function () {
         ->for($workspace)
         ->for($agent)
         ->create(['tools_allowlist' => ['chatwoot_update_contact']]);
+    $contact = Contact::factory()->create([
+        'workspace_id' => $workspace->id,
+        'chatwoot_connection_id' => $connection->id,
+    ]);
     $run = AgentRun::factory()->create([
         'workspace_id' => $workspace->id,
         'agent_id' => $agent->id,
         'chatwoot_connection_id' => $connection->id,
+        'contact_id' => $contact->id,
         'chatwoot_account_id' => 5,
         'conversation_id' => 99,
     ]);
@@ -100,7 +112,7 @@ it('rejects update when no whitelisted field is provided', function () {
         'agent_id' => $agent->id,
         'agent_run_id' => $run->id,
         'specialist_id' => $specialist->id,
-        'contact_id' => 42,
+        'contact_id' => $contact->id,
     ], ['X-Internal-Token' => 'ci-token'])
         ->assertUnprocessable();
 });
@@ -115,10 +127,15 @@ it('rejects when specialist lacks update tool in allowlist', function () {
         ->for($workspace)
         ->for($agent)
         ->create(['tools_allowlist' => ['request_human_handoff']]);
+    $contact = Contact::factory()->create([
+        'workspace_id' => $workspace->id,
+        'chatwoot_connection_id' => $connection->id,
+    ]);
     $run = AgentRun::factory()->create([
         'workspace_id' => $workspace->id,
         'agent_id' => $agent->id,
         'chatwoot_connection_id' => $connection->id,
+        'contact_id' => $contact->id,
         'chatwoot_account_id' => 5,
         'conversation_id' => 99,
     ]);
@@ -128,7 +145,7 @@ it('rejects when specialist lacks update tool in allowlist', function () {
         'agent_id' => $agent->id,
         'agent_run_id' => $run->id,
         'specialist_id' => $specialist->id,
-        'contact_id' => 42,
+        'contact_id' => $contact->id,
         'name' => 'Joao',
     ], ['X-Internal-Token' => 'ci-token'])
         ->assertUnprocessable();
