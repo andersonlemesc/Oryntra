@@ -4,6 +4,45 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 
+class MediaAttachment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file_type: str | None = None
+    content_type: str | None = None
+    data_url: str | None = None
+    thumb_url: str | None = None
+
+
+class MediaConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    vision_enabled: bool = False
+    audio_enabled: bool = False
+    max_attachment_bytes: int = 20_971_520
+    supported_mime_types: list[str] = Field(default_factory=lambda: [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/mpeg",
+        "audio/webm",
+        "audio/amr",
+    ])
+
+
+class LlmCredential(BaseModel):
+    provider: Literal["openai", "anthropic", "gemini", "local"]
+    model: str
+    api_key: str
+
+
+class RuntimeLlmCredentials(BaseModel):
+    supervisor: LlmCredential | None = None
+    specialists: dict[int, LlmCredential] = Field(default_factory=dict)
+
+
 class ChatwootMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -15,7 +54,7 @@ class ChatwootMessage(BaseModel):
     received_at: datetime | None = None
     message_type: str | None = None
     content_type: str | None = None
-    attachments: list[dict[str, Any]] = Field(default_factory=list)
+    attachments: list[MediaAttachment] = Field(default_factory=list)
 
 
 class SupervisorConfig(BaseModel):
@@ -132,7 +171,8 @@ class ChatwootRuntimeRequest(BaseModel):
     contact: dict[str, Any] = Field(default_factory=dict)
     inbox: dict[str, Any] = Field(default_factory=dict)
     guard_config: dict[str, Any] = Field(default_factory=dict)
-    media_config: dict[str, Any] = Field(default_factory=dict)
+    media_config: MediaConfig = Field(default_factory=MediaConfig)
+    media_llm_key: LlmCredential | None = Field(default=None, exclude=True)
     runtime_config: dict[str, Any] = Field(default_factory=dict)
 
 

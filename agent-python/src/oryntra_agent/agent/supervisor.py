@@ -35,7 +35,9 @@ from oryntra_agent.api.schemas import (
     ChatwootRuntimeRequest,
     ChatwootRuntimeResponse,
     HandoffRuleConfig,
+    LlmCredential,
     ResolutionRuleConfig,
+    RuntimeLlmCredentials,
     RuntimeResponsePayload,
     RuntimeUsage,
     SpecialistConfig,
@@ -139,17 +141,6 @@ class SpecialistDecision(BaseModel):
     resolution_reason: str | None = None
     resolution_summary: str | None = None
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-
-
-class LlmCredential(BaseModel):
-    provider: Literal["openai", "anthropic", "gemini", "local"]
-    model: str
-    api_key: str
-
-
-class RuntimeLlmCredentials(BaseModel):
-    supervisor: LlmCredential | None = None
-    specialists: dict[int, LlmCredential] = Field(default_factory=dict)
 
 
 class SupervisorState(TypedDict, total=False):
