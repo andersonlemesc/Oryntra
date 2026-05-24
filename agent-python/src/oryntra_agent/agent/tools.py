@@ -124,7 +124,10 @@ def _post(path: str, payload: BaseModel) -> dict[str, Any]:
         )
 
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    if not isinstance(data, dict):
+        raise RuntimeError("Laravel internal API returned a non-object payload.")
+    return data
 
 
 def request_human_handoff(payload: HumanHandoffRequest) -> HumanHandoffResponse:

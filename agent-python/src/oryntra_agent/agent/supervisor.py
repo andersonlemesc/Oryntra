@@ -859,13 +859,17 @@ def generate_handoff_summary_with_llm(
 
     try:
         structured = chat_model.with_structured_output(HandoffSummary)
-        return structured.invoke(prompt)
+        result = structured.invoke(prompt)
     except Exception:
         logger.exception(
             "handoff summary generation failed; proceeding without summary",
             extra={"specialist_id": selected_specialist.id, "agent_id": payload.agent_id},
         )
         return None
+
+    if isinstance(result, HandoffSummary):
+        return result
+    return HandoffSummary.model_validate(result)
 
 
 def human_handoff_response(

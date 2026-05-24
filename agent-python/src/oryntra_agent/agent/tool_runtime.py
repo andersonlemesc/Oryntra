@@ -178,7 +178,7 @@ def _make_update_memory_tool(ctx: ToolRuntimeContext) -> StructuredTool:
                     agent_run_id=ctx.agent_run_id,
                     specialist_id=ctx.specialist_id,
                     contact_id=int(ctx.contact_id),  # type: ignore[arg-type]
-                    type=type,  # type: ignore[arg-type]
+                    type=type,
                     content=content,
                     confidence=confidence,
                 )
