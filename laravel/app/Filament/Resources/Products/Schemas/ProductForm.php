@@ -6,7 +6,9 @@ namespace App\Filament\Resources\Products\Schemas;
 
 use App\Models\Category;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -53,6 +55,34 @@ class ProductForm
                         Toggle::make('active')
                             ->label('Ativo')
                             ->default(true),
+                    ]),
+                Section::make('Documentos')
+                    ->description('PDFs e imagens associados a este produto. O agente pode envia-los ao cliente.')
+                    ->schema([
+                        Repeater::make('documents')
+                            ->relationship('documents')
+                            ->schema([
+                                FileUpload::make('path')
+                                    ->label('Arquivo')
+                                    ->disk('s3')
+                                    ->directory('documents')
+                                    ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+                                    ->maxSize(20480)
+                                    ->required()
+                                    ->storeFileName('original_filename')
+                                    ->afterStateUpdated(function ($state, $set): void {
+                                        if ($state) {
+                                            $set('mime_type', $state->getMimeType());
+                                            $set('size_bytes', $state->getSize());
+                                        }
+                                    }),
+                                TextInput::make('original_filename')
+                                    ->label('Nome do arquivo')
+                                    ->maxLength(255),
+                            ])
+                            ->collapsible()
+                            ->itemLabel(fn (array $state): string => $state['original_filename'] ?? 'Documento')
+                            ->addActionLabel('Adicionar documento'),
                     ]),
             ]);
     }
