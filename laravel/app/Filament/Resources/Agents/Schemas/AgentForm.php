@@ -228,6 +228,12 @@ class AgentForm
                                             ->valueLabel('Valor')
                                             ->columnSpanFull()
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Pares chave/valor livres para configurar limites de midia. Exemplos: max_audio_seconds=60, accept_pdf=true, transcribe_audio=true.'),
+                                        Select::make('media_llm_key_id')
+                                            ->label('Chave LLM para midia')
+                                            ->options(fn (): array => self::llmKeyOptions(null))
+                                            ->searchable()
+                                            ->nullable()
+                                            ->helperText('Chave usada pelo supervisor para processar audio e imagem (transcricao, descricao). Se vazia, midia nao sera processada.'),
                                     ]),
                             ]),
 

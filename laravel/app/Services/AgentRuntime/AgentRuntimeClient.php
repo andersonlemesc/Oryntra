@@ -178,7 +178,7 @@ class AgentRuntimeClient
             'contact' => $this->contactPayload($run, $input),
             'inbox' => $this->objectInput($input, 'inbox'),
             'guard_config' => $this->objectInput($input, 'guard_config'),
-            'media_config' => $this->objectInput($input, 'media_config'),
+            'media_config' => $this->normalizedMediaConfig($run, $input),
             'runtime_config' => $this->runtimeConfig($run, $input),
         ];
     }
@@ -379,6 +379,50 @@ class AgentRuntimeClient
     private function stringOrDefault(mixed $value, string $default): string
     {
         return is_string($value) && trim($value) !== '' ? $value : $default;
+    }
+
+    /**
+     * @param  array<string, mixed>           $input
+     * @return array<string, mixed>|\stdClass
+     */
+    private function normalizedMediaConfig(AgentRun $run, array $input): array|\stdClass
+    {
+        $inputConfig = $this->objectInput($input, 'media_config');
+        $agent = $run->agent;
+
+        if (! is_array($inputConfig)) {
+            $inputConfig = [];
+        }
+
+        if ($agent instanceof Agent) {
+            $agentPolicy = is_array($agent->media_policy) ? $agent->media_policy : [];
+            $inputPolicy = is_array(($input['media_config']['policy'] ?? null)) ? $input['media_config']['policy'] : $inputConfig['policy'] ?? null;
+
+            $effectivePolicy = is_array($inputPolicy) ? $inputPolicy : $agentPolicy;
+            $mediaCred = $this->mediaCredential($agent, $run->workspace_id);
+
+            return [
+                'policy' => $effectivePolicy,
+                'llm_key_id' => $agent->media_llm_key_id,
+                'llm_provider' => $mediaCred['provider'] ?? null,
+                'llm_api_key' => $mediaCred['api_key'] ?? null,
+                ...$inputConfig,
+            ];
+        }
+
+        if ($inputConfig === []) {
+            return new \stdClass;
+        }
+
+        return $inputConfig;
+    }
+
+    /**
+     * @return array{provider: string|null, api_key: string|null}
+     */
+    private function mediaCredential(Agent $agent, int $workspaceId): array
+    {
+        return $this->credentialFromKey($agent->mediaLlmKey, $workspaceId);
     }
 
     /**
