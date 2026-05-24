@@ -268,6 +268,75 @@ class SpecialistsRelationManager extends RelationManager
                                     ]),
                             ]),
 
+                        Tab::make('Encerramento')
+                            ->icon('heroicon-o-check-circle')
+                            ->schema([
+                                Section::make('Configuracao')
+                                    ->description('Permite o especialista encerrar a conversa marcando como resolvida no Chatwoot quando a duvida do cliente foi solucionada.')
+                                    ->columns(2)
+                                    ->schema([
+                                        Toggle::make('resolution_config.enabled')
+                                            ->label('Permitir encerrar conversa')
+                                            ->live()
+                                            ->default(false)
+                                            ->helperText('Quando habilitado, a tool resolve_conversation sera adicionada automaticamente ao especialista.'),
+                                        TextInput::make('resolution_config.label_name')
+                                            ->label('Label Chatwoot')
+                                            ->maxLength(120)
+                                            ->placeholder('resolved-by-ai')
+                                            ->visible(fn (Get $get): bool => (bool) $get('resolution_config.enabled'))
+                                            ->helperText('Opcional. Aplicada antes do toggle_status=resolved. Deixe vazio para nao adicionar label.'),
+                                        Textarea::make('resolution_config.customer_message')
+                                            ->label('Mensagem de despedida')
+                                            ->rows(2)
+                                            ->visible(fn (Get $get): bool => (bool) $get('resolution_config.enabled'))
+                                            ->helperText('Opcional. Enviada antes do encerramento. Pode ser sobrescrita por regra ou pelo LLM.')
+                                            ->columnSpanFull(),
+                                    ]),
+
+                                Section::make('Situacoes de encerramento')
+                                    ->description('Cada regra dispara um encerramento automatico quando o cliente menciona palavras-chave especificas.')
+                                    ->schema([
+                                        Repeater::make('resolution_config.rules')
+                                            ->hiddenLabel()
+                                            ->collapsible()
+                                            ->collapsed()
+                                            ->itemLabel(fn (array $state): string => self::ruleItemLabel($state))
+                                            ->addActionLabel('Adicionar regra')
+                                            ->schema([
+                                                TextInput::make('name')
+                                                    ->label('Nome')
+                                                    ->required()
+                                                    ->maxLength(120),
+                                                Toggle::make('enabled')
+                                                    ->label('Ativa')
+                                                    ->default(true),
+                                                TagsInput::make('keywords')
+                                                    ->label('Palavras-chave')
+                                                    ->separator(',')
+                                                    ->required()
+                                                    ->helperText('Ex: obrigado, resolveu, era so isso, ja entendi.'),
+                                                Textarea::make('reason')
+                                                    ->label('Motivo interno')
+                                                    ->rows(2)
+                                                    ->required()
+                                                    ->columnSpanFull(),
+                                                Textarea::make('customer_message')
+                                                    ->label('Mensagem especifica ao cliente')
+                                                    ->rows(2)
+                                                    ->columnSpanFull()
+                                                    ->helperText('Opcional. Sobrescreve a mensagem geral so para esta situacao.'),
+                                                TextInput::make('label_name')
+                                                    ->label('Label especifica')
+                                                    ->maxLength(120)
+                                                    ->helperText('Opcional. Sobrescreve a label geral so para esta situacao.'),
+                                            ])
+                                            ->columns(2)
+                                            ->defaultItems(0)
+                                            ->columnSpanFull(),
+                                    ]),
+                            ]),
+
                         Tab::make('Memoria longo prazo')
                             ->icon('heroicon-o-bookmark')
                             ->schema([
@@ -454,12 +523,16 @@ class SpecialistsRelationManager extends RelationManager
         $memoryConfig = is_array($data['memory_config'] ?? null)
             ? $data['memory_config']
             : [];
+        $resolutionConfig = is_array($data['resolution_config'] ?? null)
+            ? $data['resolution_config']
+            : [];
 
         $humanEnabled = (bool) ($handoffConfig['enabled'] ?? false);
         $teamEnabled = (bool) ($handoffConfig['team_enabled'] ?? false);
         $contactUpdateEnabled = (bool) ($contactConfig['update_enabled'] ?? false);
         $memoryExtractionEnabled = (bool) ($memoryConfig['extraction_enabled'] ?? false);
         $memoryInjectionEnabled = (bool) ($memoryConfig['injection_enabled'] ?? false);
+        $resolutionEnabled = (bool) ($resolutionConfig['enabled'] ?? false);
 
         $toolsAllowlist = is_array($data['tools_allowlist'] ?? null)
             ? array_values($data['tools_allowlist'])
@@ -469,6 +542,7 @@ class SpecialistsRelationManager extends RelationManager
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::RequestTeamHandoff->value, $teamEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ChatwootGetContact->value, $contactUpdateEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ChatwootUpdateContact->value, $contactUpdateEnabled);
+        $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ResolveConversation->value, $resolutionEnabled);
 
         $handoffConfig['summary_llm_enabled'] = (bool) ($handoffConfig['summary_llm_enabled'] ?? false);
         $handoffConfig['default_priority'] = $handoffConfig['default_priority'] ?? 'normal';
@@ -517,10 +591,26 @@ class SpecialistsRelationManager extends RelationManager
             ? max(1, min(20, (int) $memoryConfig['max_tool_iterations']))
             : 4;
 
+        $resolutionConfig['enabled'] = $resolutionEnabled;
+        $resolutionConfig['customer_message'] = $resolutionEnabled && filled($resolutionConfig['customer_message'] ?? null)
+            ? (string) $resolutionConfig['customer_message']
+            : null;
+        $resolutionConfig['label_name'] = $resolutionEnabled && filled($resolutionConfig['label_name'] ?? null)
+            ? trim((string) $resolutionConfig['label_name'])
+            : null;
+        $resolutionConfig['rules'] = is_array($resolutionConfig['rules'] ?? null)
+            ? array_values($resolutionConfig['rules'])
+            : [];
+        $resolutionConfig['rules'] = array_map(
+            fn (mixed $rule): array => self::normalizeResolutionRule($rule),
+            $resolutionConfig['rules'],
+        );
+
         $data['tools_allowlist'] = $toolsAllowlist;
         $data['handoff_config'] = $handoffConfig;
         $data['contact_tools_config'] = $contactConfig;
         $data['memory_config'] = $memoryConfig;
+        $data['resolution_config'] = $resolutionConfig;
         $data['intent_keywords'] = self::normalizeKeywordList($data['intent_keywords'] ?? null);
 
         return $data;
@@ -642,6 +732,42 @@ class SpecialistsRelationManager extends RelationManager
         $rule['keywords'] = array_values($keywords);
         $rule['enabled'] = (bool) ($rule['enabled'] ?? true);
         $rule['priority'] = $rule['priority'] ?? 'normal';
+
+        return $rule;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function normalizeResolutionRule(mixed $rule): array
+    {
+        if (! is_array($rule)) {
+            return [];
+        }
+
+        $keywords = $rule['keywords'] ?? [];
+
+        if (is_string($keywords)) {
+            $keywords = array_values(array_filter(array_map(
+                fn (string $keyword): string => trim($keyword),
+                explode(',', $keywords),
+            )));
+        }
+
+        if (! is_array($keywords)) {
+            $keywords = [];
+        }
+
+        $rule['keywords'] = array_values($keywords);
+        $rule['enabled'] = (bool) ($rule['enabled'] ?? true);
+
+        $rule['customer_message'] = isset($rule['customer_message']) && is_string($rule['customer_message']) && trim($rule['customer_message']) !== ''
+            ? (string) $rule['customer_message']
+            : null;
+
+        $rule['label_name'] = isset($rule['label_name']) && is_string($rule['label_name']) && trim($rule['label_name']) !== ''
+            ? trim((string) $rule['label_name'])
+            : null;
 
         return $rule;
     }

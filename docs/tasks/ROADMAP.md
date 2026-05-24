@@ -3,9 +3,9 @@
 > Indice vivo do que ja foi entregue e o que esta pendente.
 > Atualize ao concluir ou re-priorizar uma fase. Detalhes completos ficam em cada plano `YYYY-MM-DD-*.md` neste diretorio.
 
-## Estado atual (2026-05-23)
+## Estado atual (2026-05-24)
 
-Branch ativa: `feature/langgraph-conversation-memory` (pronta pra merge em `main`).
+Branch ativa: `feature/resolve-conversation-tool` (pronta pra merge em `develop`/`main`).
 
 ## Fases entregues
 
@@ -23,6 +23,7 @@ Branch ativa: `feature/langgraph-conversation-memory` (pronta pra merge em `main
 | 7.2 | `2026-05-20-handoff-auto-execute-and-contact-tools-phase-7-2.md` | Handoff dispara side effects direto (sem gate HITL): abre conversa via `toggle_status`, manda mensagem ao cliente, nota privada (com resumo LLM opcional), label, atribuicao team/agent. Migrations `chatwoot_teams` + `chatwoot_team_members` + `workspace_members.chatwoot_user_id` + `chatwoot_connections.admin_api_token`. Sync via `ChatwootAdminApiClient`. Tools `request_team_handoff`, `chatwoot_get_contact`, `chatwoot_update_contact`. Filament: 3 tabs novas no especialista. Bugfix: `DispatchAgentRunJob` preserva handoff payload no merge. |
 | 7.3 | `2026-05-21-specialist-first-handoff-config.md` | `label_name` + `private_note_template` viraram campos por especialista. Binding mantem como fallback default. Hints Filament esclarecem que binding sao defaults. |
 | 11 | `2026-05-23-contacts-and-long-term-memory-phase-11.md` | Contacts criados automaticamente do webhook (`agent_runs.contact_id`). `contact_memories` (preferencia/fato/restricao/historico) por type+source. Tool `update_contact_memory` para a IA registrar fatos. Job `ExtractContactMemoryJob` que pede ao LLM novos fatos pos-run (endpoint Python `/internal/memory/extract`). Injecao das memorias no system prompt do especialista (top N por recencia, configuravel). `chatwoot_get_contact` usa cache local (5min) e `chatwoot_update_contact` sincroniza linha local. Filament `ContactResource` com tabs Resumo/Memorias/Chatwoot raw, badges de lead_status, bulk actions de pipeline, widgets de leads no dashboard. Sync horario via `SyncChatwootContactsJob` + botao manual no Filament. |
+| 12 | `2026-05-24-resolve-conversation-tool-phase-12.md` | Tool `resolve_conversation` permite IA encerrar conversa Chatwoot quando resolve sozinha. Nova coluna `agent_specialists.resolution_config` (jsonb) com `enabled`, `customer_message`, `label_name` e `rules` (keyword-triggered). Action + Job idempotente (no-op se conversa ja `resolved`), ordem `msg -> label -> toggle_status=resolved`. Supervisor Python: `matching_resolution_rule` + acao `resolve_conversation` no `SpecialistDecision`. Filament tab "Encerramento" com toggle, label, mensagem padrao e repeater de regras. Allowlist obrigatoria (`resolve_conversation` no `tools_allowlist`). |
 
 ## Fases pendentes
 
@@ -40,15 +41,15 @@ Branch ativa: `feature/langgraph-conversation-memory` (pronta pra merge em `main
 
 | # | Fase | Escopo | Complexidade | Pre-req |
 |---|---|---|---|---|
-| 11 | **Send document via MinIO** | Tool `send_document(document_id, caption)`. Admin sobe arquivos pre-prontos no MinIO. IA escolhe enviar PDF/imagem ao cliente via Chatwoot (upload multipart). | Media | Nenhum |
-| 12 | **Vision / Audio** | `transcribe_audio` (Whisper API) + `vision_describe` (GPT-4o / Claude vision). Cliente manda audio ou foto via WhatsApp, IA processa o conteudo. | Media-alta | LLM com vision habilitado |
-| 13 | **DB query tools whitelisted** | Tools `query_*` parametrizadas por workspace. Ex: `query_orders(customer_email)`, `query_invoice(invoice_id)`. Laravel valida payload + executa SELECT escopado + retorna rows tipadas. | Alta | Schema do DB externo + politica de seguranca |
-| 14 | **MCP servers por workspace** | Tabela `workspace_mcp_servers`. Admin cadastra URL + auth. Tools do MCP viram disponiveis no allowlist dos especialistas. Laravel atua como proxy + valida scopes. | Alta | Nenhum |
-| 15 | **Notificacao de handoff** | Email / Slack / Chatwoot notification quando run cai em `waiting_human`. Hoje admin so ve no painel. | Baixa-media | Conta SMTP ou webhook Slack |
-| 16 | **Trace polish** | Replay step-by-step com cursor, edicao inline de step, comparacao de runs. Hoje a timeline ja existe (Fase 9) mas e read-only. | Media | Fase 9 (feita) |
-| 17 | **Drag-and-drop priority especialistas** | UI Filament arrasta especialistas dentro do agent para reordenar `priority`. | Baixa | Nenhum |
-| 18 | **Billing / custos por run** | Acumular tokens + custo estimado por LLM key em `agent_runs.usage`. Dashboard por workspace + alerta de budget. | Media | Tabela de pricing por provider |
-| 19 | **Localizacao** | Strings PT-BR extraidas para `lang/pt_BR/`. Permite fallback `en` por usuario. | Media | Nenhum |
+| 13 | **Send document via MinIO** | Tool `send_document(document_id, caption)`. Admin sobe arquivos pre-prontos no MinIO. IA escolhe enviar PDF/imagem ao cliente via Chatwoot (upload multipart). | Media | Nenhum |
+| 14 | **Vision / Audio** | `transcribe_audio` (Whisper API) + `vision_describe` (GPT-4o / Claude vision). Cliente manda audio ou foto via WhatsApp, IA processa o conteudo. | Media-alta | LLM com vision habilitado |
+| 15 | **DB query tools whitelisted** | Tools `query_*` parametrizadas por workspace. Ex: `query_orders(customer_email)`, `query_invoice(invoice_id)`. Laravel valida payload + executa SELECT escopado + retorna rows tipadas. | Alta | Schema do DB externo + politica de seguranca |
+| 16 | **MCP servers por workspace** | Tabela `workspace_mcp_servers`. Admin cadastra URL + auth. Tools do MCP viram disponiveis no allowlist dos especialistas. Laravel atua como proxy + valida scopes. | Alta | Nenhum |
+| 17 | **Notificacao de handoff** | Email / Slack / Chatwoot notification quando run cai em `waiting_human`. Hoje admin so ve no painel. | Baixa-media | Conta SMTP ou webhook Slack |
+| 18 | **Trace polish** | Replay step-by-step com cursor, edicao inline de step, comparacao de runs. Hoje a timeline ja existe (Fase 9) mas e read-only. | Media | Fase 9 (feita) |
+| 19 | **Drag-and-drop priority especialistas** | UI Filament arrasta especialistas dentro do agent para reordenar `priority`. | Baixa | Nenhum |
+| 20 | **Billing / custos por run** | Acumular tokens + custo estimado por LLM key em `agent_runs.usage`. Dashboard por workspace + alerta de budget. | Media | Tabela de pricing por provider |
+| 21 | **Localizacao** | Strings PT-BR extraidas para `lang/pt_BR/`. Permite fallback `en` por usuario. | Media | Nenhum |
 
 ## Decisoes arquiteturais fixas (relembrando)
 
