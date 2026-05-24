@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -115,7 +116,15 @@ class Product extends Model
     }
 
     /**
-     * @return array{id:int,name:string,sku:string|null,description:string|null,price:float|null,category:string|null}
+     * @return HasMany<ProductDocument>
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(ProductDocument::class);
+    }
+
+    /**
+     * @return array{id:int,name:string,sku:string|null,description:string|null,price:float|null,category:string|null,documents:list<array{id:int,original_filename:string,mime_type:string,size_bytes:int}>}
      */
     public function toAgentPayload(): array
     {
@@ -126,6 +135,9 @@ class Product extends Model
             'description' => $this->description,
             'price' => $this->price,
             'category' => $this->category?->name,
+            'documents' => $this->relationLoaded('documents')
+                ? $this->documents->map(fn (ProductDocument $d) => $d->toAgentPayload())->all()
+                : [],
         ];
     }
 }
