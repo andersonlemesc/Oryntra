@@ -66,6 +66,16 @@ def test_build_specialist_tools_builds_query_products_without_contact() -> None:
     assert names == ["query_products"]
 
 
+def test_build_specialist_tools_builds_send_document_without_contact() -> None:
+    tools = build_specialist_tools(
+        ["send_document"],
+        make_ctx(contact_id=None),
+    )
+
+    names = sorted(tool.name for tool in tools)
+    assert names == ["send_document"]
+
+
 def test_build_specialist_tools_skips_resolve_without_terminal_state() -> None:
     tools = build_specialist_tools(
         ["resolve_conversation"],
