@@ -23,6 +23,7 @@ it('sends customer_message, label and toggles status to resolved in order', func
         'base_url' => 'http://chatwoot.test',
         'account_id' => 5,
         'api_access_token' => 'agent-bot-token',
+        'admin_api_token' => 'admin-token',
     ]);
     $run = AgentRun::factory()->create([
         'workspace_id' => $workspace->id,
@@ -50,6 +51,7 @@ it('sends customer_message, label and toggles status to resolved in order', func
         && $request['content'] === 'Resolvido, ate breve!'
         && $request['private'] === false);
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/labels'
+        && $request->method() === 'POST'
         && $request['labels'] === ['resolved-by-ai']);
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/toggle_status'
         && ($request['status'] ?? null) === 'resolved');
@@ -71,6 +73,7 @@ it('marks already_resolved when the conversation status is resolved before runni
         'base_url' => 'http://chatwoot.test',
         'account_id' => 5,
         'api_access_token' => 'agent-bot-token',
+        'admin_api_token' => 'admin-token',
     ]);
     $run = AgentRun::factory()->create([
         'workspace_id' => $workspace->id,
@@ -109,6 +112,7 @@ it('skips customer_message and label when payload omits them', function () {
         'base_url' => 'http://chatwoot.test',
         'account_id' => 5,
         'api_access_token' => 'agent-bot-token',
+        'admin_api_token' => 'admin-token',
     ]);
     $output = resolutionOutputForJobTest();
     $output['resolution']['customer_message'] = null;
@@ -153,6 +157,7 @@ it('continues to label and resolve when sending the customer_message fails', fun
         'base_url' => 'http://chatwoot.test',
         'account_id' => 5,
         'api_access_token' => 'agent-bot-token',
+        'admin_api_token' => 'admin-token',
     ]);
     $run = AgentRun::factory()->create([
         'workspace_id' => $workspace->id,
@@ -185,6 +190,45 @@ it('continues to label and resolve when sending the customer_message fails', fun
         ->and($stored['resolution']['side_effects']['actions']['label'])->toBe('completed')
         ->and($stored['resolution']['side_effects']['actions']['resolve'])->toBe('completed')
         ->and($stored['resolution']['side_effects']['action_errors']['customer_message'])->toContain('HTTP 500');
+});
+
+it('marks label failed with missing_admin_api_token when connection has no admin token', function () {
+    $workspace = Workspace::factory()->create();
+    $agent = Agent::factory()->active()->for($workspace)->create();
+    $connection = ChatwootConnection::factory()->for($workspace)->create([
+        'base_url' => 'http://chatwoot.test',
+        'account_id' => 5,
+        'api_access_token' => 'agent-bot-token',
+        'admin_api_token' => null,
+    ]);
+    $run = AgentRun::factory()->create([
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $connection->id,
+        'chatwoot_account_id' => 5,
+        'conversation_id' => 99,
+        'thread_id' => "workspace:{$workspace->id}:account:5:conversation:99",
+        'status' => AgentRunStatus::Completed,
+        'output' => resolutionOutputForJobTest(),
+    ]);
+
+    Http::fake([
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99' => Http::response(['status' => 'open']),
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages' => Http::response(['id' => 123]),
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/toggle_status' => Http::response(['payload' => ['success' => true]]),
+    ]);
+
+    (new ApplyResolveConversationToChatwootJob($run->id))->handle();
+
+    Http::assertNotSent(fn (Request $request): bool => str_ends_with($request->url(), '/labels'));
+
+    $stored = $run->fresh()?->output;
+
+    assert(is_array($stored));
+
+    expect($stored['resolution']['side_effects']['actions']['label'])->toBe('failed')
+        ->and($stored['resolution']['side_effects']['action_errors']['label'])->toBe('missing_admin_api_token')
+        ->and($stored['resolution']['side_effects']['actions']['resolve'])->toBe('completed');
 });
 
 /**

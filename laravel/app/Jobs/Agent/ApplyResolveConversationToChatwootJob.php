@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs\Agent;
 
 use App\Models\AgentRun;
+use App\Services\Chatwoot\ChatwootAdminApiClient;
 use App\Services\Chatwoot\ChatwootAgentBotClient;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -75,9 +76,14 @@ class ApplyResolveConversationToChatwootJob implements ShouldQueue
         }
 
         if (filled($labelName)) {
-            $this->runAction($run, 'label', function () use ($client, $conversationId, $labelName): void {
-                $client->addConversationLabel($conversationId, $labelName);
-            });
+            if (! $connection->hasAdminApiToken()) {
+                $this->markAction($run, 'label', 'failed');
+                $this->appendActionError($run, 'label', 'missing_admin_api_token');
+            } else {
+                $this->runAction($run, 'label', function () use ($connection, $conversationId, $labelName): void {
+                    (new ChatwootAdminApiClient($connection))->addConversationLabel($conversationId, $labelName);
+                });
+            }
         } else {
             $this->markAction($run, 'label', 'skipped');
         }

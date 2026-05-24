@@ -26,6 +26,7 @@ it('applies configured human handoff side effects to Chatwoot', function () {
         'base_url' => 'http://chatwoot.test',
         'account_id' => 5,
         'api_access_token' => 'agent-bot-token',
+        'admin_api_token' => 'admin-token',
     ]);
     AgentChatwootBinding::factory()->create([
         'workspace_id' => $workspace->id,
@@ -68,6 +69,7 @@ it('applies configured human handoff side effects to Chatwoot', function () {
         && $request['content'] === 'Motivo: Cliente pediu humano.; Prioridade: normal; Conversa: 99'
         && $request['private'] === true);
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/labels'
+        && $request->method() === 'POST'
         && $request['labels'] === ['human_handoff']);
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/assignments'
         && ($request['team_id'] ?? null) === 12);
@@ -94,6 +96,7 @@ it('skips already completed actions when retrying handoff side effects', functio
         'base_url' => 'http://chatwoot.test',
         'account_id' => 5,
         'api_access_token' => 'agent-bot-token',
+        'admin_api_token' => 'admin-token',
     ]);
     AgentChatwootBinding::factory()->create([
         'workspace_id' => $workspace->id,
@@ -133,6 +136,7 @@ it('uses the specialist label_name and private_note_template when set, overridin
         'base_url' => 'http://chatwoot.test',
         'account_id' => 5,
         'api_access_token' => 'agent-bot-token',
+        'admin_api_token' => 'admin-token',
     ]);
     AgentChatwootBinding::factory()->create([
         'workspace_id' => $workspace->id,
@@ -172,6 +176,7 @@ it('uses the specialist label_name and private_note_template when set, overridin
     (new ApplyHumanHandoffToChatwootJob($run->id))->handle(app(HandoffPrivateNoteRenderer::class));
 
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/labels'
+        && $request->method() === 'POST'
         && $request['labels'] === ['vendas']);
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages'
         && str_starts_with((string) $request['content'], 'SPECIALIST ')
@@ -185,6 +190,7 @@ it('falls back to the binding label and template when the specialist leaves them
         'base_url' => 'http://chatwoot.test',
         'account_id' => 5,
         'api_access_token' => 'agent-bot-token',
+        'admin_api_token' => 'admin-token',
     ]);
     AgentChatwootBinding::factory()->create([
         'workspace_id' => $workspace->id,
@@ -224,6 +230,7 @@ it('falls back to the binding label and template when the specialist leaves them
     (new ApplyHumanHandoffToChatwootJob($run->id))->handle(app(HandoffPrivateNoteRenderer::class));
 
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/labels'
+        && $request->method() === 'POST'
         && $request['labels'] === ['binding_label']);
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages'
         && str_starts_with((string) $request['content'], 'BINDING fallback ')

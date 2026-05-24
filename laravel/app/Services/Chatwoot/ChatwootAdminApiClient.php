@@ -54,6 +54,45 @@ class ChatwootAdminApiClient
         return is_array($data) ? array_values($data) : [];
     }
 
+    public function addConversationLabel(int $conversationId, string $label): void
+    {
+        $existing = $this->listConversationLabels($conversationId);
+        $merged = array_values(array_unique([...$existing, $label]));
+
+        $response = Http::withHeaders($this->connection->chatwootAdminHeaders())
+            ->post($this->url("conversations/{$conversationId}/labels"), [
+                'labels' => $merged,
+            ]);
+
+        if ($response->failed()) {
+            throw new RuntimeException("Chatwoot admin addConversationLabel({$conversationId}) failed: HTTP {$response->status()}");
+        }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function listConversationLabels(int $conversationId): array
+    {
+        $response = Http::withHeaders($this->connection->chatwootAdminHeaders())
+            ->get($this->url("conversations/{$conversationId}/labels"));
+
+        if ($response->failed()) {
+            return [];
+        }
+
+        $payload = $response->json('payload');
+
+        if (! is_array($payload)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $payload,
+            fn (mixed $label): bool => is_string($label) && $label !== '',
+        ));
+    }
+
     /**
      * @return array<int, array<string, mixed>>
      */

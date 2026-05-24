@@ -7,6 +7,7 @@ namespace App\Jobs\Agent;
 use App\Models\AgentChatwootBinding;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
+use App\Services\Chatwoot\ChatwootAdminApiClient;
 use App\Services\Chatwoot\ChatwootAgentBotClient;
 use App\Support\AgentTools\HandoffPrivateNoteRenderer;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -97,9 +98,13 @@ class ApplyHumanHandoffToChatwootJob implements ShouldQueue
             });
 
             if (filled($labelName)) {
-                $this->runAction($run, 'label', function () use ($client, $conversationId, $labelName): void {
-                    $client->addConversationLabel($conversationId, (string) $labelName);
-                });
+                if (! $connection->hasAdminApiToken()) {
+                    $this->markAction($run, 'label', 'skipped');
+                } else {
+                    $this->runAction($run, 'label', function () use ($connection, $conversationId, $labelName): void {
+                        (new ChatwootAdminApiClient($connection))->addConversationLabel($conversationId, (string) $labelName);
+                    });
+                }
             } else {
                 $this->markAction($run, 'label', 'skipped');
             }
