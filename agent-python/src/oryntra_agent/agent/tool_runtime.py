@@ -123,7 +123,7 @@ def _make_update_contact_tool(ctx: ToolRuntimeContext) -> StructuredTool:
                     phone_number=phone_number,
                 )
             )
-        except Exception as exc:  # noqa: BLE001 — surface tool failures to the LLM as text
+        except Exception as exc:
             logger.exception("chatwoot_update_contact tool call failed")
             return f"error: chatwoot_update_contact failed ({exc})."
 
@@ -152,7 +152,7 @@ def _make_get_contact_tool(ctx: ToolRuntimeContext) -> StructuredTool:
                     contact_id=int(ctx.contact_id),  # type: ignore[arg-type]
                 )
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("chatwoot_get_contact tool call failed")
             return f"error: chatwoot_get_contact failed ({exc})."
 
@@ -181,7 +181,7 @@ def _make_update_memory_tool(ctx: ToolRuntimeContext) -> StructuredTool:
                     confidence=confidence,
                 )
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("update_contact_memory tool call failed")
             return f"error: update_contact_memory failed ({exc})."
 
@@ -257,7 +257,7 @@ def run_specialist_tool_loop(
             else:
                 try:
                     result = tool.invoke(args or {})
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.exception("tool dispatch failed")
                     result = f"error: tool '{name}' raised {exc}."
 

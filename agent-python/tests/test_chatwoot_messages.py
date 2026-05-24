@@ -1,5 +1,5 @@
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from oryntra_agent import auth
 from oryntra_agent import settings as settings_module
