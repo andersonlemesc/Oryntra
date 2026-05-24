@@ -47,7 +47,7 @@ class EditChatwootConnection extends EditRecord
 
                     Notification::make()
                         ->title('Sincronizacao enfileirada')
-                        ->body('Times, agentes e membros do Chatwoot serao atualizados em background.')
+                        ->body('Times, agentes, membros e labels do Chatwoot serao atualizados em background.')
                         ->success()
                         ->send();
                 }),

@@ -127,7 +127,7 @@ class ChatwootPlatformSettings extends Page implements HasForms
 
         Notification::make()
             ->title('Sincronização enfileirada')
-            ->body('Accounts, usuários, times e membros Chatwoot serão atualizados em background.')
+            ->body('Accounts, usuários, times, membros e labels Chatwoot serão atualizados em background.')
             ->success()
             ->send();
     }
