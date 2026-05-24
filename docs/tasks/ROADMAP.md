@@ -35,6 +35,7 @@ Branch ativa: `develop` com fases 4–14.2 entregues. Pronta para testar em Chat
 
 | 14.1 | `2026-05-24-vision-audio-phase-14-1.md` | Pipeline de mídia: audio → Whisper/Gemini, imagem → GPT-4o/Claude/Gemini Vision. `media_policy` por tipo (enabled + fallback_message). `audio_llm_key_id` + `vision_llm_key_id` no Agent. Filament: tab Mídia com 4 seções. `preprocess_media` async → short-circuit ou inject text. Trace steps + `usage.media` para cobrar tokens. Migração `media_config` → `audio/vision_llm_key`. `ProductSearchService` com unaccent + pg_trgm word_similarity. |
 | 14.2 | mesmo plano | Busca fuzzy de produtos com unaccent + token-by-token + pg_trgm word_similarity. "bicicleta eletrica" retorna 5 bikes, "bike" retorna 6 via similarity. Migração para ativar extensions unaccent e pg_trgm. |
+| 14.3 | `2026-05-25-send-document-phase-14.md` | Tool `send_document(document_id, caption)`. Tabelas `product_documents` + `documents` (MinIO). Filament upload em Produto + DocumentResource standalone. Action `SendDocument` resolve doc, baixa de MinIO, envia como attachment Chatwoot. `NativeTool::SendDocument` + Python tool builder + `RuntimeResponsePayload.type=send_document`. Dispatch no `DispatchAgentRunJob`. 252 Pest tests + 86 pytest. |
 
 ### Em andamento
 
@@ -52,7 +53,7 @@ Branch ativa: `develop` com fases 4–14.2 entregues. Pronta para testar em Chat
 |---|---|---|---|---|
 | 13 | **Trace latency real** | ✅ Entregue — `latency_ms` e `tokens` já populados nos trace steps. | Baixa | Nenhum |
 | 13.1 | **Tabela de produtos + tool query_products** | ✅ Entregue — Fase 13.1 completa com Filament resource, CSV import e tool. | Media | Nenhum |
-| 14 | **Send document via MinIO** | Tool `send_document(document_id, caption)`. Admin sobe arquivos pre-prontos no MinIO. IA escolhe enviar PDF/imagem ao cliente via Chatwoot (upload multipart). | Media | Nenhum |
+| 14 | **Send document via MinIO** | ✅ Entregue — Fase 14.3 completa com `product_documents` + `documents`, Filament upload, Action send_document + Chatwoot attachment, Python tool builder, dispatch em `DispatchAgentRunJob`. |
 | 15 | **DB query tools whitelisted** | Tools `query_*` parametrizadas por workspace. Ex: `query_orders(customer_email)`, `query_invoice(invoice_id)`. Laravel valida payload + executa SELECT escopado + retorna rows tipadas. | Alta | Schema do DB externo + politica de seguranca |
 | 16 | **MCP servers por workspace** | Tabela `workspace_mcp_servers`. Admin cadastra URL + auth. Tools do MCP viram disponiveis no allowlist dos especialistas. Laravel atua como proxy + valida scopes. | Alta | Nenhum |
 | 17 | **Notificacao de handoff** | Email / Slack / Chatwoot notification quando run cai em `waiting_human`. Hoje admin so ve no painel. | Baixa-media | Conta SMTP ou webhook Slack |
