@@ -41,6 +41,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'guard_config',
     'rag_config',
     'runtime_config',
+    'media_config',
+    'media_llm_key_id',
 ])]
 class Agent extends Model
 {
@@ -96,6 +98,14 @@ class Agent extends Model
     }
 
     /**
+     * @return BelongsTo<AgentLlmKey, $this>
+     */
+    public function mediaLlmKey(): BelongsTo
+    {
+        return $this->belongsTo(AgentLlmKey::class, 'media_llm_key_id');
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
@@ -112,6 +122,7 @@ class Agent extends Model
             'guard_config' => 'array',
             'rag_config' => 'array',
             'runtime_config' => 'array',
+            'media_config' => 'array',
         ];
     }
 }
