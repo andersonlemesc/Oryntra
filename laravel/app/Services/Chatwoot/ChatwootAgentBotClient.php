@@ -102,6 +102,32 @@ class ChatwootAgentBotClient
         return is_string($status) ? $status : null;
     }
 
+    /**
+     * @return array{message: array<string, mixed>}
+     */
+    public function sendConversationMessageWithAttachment(
+        int $conversationId,
+        string $content,
+        string $filePath,
+        string $originalFilename,
+        string $mimeType,
+    ): array {
+        $response = Http::withHeaders($this->connection->chatwootHeaders())
+            ->timeout(30)
+            ->attach('attachments[]', file_get_contents($filePath), $originalFilename, ['Content-Type' => $mimeType])
+            ->post($this->url("conversations/{$conversationId}/messages"), [
+                'content' => $content,
+                'message_type' => 'outgoing',
+                'private' => false,
+            ]);
+
+        if ($response->failed()) {
+            throw new RuntimeException("Chatwoot sendConversationMessageWithAttachment({$conversationId}) failed: HTTP {$response->status()}");
+        }
+
+        return $response->json('message', []);
+    }
+
     private function url(string $path): string
     {
         $baseUrl = rtrim((string) $this->connection->base_url, '/');
