@@ -233,6 +233,7 @@ class RuntimeUsage(BaseModel):
 
     supervisor: UsageBucket = Field(default_factory=UsageBucket)
     specialist: UsageBucket = Field(default_factory=UsageBucket)
+    media: UsageBucket = Field(default_factory=UsageBucket)
     total_cost_cents: int = 0
 
 

@@ -70,6 +70,9 @@ class AccumulatedUsage:
         self.specialist_input_tokens: int = 0
         self.specialist_output_tokens: int = 0
         self.specialist_latency_ms: int = 0
+        self.media_input_tokens: int = 0
+        self.media_output_tokens: int = 0
+        self.media_latency_ms: int = 0
         self.last_specialist_usage: LlmUsage | None = None
         self.last_supervisor_usage: LlmUsage | None = None
 
@@ -84,6 +87,11 @@ class AccumulatedUsage:
         self.specialist_output_tokens += usage.output_tokens
         self.specialist_latency_ms += usage.latency_ms
         self.last_specialist_usage = usage
+
+    def add_media(self, usage: LlmUsage) -> None:
+        self.media_input_tokens += usage.input_tokens
+        self.media_output_tokens += usage.output_tokens
+        self.media_latency_ms += usage.latency_ms
 
     def consume_specialist_usage(self) -> LlmUsage | None:
         usage = self.last_specialist_usage
@@ -104,6 +112,10 @@ class AccumulatedUsage:
             specialist=UsageBucket(
                 input_tokens=self.specialist_input_tokens,
                 output_tokens=self.specialist_output_tokens,
+            ),
+            media=UsageBucket(
+                input_tokens=self.media_input_tokens,
+                output_tokens=self.media_output_tokens,
             ),
             total_cost_cents=0,
         )

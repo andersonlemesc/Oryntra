@@ -11,10 +11,13 @@ Pipeline:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import re
+import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Literal
 from urllib.parse import urlparse
 
@@ -29,6 +32,8 @@ from oryntra_agent.api.schemas import (
     MediaPolicy,
     RuntimeResponsePayload,
     RuntimeUsage,
+    TraceStep,
+    UsageBucket,
 )
 
 logger = logging.getLogger(__name__)
@@ -87,13 +92,45 @@ def classify_attachment(att: MediaAttachment) -> MediaKind:
 
 
 @dataclass(frozen=True)
+class MediaUsage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: int = 0
+    provider: str = ""
+    model: str = ""
+    operation: str = ""
+
+    def to_usage_bucket(self) -> UsageBucket:
+        return UsageBucket(input_tokens=self.input_tokens, output_tokens=self.output_tokens)
+
+
+@dataclass(frozen=True)
 class PreprocessResult:
     payload: ChatwootRuntimeRequest
     fallback_prefix: str | None
     short_circuit_response: ChatwootRuntimeResponse | None
+    media_usage: list[MediaUsage] | None = None
+    trace_steps: list[dict[str, Any]] | None = None
 
 
-def _build_short_circuit_response(fallback_prefix: str) -> ChatwootRuntimeResponse:
+def _build_short_circuit_response(
+    fallback_prefix: str,
+    media_usage: list[MediaUsage] | None = None,
+    trace_steps: list[dict[str, Any]] | None = None,
+) -> ChatwootRuntimeResponse:
+    usage = RuntimeUsage()
+    if media_usage:
+        total_in = sum(m.input_tokens for m in media_usage)
+        total_out = sum(m.output_tokens for m in media_usage)
+        usage = RuntimeUsage(
+            media=UsageBucket(input_tokens=total_in, output_tokens=total_out),
+        )
+
+    steps: list[TraceStep] = []
+    if trace_steps:
+        for s in trace_steps:
+            steps.append(TraceStep(**s))
+
     return ChatwootRuntimeResponse(
         status="completed",
         response=RuntimeResponsePayload(
@@ -102,8 +139,8 @@ def _build_short_circuit_response(fallback_prefix: str) -> ChatwootRuntimeRespon
             confidence=1.0,
         ),
         specialist_id=None,
-        trace=[],
-        usage=RuntimeUsage(),
+        trace=steps,
+        usage=usage,
     )
 
 
@@ -147,6 +184,37 @@ def _maybe_add_fallback(
         seen.add(kind)
 
 
+def _make_trace_step(
+    step: int,
+    type: str,
+    att: MediaAttachment,
+    kind: MediaKind,
+    text: str | None,
+    usage: MediaUsage | None,
+    latency_ms: int,
+) -> dict[str, Any]:
+    return {
+        "step": step,
+        "type": type,
+        "specialist_id": None,
+        "tool": f"media_{kind}",
+        "input": {
+            "content_type": att.content_type,
+            "file_type": att.file_type,
+        },
+        "output": {
+            "transcribed": text is not None,
+            "text_length": len(text) if text else 0,
+        },
+        "tokens": {
+            "input": usage.input_tokens if usage else 0,
+            "output": usage.output_tokens if usage else 0,
+        },
+        "latency_ms": latency_ms,
+        "ts": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
 async def preprocess_media(payload: ChatwootRuntimeRequest) -> PreprocessResult:
     policy: MediaPolicy = payload.media_policy
     internal_base = _internal_base_url(payload)
@@ -154,6 +222,9 @@ async def preprocess_media(payload: ChatwootRuntimeRequest) -> PreprocessResult:
 
     fallback_snippets: list[str] = []
     seen_fallback_types: set[MediaKind] = set()
+    media_usage: list[MediaUsage] = []
+    trace_steps: list[dict[str, Any]] = []
+    step_counter = 0
 
     new_messages: list[ChatwootMessage] = []
 
@@ -169,30 +240,57 @@ async def preprocess_media(payload: ChatwootRuntimeRequest) -> PreprocessResult:
 
             if kind == "audio":
                 if policy.audio.enabled and payload.audio_llm_key is not None:
-                    text = await _process_audio(
+                    step_counter += 1
+                    t0 = time.monotonic()
+                    text, usage = await _process_audio_with_usage(
                         att, payload.audio_llm_key, internal_base, payload.workspace_id
                     )
+                    elapsed_ms = int((time.monotonic() - t0) * 1000)
+                    if usage:
+                        media_usage.append(usage)
                     if text:
                         extracted_for_message.append(text)
+                    trace_steps.append(_make_trace_step(
+                        step=step_counter,
+                        type="media_transcribe",
+                        att=att,
+                        kind=kind,
+                        text=text,
+                        usage=usage,
+                        latency_ms=elapsed_ms,
+                    ))
                 else:
                     _maybe_add_fallback(fallback_snippets, seen_fallback_types, "audio", policy)
 
             elif kind == "image":
                 if policy.image.enabled:
-                    text = await _process_image(
+                    step_counter += 1
+                    t0 = time.monotonic()
+                    text, usage = await _process_image_with_usage(
                         att,
                         payload.vision_llm_key,
                         specialist_vision,
                         internal_base,
                         payload.workspace_id,
                     )
+                    elapsed_ms = int((time.monotonic() - t0) * 1000)
+                    if usage:
+                        media_usage.append(usage)
                     if text:
                         extracted_for_message.append(text)
+                    trace_steps.append(_make_trace_step(
+                        step=step_counter,
+                        type="media_vision",
+                        att=att,
+                        kind=kind,
+                        text=text,
+                        usage=usage,
+                        latency_ms=elapsed_ms,
+                    ))
                 else:
                     _maybe_add_fallback(fallback_snippets, seen_fallback_types, "image", policy)
 
             elif kind == "document":
-                # Not implemented this phase: always fallback regardless of stored enabled flag.
                 _maybe_add_fallback(fallback_snippets, seen_fallback_types, "document", policy)
 
             elif kind == "video":
@@ -218,48 +316,52 @@ async def preprocess_media(payload: ChatwootRuntimeRequest) -> PreprocessResult:
         return PreprocessResult(
             payload=new_payload,
             fallback_prefix=fallback_prefix,
-            short_circuit_response=_build_short_circuit_response(fallback_prefix),
+            short_circuit_response=_build_short_circuit_response(fallback_prefix, media_usage, trace_steps),
+            media_usage=media_usage or None,
+            trace_steps=trace_steps or None,
         )
 
     return PreprocessResult(
         payload=new_payload,
         fallback_prefix=fallback_prefix,
         short_circuit_response=None,
+        media_usage=media_usage or None,
+        trace_steps=trace_steps or None,
     )
 
 
 # ---- audio ----------------------------------------------------------------
 
 
-async def _process_audio(
+async def _process_audio_with_usage(
     att: MediaAttachment,
     key: LlmCredentialPayload,
     internal_base: str | None,
     workspace_id: int,
-) -> str:
+) -> tuple[str, MediaUsage | None]:
     if att.transcribed_text and att.transcribed_text.strip():
-        return f"[Transcrição de áudio]: {att.transcribed_text.strip()}"
+        return f"[Transcrição de áudio]: {att.transcribed_text.strip()}", None
 
     if key.provider not in AUDIO_PROVIDERS:
-        return f"[Áudio: provedor '{key.provider}' não suporta transcrição]"
+        return f"[Áudio: provedor '{key.provider}' não suporta transcrição]", None
 
     data = await _download(att, internal_base)
     if data is None:
-        return "[Áudio: não foi possível baixar o arquivo]"
+        return "[Áudio: não foi possível baixar o arquivo]", None
 
     if key.provider == "openai":
-        return await _whisper(data, att, key, workspace_id)
+        return await _whisper_with_usage(data, att, key, workspace_id)
     if key.provider == "gemini":
-        return await _gemini_audio(data, att, key, workspace_id)
-    return ""
+        return await _gemini_audio_with_usage(data, att, key, workspace_id)
+    return "", None
 
 
-async def _whisper(
+async def _whisper_with_usage(
     data: bytes,
     att: MediaAttachment,
     key: LlmCredentialPayload,
     workspace_id: int,
-) -> str:
+) -> tuple[str, MediaUsage | None]:
     import openai
 
     content_type = att.content_type or "audio/ogg"
@@ -274,29 +376,38 @@ async def _whisper(
             response_format="text",
         )
         text = transcript.strip() if isinstance(transcript, str) else str(transcript).strip()
-        return f"[Transcrição de áudio]: {text}" if text else "[Áudio: transcrição vazia]"
+        result = f"[Transcrição de áudio]: {text}" if text else "[Áudio: transcrição vazia]"
+        usage = MediaUsage(
+            input_tokens=0,
+            output_tokens=len(text) // 4 if text else 0,
+            provider=key.provider,
+            model=key.model or "whisper-1",
+            operation="audio_transcription",
+        )
+        return result, usage
     except Exception as exc:
         logger.exception(
             "media.whisper_failed",
             extra={"workspace_id": workspace_id, "error": str(exc)},
         )
-        return "[Áudio: erro inesperado na transcrição]"
+        return "[Áudio: erro inesperado na transcrição]", None
 
 
-async def _gemini_audio(
+async def _gemini_audio_with_usage(
     data: bytes,
     att: MediaAttachment,
     key: LlmCredentialPayload,
     workspace_id: int,
-) -> str:
+) -> tuple[str, MediaUsage | None]:
     from langchain_core.messages import HumanMessage
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     content_type = att.content_type or "audio/ogg"
+    model_name = key.model or "gemini-2.0-flash"
 
     try:
         llm = ChatGoogleGenerativeAI(
-            model=key.model or "gemini-2.0-flash",
+            model=model_name,
             google_api_key=key.api_key.get_secret_value(),
             temperature=0,
         )
@@ -317,35 +428,46 @@ async def _gemini_audio(
         response = await llm.ainvoke([message])
         text = response.content if isinstance(response.content, str) else ""
         text = (text or "").strip()
-        return f"[Transcrição de áudio]: {text}" if text else "[Áudio: transcrição vazia]"
+        result = f"[Transcrição de áudio]: {text}" if text else "[Áudio: transcrição vazia]"
+
+        in_tok = getattr(response, "usage_metadata", {}).get("input_tokens", 0) if isinstance(getattr(response, "usage_metadata", None), dict) else 0
+        out_tok = getattr(response, "usage_metadata", {}).get("output_tokens", 0) if isinstance(getattr(response, "usage_metadata", None), dict) else 0
+        usage = MediaUsage(
+            input_tokens=int(in_tok) if in_tok else 0,
+            output_tokens=int(out_tok) if out_tok else 0,
+            provider="gemini",
+            model=model_name,
+            operation="audio_transcription",
+        )
+        return result, usage
     except Exception as exc:
         logger.exception(
             "media.gemini_audio_failed",
             extra={"workspace_id": workspace_id, "error": str(exc)},
         )
-        return f"[Áudio: erro Gemini — {type(exc).__name__}]"
+        return f"[Áudio: erro Gemini — {type(exc).__name__}]", None
 
 
 # ---- image ----------------------------------------------------------------
 
 
-async def _process_image(
+async def _process_image_with_usage(
     att: MediaAttachment,
     vision_key: LlmCredentialPayload | None,
     specialist_vision_key: LlmCredentialPayload | None,
     internal_base: str | None,
     workspace_id: int,
-) -> str:
+) -> tuple[str, MediaUsage | None]:
     key = (
         vision_key
         if (vision_key is not None and vision_key.provider in VISION_PROVIDERS)
         else specialist_vision_key
     )
     if key is None or key.provider not in VISION_PROVIDERS:
-        return "[Imagem: nenhuma chave LLM com visão disponível]"
+        return "[Imagem: nenhuma chave LLM com visão disponível]", None
 
     if not att.data_url:
-        return "[Imagem: URL não disponível]"
+        return "[Imagem: URL não disponível]", None
 
     url = rewrite_localhost_url(att.data_url, internal_base)
 
@@ -354,7 +476,7 @@ async def _process_image(
 
         chat_model = _build_vision_chat_model(key)
         if chat_model is None:
-            return f"[Imagem: provedor '{key.provider}' não suporta visão]"
+            return f"[Imagem: provedor '{key.provider}' não suporta visão]", None
 
         message = HumanMessage(
             content=[
@@ -371,13 +493,28 @@ async def _process_image(
         response = await chat_model.ainvoke([message])
         description = response.content if isinstance(response.content, str) else ""
         description = (description or "").strip()
-        return f"[Descrição de imagem]: {description}" if description else "[Imagem: descrição vazia]"
+        result = f"[Descrição de imagem]: {description}" if description else "[Imagem: descrição vazia]"
+
+        in_tok = 0
+        out_tok = 0
+        meta = getattr(response, "usage_metadata", None)
+        if isinstance(meta, dict):
+            in_tok = int(meta.get("input_tokens", 0))
+            out_tok = int(meta.get("output_tokens", 0))
+        usage = MediaUsage(
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            provider=key.provider,
+            model=key.model,
+            operation="image_description",
+        )
+        return result, usage
     except Exception as exc:
         logger.exception(
             "media.vision_failed",
             extra={"workspace_id": workspace_id, "error": str(exc)},
         )
-        return f"[Imagem: erro na descrição — {type(exc).__name__}]"
+        return f"[Imagem: erro na descrição — {type(exc).__name__}]", None
 
 
 def _build_vision_chat_model(key: LlmCredentialPayload) -> Any | None:
