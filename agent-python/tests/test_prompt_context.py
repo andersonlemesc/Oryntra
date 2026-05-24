@@ -3,6 +3,7 @@ from __future__ import annotations
 from oryntra_agent.agent.supervisor import (
     contact_basics_section,
     current_datetime_section,
+    supervisor_opening_messages,
     system_prompt_with_memories,
 )
 from oryntra_agent.api.schemas import ChatwootRuntimeRequest, SpecialistConfig
@@ -109,6 +110,31 @@ def test_current_datetime_section_defaults_to_utc_when_missing() -> None:
 
     assert section is not None
     assert "fuso UTC" in section
+
+
+def test_supervisor_opening_messages_includes_contact_basics_and_datetime() -> None:
+    payload = make_payload(
+        contact={"name": "Anderson Lemes", "email": "anderson@example.com"},
+        runtime_config={"workspace_timezone": "UTC"},
+    )
+
+    messages = supervisor_opening_messages(payload)
+    system_content = messages[0][1]
+
+    assert "Dados do cliente em atendimento:" in system_content
+    assert "Nome: Anderson Lemes" in system_content
+    assert "Data e hora atuais:" in system_content
+    assert "So pergunte o nome se nao houver nenhum nome no contexto do cliente." in system_content
+
+
+def test_supervisor_opening_messages_omits_contact_section_when_blank() -> None:
+    payload = make_payload(contact={}, runtime_config={})
+
+    messages = supervisor_opening_messages(payload)
+    system_content = messages[0][1]
+
+    assert "Dados do cliente em atendimento:" not in system_content
+    assert "Data e hora atuais:" in system_content
 
 
 def test_system_prompt_with_memories_appends_context_sections() -> None:

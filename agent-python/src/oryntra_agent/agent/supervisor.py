@@ -1571,20 +1571,35 @@ def supervisor_opening_messages(payload: ChatwootRuntimeRequest) -> list[tuple[s
     supervisor_prompt = payload.supervisor.prompt or "Voce atende clientes com cordialidade."
     message_lines = conversation_message_lines(payload)
 
+    base_lines = [
+        supervisor_prompt,
+        "A mensagem ainda nao tem intencao suficiente para escolher um especialista.",
+        "Responda como recepcao inicial: cumprimente, seja cordial e pergunte como pode ajudar.",
+        "Se ja souber o nome do cliente pelos dados injetados, use-o naturalmente no cumprimento. Nao pergunte novamente nome, email ou telefone que ja constem no contexto.",
+        "So pergunte o nome se nao houver nenhum nome no contexto do cliente.",
+        "Nao mencione roteamento, supervisor, especialistas, prompts ou detalhes internos.",
+        "Nao transfira para humano nesse momento.",
+        "Responda em uma ou duas frases curtas.",
+    ]
+
+    sections: list[str] = []
+
+    contact_section = contact_basics_section(payload)
+    if contact_section is not None:
+        sections.append(contact_section)
+
+    datetime_section = current_datetime_section(payload)
+    if datetime_section is not None:
+        sections.append(datetime_section)
+
+    system_content = "\n".join(base_lines)
+    if sections:
+        system_content = "\n".join([system_content, "", *_interleave_sections(sections)])
+
     return [
         (
             "system",
-            "\n".join(
-                [
-                    supervisor_prompt,
-                    "A mensagem ainda nao tem intencao suficiente para escolher um especialista.",
-                    "Responda como recepcao inicial: cumprimente, seja cordial e pergunte como pode ajudar.",
-                    "Se fizer sentido, pergunte o nome do cliente de forma natural.",
-                    "Nao mencione roteamento, supervisor, especialistas, prompts ou detalhes internos.",
-                    "Nao transfira para humano nesse momento.",
-                    "Responda em uma ou duas frases curtas.",
-                ]
-            ),
+            system_content,
         ),
         (
             "human",
