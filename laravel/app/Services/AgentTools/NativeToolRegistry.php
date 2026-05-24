@@ -60,6 +60,14 @@ final class NativeToolRegistry
                 'label' => 'Consultar produtos',
                 'description' => 'Busca produtos do catalogo por nome, categoria ou termo. Retorna lista com precos e descricao.',
             ],
+            NativeTool::TranscribeAudio->value => [
+                'label' => 'Transcrever áudio',
+                'description' => 'Transcreve um arquivo de áudio enviado pelo cliente em texto.',
+            ],
+            NativeTool::VisionDescribe->value => [
+                'label' => 'Descrever imagem',
+                'description' => 'Descreve uma imagem enviada pelo cliente usando visão computacional.',
+            ],
         ];
     }
 

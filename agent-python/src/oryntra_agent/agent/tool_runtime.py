@@ -47,6 +47,8 @@ EXECUTABLE_TOOLS: frozenset[str] = frozenset(
         "update_contact_memory",
         "resolve_conversation",
         "query_products",
+        "transcribe_audio",
+        "vision_describe",
     }
 )
 
@@ -160,6 +162,12 @@ def build_specialist_tools(
 
     if "query_products" in allowed_tools:
         tools.append(_make_query_products_tool(ctx))
+
+    if "transcribe_audio" in allowed_tools:
+        tools.append(_make_transcribe_audio_tool(ctx))
+
+    if "vision_describe" in allowed_tools:
+        tools.append(_make_vision_describe_tool(ctx))
 
     return tools
 
@@ -411,6 +419,91 @@ def _make_query_products_tool(ctx: ToolRuntimeContext) -> StructuredTool:
             "informar precos, ou ajudar a escolher. Retorna ate 20 produtos por padrao."
         ),
         args_schema=QueryProductsArgs,
+        func=run,
+    )
+
+
+class TranscribeAudioArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attachment_url: str = Field(description="URL do arquivo de áudio para transcrição.")
+    content_type: str = Field(
+        default="audio/ogg",
+        description="MIME type do arquivo (ex.: audio/ogg, audio/mp4, audio/webm).",
+    )
+
+
+class VisionDescribeArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attachment_url: str = Field(description="URL da imagem para descrição.")
+    prompt: str | None = Field(
+        default=None,
+        description="Instrução customizada para descrever a imagem.",
+    )
+
+
+def _make_transcribe_audio_tool(ctx: ToolRuntimeContext) -> StructuredTool:
+    def run(attachment_url: str, content_type: str = "audio/ogg") -> str:
+        from oryntra_agent.agent.media import transcribe_audio_sync
+        from oryntra_agent.agent.supervisor import _runtime_llm_credentials
+
+        credentials = _runtime_llm_credentials.get()
+        media_key = credentials.supervisor if credentials else None
+
+        try:
+            result = transcribe_audio_sync(
+                attachment_url=attachment_url,
+                content_type=content_type,
+                media_llm_key=media_key,
+                workspace_id=ctx.workspace_id,
+            )
+            return result
+        except Exception as exc:
+            logger.exception("transcribe_audio tool call failed")
+            return f"error: transcribe_audio failed ({exc})."
+
+    return StructuredTool.from_function(
+        name="transcribe_audio",
+        description=(
+            "Transcreve um arquivo de áudio enviado pelo cliente em texto. "
+            "Use quando o cliente enviar um áudio e você precisar entender o conteúdo."
+        ),
+        args_schema=TranscribeAudioArgs,
+        func=run,
+    )
+
+
+def _make_vision_describe_tool(ctx: ToolRuntimeContext) -> StructuredTool:
+    def run(attachment_url: str, prompt: str | None = None) -> str:
+        from oryntra_agent.agent.media import describe_image_sync
+        from oryntra_agent.agent.supervisor import _runtime_llm_credentials
+
+        credentials = _runtime_llm_credentials.get()
+        specialist_key = (
+            credentials.specialists.get(ctx.specialist_id) if credentials and ctx.specialist_id else None
+        )
+        media_key = credentials.supervisor if credentials else None
+
+        try:
+            result = describe_image_sync(
+                attachment_url=attachment_url,
+                prompt=prompt,
+                media_llm_key=media_key,
+                specialist_llm_key=specialist_key,
+            )
+            return result
+        except Exception as exc:
+            logger.exception("vision_describe tool call failed")
+            return f"error: vision_describe failed ({exc})."
+
+    return StructuredTool.from_function(
+        name="vision_describe",
+        description=(
+            "Descreve uma imagem enviada pelo cliente. Use quando o cliente "
+            "enviar uma foto e você precisar entender o conteúdo visual."
+        ),
+        args_schema=VisionDescribeArgs,
         func=run,
     )
 
