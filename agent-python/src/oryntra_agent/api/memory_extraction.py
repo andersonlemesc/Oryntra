@@ -98,12 +98,8 @@ async def extract_memories(payload: MemoryExtractionRequest) -> MemoryExtraction
     if chat_model is None:
         return MemoryExtractionResponse(status="skipped", reason="unsupported_provider")
 
-    transcript_lines = [
-        f"{message.role}: {message.content}" for message in payload.transcript
-    ]
-    existing_lines = [
-        f"- [{memory.type}] {memory.content}" for memory in payload.existing_memories
-    ]
+    transcript_lines = [f"{message.role}: {message.content}" for message in payload.transcript]
+    existing_lines = [f"- [{memory.type}] {memory.content}" for memory in payload.existing_memories]
     allowed = ", ".join(payload.allowed_types)
 
     system_prompt = (
@@ -138,8 +134,7 @@ async def extract_memories(payload: MemoryExtractionRequest) -> MemoryExtraction
 
     filtered: list[ExtractedMemory] = []
     existing_set = {
-        (memory.type, _normalize(memory.content))
-        for memory in payload.existing_memories
+        (memory.type, _normalize(memory.content)) for memory in payload.existing_memories
     }
 
     for memory in result.memories:

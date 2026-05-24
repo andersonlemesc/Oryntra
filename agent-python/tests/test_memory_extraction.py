@@ -50,12 +50,22 @@ def test_extract_returns_filtered_new_memories(monkeypatch: pytest.MonkeyPatch) 
             return self
 
         def invoke(self, _messages: Any) -> ExtractedMemoryList:
-            return ExtractedMemoryList(memories=[
-                ExtractedMemory(type="preference", content="Procura bike eletrica urbana", confidence=0.9),
-                ExtractedMemory(type="constraint", content="Orcamento ate 6000 reais", confidence=0.85),
-                ExtractedMemory(type="fact", content="Trajeto diario de 5km", confidence=0.9),
-                ExtractedMemory(type="history", content="Should be filtered out (type not allowed)", confidence=0.8),
-            ])
+            return ExtractedMemoryList(
+                memories=[
+                    ExtractedMemory(
+                        type="preference", content="Procura bike eletrica urbana", confidence=0.9
+                    ),
+                    ExtractedMemory(
+                        type="constraint", content="Orcamento ate 6000 reais", confidence=0.85
+                    ),
+                    ExtractedMemory(type="fact", content="Trajeto diario de 5km", confidence=0.9),
+                    ExtractedMemory(
+                        type="history",
+                        content="Should be filtered out (type not allowed)",
+                        confidence=0.8,
+                    ),
+                ]
+            )
 
     monkeypatch.setattr(
         memory_extraction,

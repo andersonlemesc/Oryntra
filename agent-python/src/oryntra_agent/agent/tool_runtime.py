@@ -83,7 +83,9 @@ class UpdateContactMemoryArgs(BaseModel):
     )
 
 
-def build_specialist_tools(allowed_tools: list[str], ctx: ToolRuntimeContext) -> list[StructuredTool]:
+def build_specialist_tools(
+    allowed_tools: list[str], ctx: ToolRuntimeContext
+) -> list[StructuredTool]:
     tools: list[StructuredTool] = []
 
     if ctx.contact_id is None:

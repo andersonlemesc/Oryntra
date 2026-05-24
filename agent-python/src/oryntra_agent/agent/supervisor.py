@@ -58,7 +58,9 @@ class SpecialistChoice(BaseModel):
 
 class HandoffSummary(BaseModel):
     summary: str = Field(description="Resumo conciso da conversa em 1-3 frases.")
-    key_fact: str = Field(description="O fato mais relevante para o atendente humano agir agora (1 frase).")
+    key_fact: str = Field(
+        description="O fato mais relevante para o atendente humano agir agora (1 frase)."
+    )
 
 
 class SpecialistDecision(BaseModel):
@@ -357,8 +359,7 @@ def no_route_response(
     turn_count: int,
 ) -> ChatwootRuntimeResponse:
     response_content = generate_supervisor_opening_with_llm(payload) or (
-        "Olá! Posso te ajudar por aqui. Me conta, por favor, "
-        "o que você precisa hoje?"
+        "Olá! Posso te ajudar por aqui. Me conta, por favor, o que você precisa hoje?"
     )
 
     return ChatwootRuntimeResponse(
@@ -458,8 +459,7 @@ def routed_specialist_response(
                 reason=reason,
                 turn_count=turn_count,
                 handoff_reason=(
-                    specialist_decision.handoff_reason
-                    or "Human handoff requested by specialist."
+                    specialist_decision.handoff_reason or "Human handoff requested by specialist."
                 ),
                 handoff_priority=specialist_decision.handoff_priority,
                 customer_message=(
@@ -476,10 +476,7 @@ def routed_specialist_response(
         if specialist_decision.action == "request_reroute" and allow_reroute:
             rerouted_specialist, rerouted_confidence, rerouted_reason = choose_specialist(payload)
 
-            if (
-                rerouted_specialist is not None
-                and rerouted_specialist.id != selected_specialist.id
-            ):
+            if rerouted_specialist is not None and rerouted_specialist.id != selected_specialist.id:
                 return routed_specialist_response(
                     payload=payload,
                     selected_specialist=rerouted_specialist,
@@ -571,8 +568,12 @@ def specialist_text_response(
             if response_source == "structured_decision"
             else specialist_response_messages(payload, selected_specialist)
         )
-        specialist_response_input["debug_system_prompt"] = messages[0][1] if len(messages) > 0 else ""
-        specialist_response_input["debug_human_prompt"] = messages[1][1] if len(messages) > 1 else ""
+        specialist_response_input["debug_system_prompt"] = (
+            messages[0][1] if len(messages) > 0 else ""
+        )
+        specialist_response_input["debug_human_prompt"] = (
+            messages[1][1] if len(messages) > 1 else ""
+        )
 
     return ChatwootRuntimeResponse(
         status="completed",
@@ -1539,9 +1540,7 @@ def latest_message_requests_reroute(
 
 
 def keyword_match_count(specialist: SpecialistConfig, message_text: str) -> int:
-    return sum(
-        1 for keyword in specialist.intent_keywords if keyword.casefold() in message_text
-    )
+    return sum(1 for keyword in specialist.intent_keywords if keyword.casefold() in message_text)
 
 
 def payload_from_state(state: SupervisorState) -> ChatwootRuntimeRequest:

@@ -55,15 +55,15 @@ def test_supervisor_uses_fallback_when_llm_returns_null_specialist(monkeypatch) 
     monkeypatch.setattr(
         supervisor,
         "choose_specialist_with_llm",
-        lambda payload: SpecialistChoice(
-            specialist_id=None, confidence=0.3, reason="ambiguous"
-        ),
+        lambda payload: SpecialistChoice(specialist_id=None, confidence=0.3, reason="ambiguous"),
     )
 
     payload = make_payload(fallback_specialist_id=6)
 
-    with patch.object(supervisor, "generate_specialist_decision_with_llm", return_value=None), \
-        patch.object(supervisor, "generate_specialist_response_with_llm", return_value=None):
+    with (
+        patch.object(supervisor, "generate_specialist_decision_with_llm", return_value=None),
+        patch.object(supervisor, "generate_specialist_response_with_llm", return_value=None),
+    ):
         response = run_chatwoot_runtime(payload)
 
     assert response.specialist_id == 6
@@ -75,9 +75,7 @@ def test_supervisor_does_not_fallback_when_disabled(monkeypatch) -> None:
     monkeypatch.setattr(
         supervisor,
         "choose_specialist_with_llm",
-        lambda payload: SpecialistChoice(
-            specialist_id=None, confidence=0.3, reason="ambiguous"
-        ),
+        lambda payload: SpecialistChoice(specialist_id=None, confidence=0.3, reason="ambiguous"),
     )
 
     payload = make_payload(fallback_specialist_id=None)
@@ -92,9 +90,7 @@ def test_supervisor_does_not_fallback_when_fallback_id_unknown(monkeypatch) -> N
     monkeypatch.setattr(
         supervisor,
         "choose_specialist_with_llm",
-        lambda payload: SpecialistChoice(
-            specialist_id=None, confidence=0.3, reason="ambiguous"
-        ),
+        lambda payload: SpecialistChoice(specialist_id=None, confidence=0.3, reason="ambiguous"),
     )
 
     payload = make_payload(fallback_specialist_id=999)

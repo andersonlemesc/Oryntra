@@ -276,9 +276,11 @@ def test_runtime_accumulates_conversation_history_for_same_thread() -> None:
         supervisor_payload("Uso para ir ao trabalho cerca de 5km", thread_id=thread_id)
     )
 
-    state = get_runtime_graph().get_state(
-        runtime_config(supervisor_payload(thread_id=thread_id))
-    ).values
+    state = (
+        get_runtime_graph()
+        .get_state(runtime_config(supervisor_payload(thread_id=thread_id)))
+        .values
+    )
 
     assert [message["content"] for message in state["conversation_messages"]] == [
         "Preciso comprar uma bike",
@@ -302,9 +304,7 @@ def test_runtime_reuses_active_specialist_for_followup_without_rerouting(monkeyp
     first = run_chatwoot_runtime(
         supervisor_payload("Preciso comprar uma bike", thread_id=thread_id)
     )
-    second = run_chatwoot_runtime(
-        supervisor_payload("Tenho 1,72 e peso 79kg", thread_id=thread_id)
-    )
+    second = run_chatwoot_runtime(supervisor_payload("Tenho 1,72 e peso 79kg", thread_id=thread_id))
 
     assert first.specialist_id == 6
     assert second.specialist_id == 6

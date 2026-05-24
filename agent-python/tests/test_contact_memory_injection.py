@@ -24,7 +24,9 @@ def clear_runtime_graph_cache() -> None:
     settings_module.settings.langgraph_checkpointer = "memory"
 
 
-def make_payload(*, injection_enabled: bool, limit: int | None, memories: list[dict]) -> ChatwootRuntimeRequest:
+def make_payload(
+    *, injection_enabled: bool, limit: int | None, memories: list[dict]
+) -> ChatwootRuntimeRequest:
     return ChatwootRuntimeRequest.model_validate(
         {
             "workspace_id": 1,
@@ -88,8 +90,7 @@ def test_contact_memory_section_lists_memories_with_types() -> None:
 
 def test_contact_memory_section_respects_injection_limit() -> None:
     memories = [
-        {"type": "fact", "content": f"fato {i}", "source": "agent_extracted"}
-        for i in range(5)
+        {"type": "fact", "content": f"fato {i}", "source": "agent_extracted"} for i in range(5)
     ]
     payload = make_payload(injection_enabled=True, limit=2, memories=memories)
 
@@ -107,9 +108,7 @@ def test_specialist_prompt_includes_memories_when_injection_enabled(monkeypatch)
     monkeypatch.setattr(
         supervisor,
         "choose_specialist_with_llm",
-        lambda payload: SpecialistChoice(
-            specialist_id=6, confidence=0.9, reason="match"
-        ),
+        lambda payload: SpecialistChoice(specialist_id=6, confidence=0.9, reason="match"),
     )
 
     class FakeChatModel:
@@ -134,7 +133,11 @@ def test_specialist_prompt_includes_memories_when_injection_enabled(monkeypatch)
         injection_enabled=True,
         limit=10,
         memories=[
-            {"type": "preference", "content": "Quer bike eletrica urbana", "source": "agent_extracted"},
+            {
+                "type": "preference",
+                "content": "Quer bike eletrica urbana",
+                "source": "agent_extracted",
+            },
             {"type": "fact", "content": "Altura 1,72m, peso 80kg", "source": "tool"},
         ],
     )
@@ -155,9 +158,7 @@ def test_specialist_prompt_does_not_include_memories_when_injection_disabled(mon
     monkeypatch.setattr(
         supervisor,
         "choose_specialist_with_llm",
-        lambda payload: SpecialistChoice(
-            specialist_id=6, confidence=0.9, reason="match"
-        ),
+        lambda payload: SpecialistChoice(specialist_id=6, confidence=0.9, reason="match"),
     )
 
     class FakeChatModel:
