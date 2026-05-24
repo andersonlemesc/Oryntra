@@ -26,11 +26,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from oryntra_agent.agent.tools import (
     GetContactRequest,
+    QueryProductsRequest,
     ResolveConversationRequest,
     UpdateContactMemoryRequest,
     UpdateContactRequest,
     chatwoot_get_contact,
     chatwoot_update_contact,
+    query_products,
     resolve_conversation,
     update_contact_memory,
 )
@@ -44,6 +46,7 @@ EXECUTABLE_TOOLS: frozenset[str] = frozenset(
         "chatwoot_get_contact",
         "update_contact_memory",
         "resolve_conversation",
+        "query_products",
     }
 )
 
@@ -135,6 +138,9 @@ def build_specialist_tools(
 
     if "resolve_conversation" in allowed_tools and terminal_state is not None:
         tools.append(_make_resolve_conversation_tool(ctx, terminal_state))
+
+    if "query_products" in allowed_tools:
+        tools.append(_make_query_products_tool(ctx))
 
     return tools
 
@@ -288,6 +294,66 @@ def _make_resolve_conversation_tool(
             "precisar de mais nada. Apos essa tool, nao gere mais texto."
         ),
         args_schema=ResolveConversationArgs,
+        func=run,
+    )
+
+
+class QueryProductsArgs(BaseModel):
+    query: str | None = Field(default=None, description="Termo de busca pelo nome ou descricao do produto.")
+    category: str | None = Field(default=None, description="Filtrar por categoria.")
+    min_price: float | None = Field(default=None, description="Preco minimo.")
+    max_price: float | None = Field(default=None, description="Preco maximo.")
+    limit: int = Field(default=20, description="Quantidade maxima de resultados.")
+
+
+def _make_query_products_tool(ctx: ToolRuntimeContext) -> StructuredTool:
+    def run(
+        query: str | None = None,
+        category: str | None = None,
+        min_price: float | None = None,
+        max_price: float | None = None,
+        limit: int = 20,
+    ) -> str:
+        try:
+            response = query_products(
+                QueryProductsRequest(
+                    workspace_id=ctx.workspace_id,
+                    agent_id=ctx.agent_id,
+                    agent_run_id=ctx.agent_run_id,
+                    specialist_id=ctx.specialist_id,
+                    query=query,
+                    category=category,
+                    min_price=min_price,
+                    max_price=max_price,
+                    limit=limit,
+                )
+            )
+        except Exception as exc:
+            logger.exception("query_products tool call failed")
+            return f"error: query_products failed ({exc})."
+
+        if not response.products:
+            return "Nenhum produto encontrado."
+
+        lines = ["Produtos encontrados:"]
+        for p in response.products[:10]:
+            price_str = f"R$ {p['price']:.2f}" if p.get("price") else "preco sob consulta"
+            lines.append(f"- {p['name']} ({price_str}) [{p.get('category', 'sem categoria')}]")
+            if p.get("description"):
+                lines.append(f"  {p['description'][:100]}")
+
+        if response.total > len(response.products):
+            lines.append(f"... e mais {response.total - len(response.products)} produtos.")
+
+        return "\n".join(lines)
+
+    return StructuredTool.from_function(
+        name="query_products",
+        description=(
+            "Busca produtos do catalogo da empresa. Use para mostrar produtos ao cliente, "
+            "informar precos, ou ajudar a escolher. Retorna ate 20 produtos por padrao."
+        ),
+        args_schema=QueryProductsArgs,
         func=run,
     )
 

@@ -56,6 +56,10 @@ final class NativeToolRegistry
                 'label' => 'Encerrar conversa',
                 'description' => 'Encerra a conversa marcando como resolvida no Chatwoot quando a IA solucionou a duvida do cliente.',
             ],
+            NativeTool::QueryProducts->value => [
+                'label' => 'Consultar produtos',
+                'description' => 'Busca produtos do catalogo por nome, categoria ou termo. Retorna lista com precos e descricao.',
+            ],
         ];
     }
 

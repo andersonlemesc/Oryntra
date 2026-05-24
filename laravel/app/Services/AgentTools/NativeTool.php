@@ -17,4 +17,5 @@ enum NativeTool: string
     case ChatwootUpdateContact = 'chatwoot_update_contact';
     case UpdateContactMemory = 'update_contact_memory';
     case ResolveConversation = 'resolve_conversation';
+    case QueryProducts = 'query_products';
 }
