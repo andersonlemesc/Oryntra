@@ -202,6 +202,7 @@ def _make_update_memory_tool(ctx: ToolRuntimeContext) -> StructuredTool:
 class ToolLoopResult:
     text: str | None
     tool_calls: list[dict[str, Any]]
+    debug_prompt: dict[str, str] | None = None
 
 
 def run_specialist_tool_loop(

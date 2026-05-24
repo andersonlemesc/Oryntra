@@ -285,6 +285,9 @@ class AgentForm
                                             ->numeric()
                                             ->default(8)
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Maximo de ferramentas (consulta DB, RAG, envio de doc, etc.) que a IA pode chamar em uma unica resposta. Evita loops infinitos.'),
+                                        Toggle::make('runtime_config.debug_prompts')
+                                            ->label('Debug: salvar prompts no trace')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Quando ativo, cada trace step de specialist_response e tool_call salva o system + human prompt completo. Util para depurar o que a IA esta vendo. Aumenta o tamanho do trace e expoe prompts no UI; desligar em producao quando nao precisar.'),
                                     ]),
                             ]),
                     ]),

@@ -436,6 +436,7 @@ def routed_specialist_response(
             turn_count=turn_count,
             response_content=tool_result.text,
             tool_calls=tool_result.tool_calls,
+            debug_prompt=tool_result.debug_prompt,
         )
 
     specialist_decision = generate_specialist_decision_with_llm(payload, selected_specialist)
@@ -561,6 +562,19 @@ def specialist_text_response(
     response_content: str,
     response_source: str,
 ) -> ChatwootRuntimeResponse:
+    specialist_response_input: dict[str, Any] = {"role_prompt": selected_specialist.role_prompt}
+
+    if _debug_prompts_enabled(payload):
+        # Rebuild the messages the LLM saw so the trace step shows the system + human prompt.
+        # source=structured_decision uses specialist_decision_messages; otherwise specialist_response_messages.
+        messages = (
+            specialist_decision_messages(payload, selected_specialist)
+            if response_source == "structured_decision"
+            else specialist_response_messages(payload, selected_specialist)
+        )
+        specialist_response_input["debug_system_prompt"] = messages[0][1] if len(messages) > 0 else ""
+        specialist_response_input["debug_human_prompt"] = messages[1][1] if len(messages) > 1 else ""
+
     return ChatwootRuntimeResponse(
         status="completed",
         response=RuntimeResponsePayload(
@@ -590,12 +604,16 @@ def specialist_text_response(
                 step=3,
                 type="specialist_response",
                 specialist_id=selected_specialist.id,
-                input={"role_prompt": selected_specialist.role_prompt},
+                input=specialist_response_input,
                 output={"response_type": "text", "source": response_source},
                 ts=datetime.now(UTC),
             ),
         ],
     )
+
+
+def _debug_prompts_enabled(payload: ChatwootRuntimeRequest) -> bool:
+    return bool(payload.runtime_config.get("debug_prompts", False))
 
 
 def run_specialist_with_tool_calling(
@@ -653,13 +671,25 @@ def run_specialist_with_tool_calling(
     system_prompt = system_prompt_with_memories(payload, selected_specialist, base_lines)
     user_prompt = "\n".join(message_lines) or "(sem conteudo textual)"
 
-    return run_specialist_tool_loop(
+    result = run_specialist_tool_loop(
         chat_model=chat_model,
         tools=tools,
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_iterations=selected_specialist.memory_config.max_tool_iterations,
     )
+
+    if _debug_prompts_enabled(payload):
+        return ToolLoopResult(
+            text=result.text,
+            tool_calls=result.tool_calls,
+            debug_prompt={
+                "system": system_prompt,
+                "human": user_prompt,
+            },
+        )
+
+    return result
 
 
 def _tool_runtime_context(
@@ -691,6 +721,7 @@ def specialist_text_with_tool_calls(
     turn_count: int,
     response_content: str,
     tool_calls: list[dict[str, Any]],
+    debug_prompt: dict[str, str] | None = None,
 ) -> ChatwootRuntimeResponse:
     base_trace = [
         runtime_trace_step(payload=payload, turn_count=turn_count),
@@ -726,12 +757,17 @@ def specialist_text_with_tool_calls(
         )
         next_step += 1
 
+    specialist_response_input: dict[str, Any] = {"role_prompt": selected_specialist.role_prompt}
+    if debug_prompt is not None:
+        specialist_response_input["debug_system_prompt"] = debug_prompt.get("system", "")
+        specialist_response_input["debug_human_prompt"] = debug_prompt.get("human", "")
+
     base_trace.append(
         TraceStep(
             step=next_step,
             type="specialist_response",
             specialist_id=selected_specialist.id,
-            input={"role_prompt": selected_specialist.role_prompt},
+            input=specialist_response_input,
             output={"response_type": "text", "source": "tool_loop"},
             ts=datetime.now(UTC),
         )
