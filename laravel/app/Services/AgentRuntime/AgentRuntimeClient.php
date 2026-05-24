@@ -351,11 +351,12 @@ class AgentRuntimeClient
      */
     private function runtimeConfig(AgentRun $run, array $input): array
     {
-        $value = $input['runtime_config'] ?? [];
-        $runtimeConfig = is_array($value) ? $value : [];
+        $agentConfig = is_array($run->agent?->runtime_config) ? $run->agent->runtime_config : [];
+        $inputConfig = is_array($input['runtime_config'] ?? null) ? $input['runtime_config'] : [];
 
         return [
-            ...$runtimeConfig,
+            ...$agentConfig,
+            ...$inputConfig,
             'agent_run_id' => $run->id,
             'conversation_id' => $run->conversation_id,
         ];
