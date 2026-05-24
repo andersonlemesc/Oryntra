@@ -28,14 +28,17 @@ from oryntra_agent.agent.tools import (
     GetContactRequest,
     QueryProductsRequest,
     ResolveConversationRequest,
+    SendDocumentRequest,
     UpdateContactMemoryRequest,
     UpdateContactRequest,
     chatwoot_get_contact,
     chatwoot_update_contact,
     query_products,
     resolve_conversation,
+    send_document,
     update_contact_memory,
 )
+from oryntra_agent.api.schemas import SendDocumentArgs
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +50,7 @@ EXECUTABLE_TOOLS: frozenset[str] = frozenset(
         "update_contact_memory",
         "resolve_conversation",
         "query_products",
+        "send_document",
     }
 )
 
@@ -160,6 +164,9 @@ def build_specialist_tools(
 
     if "query_products" in allowed_tools:
         tools.append(_make_query_products_tool(ctx))
+
+    if "send_document" in allowed_tools:
+        tools.append(_make_send_document_tool(ctx))
 
     return tools
 
@@ -411,6 +418,38 @@ def _make_query_products_tool(ctx: ToolRuntimeContext) -> StructuredTool:
             "informar precos, ou ajudar a escolher. Retorna ate 20 produtos por padrao."
         ),
         args_schema=QueryProductsArgs,
+        func=run,
+    )
+
+
+def _make_send_document_tool(ctx: ToolRuntimeContext) -> StructuredTool:
+    def run(document_id: int, caption: str = "") -> str:
+        try:
+            response = send_document(
+                SendDocumentRequest(
+                    workspace_id=ctx.workspace_id,
+                    agent_run_id=ctx.agent_run_id,
+                    document_id=document_id,
+                    caption=caption,
+                    conversation_id=ctx.conversation_id,
+                )
+            )
+        except Exception as exc:
+            logger.exception("send_document tool call failed")
+            return f"error: send_document failed ({exc})."
+
+        if response.sent:
+            return f"Documento '{response.filename}' enviado com sucesso."
+
+        return f"Falha ao enviar documento: {response.error or 'erro desconhecido'}"
+
+    return StructuredTool.from_function(
+        name="send_document",
+        description=(
+            "Envia um documento (PDF, imagem) previamente cadastrado ao cliente via Chatwoot. "
+            "Use quando o cliente pede um catálogo, planta, ficha técnica, etc."
+        ),
+        args_schema=SendDocumentArgs,
         func=run,
     )
 

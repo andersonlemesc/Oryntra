@@ -245,3 +245,10 @@ class ChatwootRuntimeResponse(BaseModel):
     specialist_id: int | None = None
     trace: list[TraceStep] = Field(default_factory=list)
     usage: RuntimeUsage = Field(default_factory=RuntimeUsage)
+
+
+class SendDocumentArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: int = Field(description="ID do documento a enviar (PDF, imagem, etc).")
+    caption: str = Field(default="", description="Texto descritivo que acompanha o documento.")

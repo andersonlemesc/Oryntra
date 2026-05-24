@@ -178,6 +178,24 @@ class QueryProductsResponse(BaseModel):
     total: int
 
 
+class SendDocumentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_run_id: int
+    document_id: int
+    caption: str = ""
+    conversation_id: int
+
+
+class SendDocumentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sent: bool
+    filename: str
+    error: str | None = None
+
+
 def _post(path: str, payload: BaseModel) -> dict[str, Any]:
     base_url = settings.laravel_internal_base_url.rstrip("/")
 
@@ -237,4 +255,10 @@ def resolve_conversation(payload: ResolveConversationRequest) -> ResolveConversa
 def query_products(payload: QueryProductsRequest) -> QueryProductsResponse:
     return QueryProductsResponse.model_validate(
         _post("/api/internal/agent-tools/query-products", payload)
+    )
+
+
+def send_document(payload: SendDocumentRequest) -> SendDocumentResponse:
+    return SendDocumentResponse.model_validate(
+        _post("/api/internal/agent-tools/send-document", payload)
     )
