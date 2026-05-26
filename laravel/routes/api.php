@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\ChatwootWebhookController;
 use App\Http\Controllers\Internal\AgentRunResumeController;
 use App\Http\Controllers\Internal\GetChatwootContactController;
+use App\Http\Controllers\Internal\QueryDocumentsController;
 use App\Http\Controllers\Internal\QueryProductsController;
 use App\Http\Controllers\Internal\RequestHumanHandoffController;
 use App\Http\Controllers\Internal\RequestTeamHandoffController;
@@ -39,6 +40,9 @@ Route::middleware('internal.runtime')->group(function (): void {
 
     Route::post('internal/agent-tools/query-products', QueryProductsController::class)
         ->name('internal.agent-tools.query-products');
+
+    Route::post('internal/agent-tools/query-documents', QueryDocumentsController::class)
+        ->name('internal.agent-tools.query-documents');
 
     Route::post('internal/agent-tools/send-document', SendDocumentController::class)
         ->name('internal.agent-tools.send-document');

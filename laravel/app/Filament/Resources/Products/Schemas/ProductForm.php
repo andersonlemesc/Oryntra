@@ -63,19 +63,16 @@ class ProductForm
                             ->relationship('documents')
                             ->defaultItems(0)
                             ->schema([
+                                Hidden::make('workspace_id')
+                                    ->default(fn (): ?int => Filament::getTenant()?->getKey()),
                                 FileUpload::make('path')
                                     ->label('Arquivo')
                                     ->disk('s3')
                                     ->directory('documents')
                                     ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
                                     ->maxSize(20480)
-                                    ->afterStateUpdated(function ($state, $set): void {
-                                        if ($state) {
-                                            $set('original_filename', $state->getClientOriginalName());
-                                            $set('mime_type', $state->getMimeType());
-                                            $set('size_bytes', $state->getSize());
-                                        }
-                                    }),
+                                    ->required()
+                                    ->storeFileNamesIn('original_filename'),
                                 TextInput::make('original_filename')
                                     ->label('Nome do arquivo')
                                     ->maxLength(255),

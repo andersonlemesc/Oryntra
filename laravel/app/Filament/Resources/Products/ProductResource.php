@@ -53,7 +53,7 @@ class ProductResource extends Resource
         $tenant = Filament::getTenant();
 
         return parent::getEloquentQuery()
-            ->with('category')
+            ->with('category', 'documents')
             ->when($tenant !== null, fn (Builder $query): Builder => $query->where('workspace_id', $tenant->getKey()));
     }
 

@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from oryntra_agent.agent.tools import (
     GetContactRequest,
+    QueryDocumentsRequest,
     QueryProductsRequest,
     ResolveConversationRequest,
     SendDocumentRequest,
@@ -33,6 +34,7 @@ from oryntra_agent.agent.tools import (
     UpdateContactRequest,
     chatwoot_get_contact,
     chatwoot_update_contact,
+    query_documents,
     query_products,
     resolve_conversation,
     send_document,
@@ -50,6 +52,7 @@ EXECUTABLE_TOOLS: frozenset[str] = frozenset(
         "update_contact_memory",
         "resolve_conversation",
         "query_products",
+        "query_documents",
         "send_document",
     }
 )
@@ -164,6 +167,9 @@ def build_specialist_tools(
 
     if "query_products" in allowed_tools:
         tools.append(_make_query_products_tool(ctx))
+
+    if "query_documents" in allowed_tools:
+        tools.append(_make_query_documents_tool(ctx))
 
     if "send_document" in allowed_tools:
         tools.append(_make_send_document_tool(ctx))
@@ -405,6 +411,12 @@ def _make_query_products_tool(ctx: ToolRuntimeContext) -> StructuredTool:
             lines.append(f"- {p['name']} ({price_str}) [{p.get('category', 'sem categoria')}]")
             if p.get("description"):
                 lines.append(f"  {p['description'][:100]}")
+            documents = p.get("documents") or []
+            for doc in documents:
+                lines.append(
+                    f"  Documento: {doc.get('original_filename', 'arquivo')} "
+                    f"(document_id={doc.get('id')}, document_type='product')"
+                )
 
         if response.total > len(response.products):
             lines.append(f"... e mais {response.total - len(response.products)} produtos.")
@@ -415,21 +427,88 @@ def _make_query_products_tool(ctx: ToolRuntimeContext) -> StructuredTool:
         name="query_products",
         description=(
             "Busca produtos do catalogo da empresa. Use para mostrar produtos ao cliente, "
-            "informar precos, ou ajudar a escolher. Retorna ate 20 produtos por padrao."
+            "informar precos, ou ajudar a escolher. Retorna ate 20 produtos por padrao. "
+            "Quando um produto tem documentos anexados, eles aparecem com document_id e "
+            "document_type='product' para uso com a tool send_document."
         ),
         args_schema=QueryProductsArgs,
         func=run,
     )
 
 
+class QueryDocumentsArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str | None = Field(
+        default=None, description="Termo de busca pelo titulo, descricao ou nome do arquivo."
+    )
+    category: str | None = Field(
+        default=None,
+        description="Filtrar por categoria (ex.: catalog, faq, manual, policy, general).",
+    )
+    limit: int = Field(default=20, description="Quantidade maxima de resultados.")
+
+
+def _make_query_documents_tool(ctx: ToolRuntimeContext) -> StructuredTool:
+    def run(
+        query: str | None = None,
+        category: str | None = None,
+        limit: int = 20,
+    ) -> str:
+        try:
+            response = query_documents(
+                QueryDocumentsRequest(
+                    workspace_id=ctx.workspace_id,
+                    agent_id=ctx.agent_id,
+                    agent_run_id=ctx.agent_run_id,
+                    specialist_id=ctx.specialist_id,
+                    query=query,
+                    category=category,
+                    limit=limit,
+                )
+            )
+        except Exception as exc:
+            logger.exception("query_documents tool call failed")
+            return f"error: query_documents failed ({exc})."
+
+        if not response.documents:
+            return "Nenhum documento encontrado."
+
+        lines = ["Documentos encontrados:"]
+        for d in response.documents[:10]:
+            title = d.get("title") or d.get("original_filename", "documento")
+            lines.append(
+                f"- {title} [{d.get('category', 'sem categoria')}] "
+                f"(document_id={d.get('id')}, document_type='standalone')"
+            )
+
+        if response.total > len(response.documents):
+            lines.append(f"... e mais {response.total - len(response.documents)} documentos.")
+
+        return "\n".join(lines)
+
+    return StructuredTool.from_function(
+        name="query_documents",
+        description=(
+            "Busca documentos da biblioteca geral da empresa (catalogos, FAQs, manuais, "
+            "politicas) que podem ser enviados ao cliente. Retorna cada documento com "
+            "document_id e document_type='standalone' para uso com a tool send_document. "
+            "Use quando o cliente pede um material que nao esta vinculado a um produto."
+        ),
+        args_schema=QueryDocumentsArgs,
+        func=run,
+    )
+
+
 def _make_send_document_tool(ctx: ToolRuntimeContext) -> StructuredTool:
-    def run(document_id: int, caption: str = "") -> str:
+    def run(document_ids: list[int], document_type: str, caption: str = "") -> str:
         try:
             response = send_document(
                 SendDocumentRequest(
                     workspace_id=ctx.workspace_id,
                     agent_run_id=ctx.agent_run_id,
-                    document_id=document_id,
+                    document_ids=document_ids,
+                    document_type=document_type,
                     caption=caption,
                     conversation_id=ctx.conversation_id,
                 )
@@ -439,15 +518,19 @@ def _make_send_document_tool(ctx: ToolRuntimeContext) -> StructuredTool:
             return f"error: send_document failed ({exc})."
 
         if response.sent:
-            return f"Documento '{response.filename}' enviado com sucesso."
+            joined = ", ".join(response.filenames) or str(response.count)
+            return f"{response.count} documento(s) enviado(s) com sucesso: {joined}."
 
-        return f"Falha ao enviar documento: {response.error or 'erro desconhecido'}"
+        return f"Falha ao enviar documento(s): {response.error or 'erro desconhecido'}"
 
     return StructuredTool.from_function(
         name="send_document",
         description=(
-            "Envia um documento (PDF, imagem) previamente cadastrado ao cliente via Chatwoot. "
-            "Use quando o cliente pede um catálogo, planta, ficha técnica, etc."
+            "Envia um ou mais documentos (PDF, imagem) previamente cadastrados ao cliente "
+            "via Chatwoot, numa unica mensagem. Use quando o cliente pede um catálogo, "
+            "fotos de um produto, planta, ficha técnica, etc. Passe varios IDs em document_ids "
+            "para enviar uma galeria de uma vez. Informe document_type='product' para IDs "
+            "vindos de query_products ou document_type='standalone' para IDs de query_documents."
         ),
         args_schema=SendDocumentArgs,
         func=run,

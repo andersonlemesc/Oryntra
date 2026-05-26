@@ -103,29 +103,41 @@ class ChatwootAgentBotClient
     }
 
     /**
-     * @return array{message: array<string, mixed>}
+     * Sends a single Chatwoot message carrying one or more file attachments.
+     * Chatwoot accepts a repeated `attachments[]` multipart field.
+     *
+     * @param  array<int, array{path:string,filename:string,mime:string}> $attachments
+     * @return array<string, mixed>
      */
-    public function sendConversationMessageWithAttachment(
+    public function sendConversationMessageWithAttachments(
         int $conversationId,
         string $content,
-        string $filePath,
-        string $originalFilename,
-        string $mimeType,
+        array $attachments,
     ): array {
-        $response = Http::withHeaders($this->connection->chatwootHeaders())
-            ->timeout(30)
-            ->attach('attachments[]', file_get_contents($filePath), $originalFilename, ['Content-Type' => $mimeType])
-            ->post($this->url("conversations/{$conversationId}/messages"), [
-                'content' => $content,
-                'message_type' => 'outgoing',
-                'private' => false,
-            ]);
+        $request = Http::withHeaders($this->connection->chatwootHeaders())->timeout(60);
 
-        if ($response->failed()) {
-            throw new RuntimeException("Chatwoot sendConversationMessageWithAttachment({$conversationId}) failed: HTTP {$response->status()}");
+        foreach ($attachments as $attachment) {
+            $request = $request->attach(
+                'attachments[]',
+                file_get_contents($attachment['path']),
+                $attachment['filename'],
+                ['Content-Type' => $attachment['mime']],
+            );
         }
 
-        return $response->json('message', []);
+        // Multipart drops a boolean `false`, which makes Chatwoot persist a null
+        // `private` column (NOT NULL violation). Send the flag as the string 'false'.
+        $response = $request->post($this->url("conversations/{$conversationId}/messages"), [
+            'content' => $content,
+            'message_type' => 'outgoing',
+            'private' => 'false',
+        ]);
+
+        if ($response->failed()) {
+            throw new RuntimeException("Chatwoot sendConversationMessageWithAttachments({$conversationId}) failed: HTTP {$response->status()}");
+        }
+
+        return $response->json() ?? [];
     }
 
     private function url(string $path): string

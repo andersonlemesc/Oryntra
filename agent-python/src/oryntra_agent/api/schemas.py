@@ -195,7 +195,8 @@ class RuntimeResponsePayload(BaseModel):
 
     type: Literal["text", "send_document", "escalate", "clarify", "multi"]
     content: str | None = None
-    document_id: int | None = None
+    document_ids: list[int] | None = None
+    document_type: Literal["product", "standalone"] | None = None
     handoff_reason: str | None = None
     confidence: float = Field(ge=0, le=1)
 
@@ -250,5 +251,19 @@ class ChatwootRuntimeResponse(BaseModel):
 class SendDocumentArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    document_id: int = Field(description="ID do documento a enviar (PDF, imagem, etc).")
-    caption: str = Field(default="", description="Texto descritivo que acompanha o documento.")
+    document_ids: list[int] = Field(
+        description=(
+            "IDs dos documentos a enviar numa unica mensagem (PDF, imagem, etc). "
+            "Passe varios IDs para enviar um catalogo/galeria de uma vez. "
+            "Todos devem ser da mesma origem (mesmo document_type)."
+        ),
+        min_length=1,
+    )
+    document_type: Literal["product", "standalone"] = Field(
+        description=(
+            "Origem dos documentos: 'product' para IDs vindos de query_products "
+            "(anexados a um produto), 'standalone' para IDs da biblioteca geral "
+            "vindos de query_documents."
+        ),
+    )
+    caption: str = Field(default="", description="Texto descritivo que acompanha os documentos.")

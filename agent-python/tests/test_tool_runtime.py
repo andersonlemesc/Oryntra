@@ -374,3 +374,167 @@ def test_tool_loop_handles_tool_exception(monkeypatch) -> None:
 
     assert result.text == "Tive um problema mas continuo aqui."
     assert result.tool_calls[0]["output"].startswith("error: ")
+
+
+def test_build_specialist_tools_builds_query_documents_without_contact() -> None:
+    tools = build_specialist_tools(
+        ["query_documents"],
+        make_ctx(contact_id=None),
+    )
+
+    names = sorted(tool.name for tool in tools)
+    assert names == ["query_documents"]
+
+
+def test_query_products_output_includes_attached_documents(monkeypatch) -> None:
+    def fake_query_products(payload):
+        class FakeResponse:
+            def __init__(self) -> None:
+                self.products = [
+                    {
+                        "name": "Apartamento 101",
+                        "price": 250000.0,
+                        "category": "Imoveis",
+                        "description": "2 quartos.",
+                        "documents": [
+                            {"id": 7, "original_filename": "planta-101.pdf"},
+                        ],
+                    }
+                ]
+                self.total = 1
+
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "oryntra_agent.agent.tool_runtime.query_products",
+        fake_query_products,
+    )
+
+    tools = build_specialist_tools(["query_products"], make_ctx(contact_id=None))
+
+    first = AIMessage(
+        content="",
+        tool_calls=[{"id": "c1", "name": "query_products", "args": {"query": "apartamento"}}],
+    )
+    second = AIMessage(content="Segue a planta.")
+
+    chat_model = MagicMock()
+    bound = MagicMock()
+    bound.invoke.side_effect = [first, second]
+    chat_model.bind_tools.return_value = bound
+
+    result = run_specialist_tool_loop(
+        chat_model=chat_model,
+        tools=tools,
+        system_prompt="system",
+        user_prompt="tem planta do apartamento?",
+    )
+
+    output = result.tool_calls[0]["output"]
+    assert "document_id=7" in output
+    assert "document_type='product'" in output
+    assert "planta-101.pdf" in output
+
+
+def test_tool_loop_dispatches_query_documents(monkeypatch) -> None:
+    captured_payloads: list[Any] = []
+
+    def fake_query_documents(payload):
+        captured_payloads.append(payload)
+
+        class FakeResponse:
+            def __init__(self) -> None:
+                self.documents = [
+                    {"id": 12, "title": "Catalogo 2026", "category": "catalog"},
+                ]
+                self.total = 1
+
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "oryntra_agent.agent.tool_runtime.query_documents",
+        fake_query_documents,
+    )
+
+    tools = build_specialist_tools(["query_documents"], make_ctx(contact_id=None))
+
+    first = AIMessage(
+        content="",
+        tool_calls=[{"id": "d1", "name": "query_documents", "args": {"category": "catalog"}}],
+    )
+    second = AIMessage(content="Achei o catalogo.")
+
+    chat_model = MagicMock()
+    bound = MagicMock()
+    bound.invoke.side_effect = [first, second]
+    chat_model.bind_tools.return_value = bound
+
+    result = run_specialist_tool_loop(
+        chat_model=chat_model,
+        tools=tools,
+        system_prompt="system",
+        user_prompt="tem catalogo?",
+    )
+
+    output = result.tool_calls[0]["output"]
+    assert "document_id=12" in output
+    assert "document_type='standalone'" in output
+    assert captured_payloads[0].category == "catalog"
+    assert captured_payloads[0].specialist_id == 5
+
+
+def test_send_document_passes_document_type(monkeypatch) -> None:
+    captured_payloads: list[Any] = []
+
+    def fake_send_document(payload):
+        captured_payloads.append(payload)
+
+        class FakeResponse:
+            sent = True
+            count = 2
+            error = None
+
+            def __init__(self) -> None:
+                self.filenames = ["foto-1.jpg", "foto-2.jpg"]
+
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "oryntra_agent.agent.tool_runtime.send_document",
+        fake_send_document,
+    )
+
+    tools = build_specialist_tools(["send_document"], make_ctx(contact_id=None))
+
+    first = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": "s1",
+                "name": "send_document",
+                "args": {
+                    "document_ids": [7, 8],
+                    "document_type": "product",
+                    "caption": "Fotos da bike",
+                },
+            }
+        ],
+    )
+    second = AIMessage(content="Enviei as fotos.")
+
+    chat_model = MagicMock()
+    bound = MagicMock()
+    bound.invoke.side_effect = [first, second]
+    chat_model.bind_tools.return_value = bound
+
+    result = run_specialist_tool_loop(
+        chat_model=chat_model,
+        tools=tools,
+        system_prompt="system",
+        user_prompt="manda as fotos da bike",
+    )
+
+    assert "foto-1.jpg" in result.tool_calls[0]["output"]
+    assert "foto-2.jpg" in result.tool_calls[0]["output"]
+    assert captured_payloads[0].document_ids == [7, 8]
+    assert captured_payloads[0].document_type == "product"

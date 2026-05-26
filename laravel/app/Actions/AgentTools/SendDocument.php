@@ -16,40 +16,51 @@ use Throwable;
 class SendDocument
 {
     /**
-     * @param  array{workspace_id:int,agent_run_id:int,document_id:int,caption:string,conversation_id:int} $payload
-     * @return array{sent:bool,filename:string,error?:string}
+     * Sends one or more documents to the customer as a single Chatwoot message
+     * with multiple attachments. All ids must share the same document_type.
+     *
+     * @param  array{workspace_id:int,agent_run_id:int,document_ids:array<int,int>,document_type:string,caption?:string,conversation_id:int} $payload
+     * @return array{sent:bool,filenames:array<int,string>,count:int,error?:string}
      */
     public function execute(array $payload): array
     {
         $workspaceId = $payload['workspace_id'];
-        $documentId = $payload['document_id'];
+        $documentIds = array_values(array_unique(array_map('intval', $payload['document_ids'])));
+        $documentType = $payload['document_type'];
         $caption = $payload['caption'] ?? '';
         $conversationId = $payload['conversation_id'];
 
-        $doc = ProductDocument::query()
-            ->where('workspace_id', $workspaceId)
-            ->where('id', $documentId)
-            ->first();
-
-        if ($doc === null) {
-            $doc = Document::query()
-                ->where('workspace_id', $workspaceId)
-                ->where('id', $documentId)
-                ->first();
-        }
-
-        if ($doc === null) {
+        if ($documentIds === []) {
             throw ValidationException::withMessages([
-                'document_id' => 'Document not found or not in workspace.',
+                'document_ids' => 'At least one document is required.',
             ]);
         }
 
         $s3Disk = Storage::disk('s3');
+        $docs = [];
 
-        if (! $s3Disk->exists($doc->path)) {
-            throw ValidationException::withMessages([
-                'document_id' => 'File not found in storage.',
-            ]);
+        foreach ($documentIds as $documentId) {
+            $doc = $this->resolveDocument($workspaceId, $documentId, $documentType);
+
+            if ($doc === null) {
+                throw ValidationException::withMessages([
+                    'document_ids' => "Document {$documentId} not found or not in workspace.",
+                ]);
+            }
+
+            if ($doc instanceof Document && ! $doc->isSendable()) {
+                throw ValidationException::withMessages([
+                    'document_ids' => "Document {$documentId} category is AI-knowledge-only and cannot be sent to the customer.",
+                ]);
+            }
+
+            if (! $s3Disk->exists($doc->path)) {
+                throw ValidationException::withMessages([
+                    'document_ids' => "File for document {$documentId} not found in storage.",
+                ]);
+            }
+
+            $docs[] = $doc;
         }
 
         $run = AgentRun::query()->find($payload['agent_run_id']);
@@ -61,39 +72,80 @@ class SendDocument
             ]);
         }
 
-        $localPath = $this->downloadToLocalTemp($doc->path, $doc->filename);
+        /** @var array<int, string> $filenames */
+        $filenames = array_map(fn (Document|ProductDocument $doc): string => $doc->original_filename, $docs);
+
+        $localPaths = [];
+        $attachments = [];
+
+        foreach ($docs as $doc) {
+            $localPath = $this->downloadToLocalTemp($doc->path, $doc->filename);
+            $localPaths[] = $localPath;
+            $attachments[] = [
+                'path' => $localPath,
+                'filename' => $doc->original_filename,
+                'mime' => $doc->mime_type,
+            ];
+        }
 
         try {
             $client = new ChatwootAgentBotClient($connection);
-            $client->sendConversationMessageWithAttachment(
+
+            // With multiple attachments the WhatsApp bridge repeats the message
+            // content as a caption on every image. Send the caption once as text,
+            // then deliver the gallery without a per-image caption.
+            $mediaCaption = $caption;
+            if (count($attachments) > 1 && $caption !== '') {
+                $client->sendConversationMessage($conversationId, $caption);
+                $mediaCaption = '';
+            }
+
+            $client->sendConversationMessageWithAttachments(
                 conversationId: $conversationId,
-                content: $caption,
-                filePath: $localPath,
-                originalFilename: $doc->original_filename,
-                mimeType: $doc->mime_type,
+                content: $mediaCaption,
+                attachments: $attachments,
             );
 
             return [
                 'sent' => true,
-                'filename' => $doc->original_filename,
+                'filenames' => $filenames,
+                'count' => count($filenames),
             ];
         } catch (Throwable $e) {
             Log::error('send_document.failed', [
                 'workspace_id' => $workspaceId,
-                'document_id' => $documentId,
+                'document_ids' => $documentIds,
                 'error' => $e->getMessage(),
             ]);
 
             return [
                 'sent' => false,
-                'filename' => $doc->original_filename,
+                'filenames' => $filenames,
+                'count' => count($filenames),
                 'error' => $e->getMessage(),
             ];
         } finally {
-            if (file_exists($localPath)) {
-                @unlink($localPath);
+            foreach ($localPaths as $localPath) {
+                if (file_exists($localPath)) {
+                    @unlink($localPath);
+                }
             }
         }
+    }
+
+    private function resolveDocument(int $workspaceId, int $documentId, string $documentType): Document|ProductDocument|null
+    {
+        if ($documentType === 'product') {
+            return ProductDocument::query()
+                ->where('workspace_id', $workspaceId)
+                ->where('id', $documentId)
+                ->first();
+        }
+
+        return Document::query()
+            ->where('workspace_id', $workspaceId)
+            ->where('id', $documentId)
+            ->first();
     }
 
     private function downloadToLocalTemp(string $s3Path, string $filename): string

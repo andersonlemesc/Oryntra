@@ -195,6 +195,53 @@ it('creates specialists scoped to the current Filament tenant', function () {
         ->and($handoffConfig['rules'][0]['keywords'])->toBe(['humano', 'atendente']);
 });
 
+it('reconciles document tools into the allowlist from the Documentos tab toggles', function () {
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+    $agent = Agent::factory()->supervisor()->for($workspace)->create();
+    $llmKey = AgentLlmKey::factory()->provider(AgentLlmProvider::OpenAI)->for($workspace)->create();
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(SpecialistsRelationManager::class, [
+        'ownerRecord' => $agent,
+        'pageClass' => EditAgent::class,
+    ])
+        ->callAction(TestAction::make(CreateAction::class)->table(), [
+            'name' => 'Vendas',
+            'status' => AgentSpecialistStatus::Active->value,
+            'role_prompt' => 'Vende e envia catalogos.',
+            'intent_keywords' => ['catalogo'],
+            'llm_key_id' => $llmKey->id,
+            'llm_model' => 'gpt-4.1-nano',
+            'llm_temperature' => 0.2,
+            'tools_allowlist' => [],
+            'document_tools_config' => [
+                'query_enabled' => true,
+                'send_enabled' => true,
+                'allowed_categories' => ['catalog', 'manual'],
+            ],
+            'priority' => 10,
+            'confidence_threshold' => 0.6,
+        ])
+        ->assertHasNoFormErrors();
+
+    $specialist = AgentSpecialist::query()
+        ->where('agent_id', $agent->id)
+        ->where('name', 'Vendas')
+        ->firstOrFail();
+
+    expect($specialist->tools_allowlist)->toContain('query_documents')
+        ->and($specialist->tools_allowlist)->toContain('send_document');
+
+    $documentConfig = $specialist->getAttribute('document_tools_config');
+    assert(is_array($documentConfig));
+
+    expect($documentConfig['allowed_categories'])->toBe(['catalog', 'manual'])
+        ->and($documentConfig['send_enabled'])->toBeTrue()
+        ->and($documentConfig['query_enabled'])->toBeTrue();
+});
+
 it('configures Chatwoot handoff destination on the binding relation manager', function () {
     [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
     $agent = Agent::factory()->supervisor()->for($workspace)->create();

@@ -178,12 +178,32 @@ class QueryProductsResponse(BaseModel):
     total: int
 
 
+class QueryDocumentsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_id: int
+    agent_run_id: int
+    specialist_id: int | None = None
+    query: str | None = None
+    category: str | None = None
+    limit: int = 20
+
+
+class QueryDocumentsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    documents: list[dict[str, Any]]
+    total: int
+
+
 class SendDocumentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     workspace_id: int
     agent_run_id: int
-    document_id: int
+    document_ids: list[int]
+    document_type: Literal["product", "standalone"]
     caption: str = ""
     conversation_id: int
 
@@ -192,7 +212,8 @@ class SendDocumentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sent: bool
-    filename: str
+    filenames: list[str] = []
+    count: int = 0
     error: str | None = None
 
 
@@ -255,6 +276,12 @@ def resolve_conversation(payload: ResolveConversationRequest) -> ResolveConversa
 def query_products(payload: QueryProductsRequest) -> QueryProductsResponse:
     return QueryProductsResponse.model_validate(
         _post("/api/internal/agent-tools/query-products", payload)
+    )
+
+
+def query_documents(payload: QueryDocumentsRequest) -> QueryDocumentsResponse:
+    return QueryDocumentsResponse.model_validate(
+        _post("/api/internal/agent-tools/query-documents", payload)
     )
 
 

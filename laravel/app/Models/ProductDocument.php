@@ -25,6 +25,57 @@ class ProductDocument extends Model
     /** @use HasFactory<ProductDocumentFactory> */
     use HasFactory;
 
+    private const MIME_MAP = [
+        'pdf' => 'application/pdf',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+    ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $doc): void {
+            if (blank($doc->path)) {
+                return;
+            }
+            $doc->filename = basename($doc->path);
+            $extension = strtolower(pathinfo($doc->path, PATHINFO_EXTENSION));
+            $doc->mime_type = self::MIME_MAP[$extension] ?? 'application/octet-stream';
+        });
+
+        static::created(function (self $doc): void {
+            $doc->updateFileSize();
+        });
+
+        static::updating(function (self $doc): void {
+            if ($doc->isDirty('path') && filled($doc->path)) {
+                $doc->filename = basename($doc->path);
+                $extension = strtolower(pathinfo($doc->path, PATHINFO_EXTENSION));
+                $doc->mime_type = self::MIME_MAP[$extension] ?? 'application/octet-stream';
+            }
+        });
+
+        static::updated(function (self $doc): void {
+            if ($doc->isDirty('path')) {
+                $doc->updateFileSize();
+            }
+        });
+    }
+
+    protected function updateFileSize(): void
+    {
+        try {
+            if (filled($this->path) && Storage::disk('s3')->exists($this->path)) {
+                $size = Storage::disk('s3')->size($this->path);
+                if ($size !== false) {
+                    $this->forceFill(['size_bytes' => $size])->saveQuietly();
+                }
+            }
+        } catch (\Throwable) {
+        }
+    }
+
     protected $fillable = [
         'workspace_id',
         'product_id',

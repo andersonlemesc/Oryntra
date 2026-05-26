@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Agents\RelationManagers;
 
 use App\Enums\AgentLlmKeyStatus;
 use App\Enums\AgentSpecialistStatus;
+use App\Enums\DocumentCategory;
 use App\Models\AgentLlmKey;
 use App\Services\AgentTools\NativeTool;
 use App\Services\AgentTools\NativeToolRegistry;
@@ -282,6 +283,31 @@ class SpecialistsRelationManager extends RelationManager
                                     ]),
                             ]),
 
+                        Tab::make('Documentos')
+                            ->icon('heroicon-o-document-text')
+                            ->schema([
+                                Section::make('Biblioteca de documentos')
+                                    ->description('Permite a IA buscar e enviar documentos (PDFs, imagens) ao cliente via Chatwoot. Documentos de produto sao descobertos junto da consulta de produtos.')
+                                    ->schema([
+                                        Toggle::make('document_tools_config.query_enabled')
+                                            ->label('Permitir consultar documentos avulsos')
+                                            ->live()
+                                            ->default(false)
+                                            ->helperText('Quando habilitado, a tool query_documents sera adicionada automaticamente ao especialista.'),
+                                        Toggle::make('document_tools_config.send_enabled')
+                                            ->label('Permitir enviar documentos')
+                                            ->live()
+                                            ->default(false)
+                                            ->helperText('Quando habilitado, a tool send_document sera adicionada automaticamente ao especialista.'),
+                                        CheckboxList::make('document_tools_config.allowed_categories')
+                                            ->label('Categorias que a IA pode enviar')
+                                            ->options(DocumentCategory::sendableOptions())
+                                            ->columns(2)
+                                            ->visible(fn (Get $get): bool => (bool) $get('document_tools_config.send_enabled'))
+                                            ->helperText('Restringe quais categorias de documentos avulsos a IA pode enviar. Vazio = todas as categorias enviaveis. "Conhecimento IA" nunca e enviado.'),
+                                    ]),
+                            ]),
+
                         Tab::make('Encerramento')
                             ->icon('heroicon-o-check-circle')
                             ->schema([
@@ -540,6 +566,9 @@ class SpecialistsRelationManager extends RelationManager
         $productConfig = is_array($data['product_tools_config'] ?? null)
             ? $data['product_tools_config']
             : [];
+        $documentConfig = is_array($data['document_tools_config'] ?? null)
+            ? $data['document_tools_config']
+            : [];
         $memoryConfig = is_array($data['memory_config'] ?? null)
             ? $data['memory_config']
             : [];
@@ -559,12 +588,16 @@ class SpecialistsRelationManager extends RelationManager
             : [];
 
         $productQueryEnabled = (bool) ($productConfig['query_enabled'] ?? in_array(NativeTool::QueryProducts->value, $toolsAllowlist, true));
+        $documentQueryEnabled = (bool) ($documentConfig['query_enabled'] ?? in_array(NativeTool::QueryDocuments->value, $toolsAllowlist, true));
+        $documentSendEnabled = (bool) ($documentConfig['send_enabled'] ?? in_array(NativeTool::SendDocument->value, $toolsAllowlist, true));
 
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::RequestHumanHandoff->value, $humanEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::RequestTeamHandoff->value, $teamEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ChatwootGetContact->value, $contactUpdateEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ChatwootUpdateContact->value, $contactUpdateEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::QueryProducts->value, $productQueryEnabled);
+        $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::QueryDocuments->value, $documentQueryEnabled);
+        $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::SendDocument->value, $documentSendEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ResolveConversation->value, $resolutionEnabled);
 
         $handoffConfig['summary_llm_enabled'] = (bool) ($handoffConfig['summary_llm_enabled'] ?? false);
@@ -596,6 +629,15 @@ class SpecialistsRelationManager extends RelationManager
         $contactConfig['update_fields'] = ['name', 'email', 'phone_number'];
 
         $productConfig['query_enabled'] = $productQueryEnabled;
+
+        $documentConfig['query_enabled'] = $documentQueryEnabled;
+        $documentConfig['send_enabled'] = $documentSendEnabled;
+        $documentConfig['allowed_categories'] = $documentSendEnabled && is_array($documentConfig['allowed_categories'] ?? null)
+            ? array_values(array_filter(
+                $documentConfig['allowed_categories'],
+                fn (mixed $value): bool => is_string($value) && (DocumentCategory::tryFrom($value)?->isSendable() ?? false),
+            ))
+            : [];
 
         $memoryConfig['extraction_enabled'] = $memoryExtractionEnabled;
         $memoryConfig['injection_enabled'] = $memoryInjectionEnabled;
@@ -635,6 +677,7 @@ class SpecialistsRelationManager extends RelationManager
         $data['handoff_config'] = $handoffConfig;
         $data['contact_tools_config'] = $contactConfig;
         $data['product_tools_config'] = $productConfig;
+        $data['document_tools_config'] = $documentConfig;
         $data['memory_config'] = $memoryConfig;
         $data['resolution_config'] = $resolutionConfig;
         $data['intent_keywords'] = self::normalizeKeywordList($data['intent_keywords'] ?? null);

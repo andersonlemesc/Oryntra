@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Documents\Tables;
 
+use App\Enums\DocumentCategory;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class DocumentsTable
@@ -23,6 +25,8 @@ class DocumentsTable
                 TextColumn::make('category')
                     ->label('Categoria')
                     ->badge()
+                    ->formatStateUsing(fn (string $state): string => DocumentCategory::tryFrom($state)?->label() ?? $state)
+                    ->color(fn (string $state): string => DocumentCategory::tryFrom($state)?->isSendable() ? 'success' : 'gray')
                     ->sortable(),
                 TextColumn::make('original_filename')
                     ->label('Arquivo')
@@ -41,8 +45,11 @@ class DocumentsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
             ->filters([
-                //
+                SelectFilter::make('category')
+                    ->label('Categoria')
+                    ->options(DocumentCategory::options()),
             ])
             ->recordActions([
                 EditAction::make(),

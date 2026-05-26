@@ -15,7 +15,7 @@ class SendDocumentController extends Controller
         SendDocumentRequest $request,
         SendDocument $sendDocument,
     ): JsonResponse {
-        /** @var array{workspace_id:int,agent_run_id:int,document_id:int,caption?:string,conversation_id:int} $payload */
+        /** @var array{workspace_id:int,agent_run_id:int,document_ids:array<int,int>,document_type:string,caption?:string,conversation_id:int} $payload */
         $payload = $request->validated();
 
         $result = $sendDocument->execute($payload);

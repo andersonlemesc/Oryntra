@@ -166,10 +166,15 @@ class DispatchAgentRunJob implements ShouldQueue
         }
 
         if ($responseType === 'send_document') {
-            $documentId = intval($response['document_id'] ?? 0);
+            $documentType = $this->stringValue($response['document_type'] ?? null) ?: 'standalone';
             $caption = $content;
 
-            if ($documentId <= 0) {
+            $documentIds = array_values(array_filter(array_map(
+                'intval',
+                $this->arrayValue($response['document_ids'] ?? [intval($response['document_id'] ?? 0)]),
+            ), fn (int $id): bool => $id > 0));
+
+            if ($documentIds === []) {
                 $output['response_delivery'] = $this->skippedResponseDelivery('missing_document_id');
 
                 return $output;
@@ -189,7 +194,8 @@ class DispatchAgentRunJob implements ShouldQueue
                 $result = app(SendDocument::class)->execute([
                     'workspace_id' => $run->workspace_id,
                     'agent_run_id' => $run->id,
-                    'document_id' => $documentId,
+                    'document_ids' => $documentIds,
+                    'document_type' => $documentType,
                     'caption' => $caption,
                     'conversation_id' => (int) $run->conversation_id,
                 ]);
@@ -206,8 +212,9 @@ class DispatchAgentRunJob implements ShouldQueue
                     'sent_at' => (string) Carbon::now()->toISOString(),
                     'conversation_id' => (int) $run->conversation_id,
                     'response_type' => 'send_document',
-                    'document_id' => $documentId,
-                    'filename' => $result['filename'] ?? '',
+                    'document_ids' => $documentIds,
+                    'document_type' => $documentType,
+                    'filenames' => $result['filenames'] ?? [],
                 ];
             } catch (Throwable $exception) {
                 $output['response_delivery'] = $this->failedResponseDelivery($exception->getMessage());

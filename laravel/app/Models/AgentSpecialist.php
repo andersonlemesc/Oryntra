@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property array<string, mixed>  $handoff_config
  * @property array<string, mixed>  $contact_tools_config
  * @property array<string, mixed>  $product_tools_config
+ * @property array<string, mixed>  $document_tools_config
  * @property array<string, mixed>  $memory_config
  * @property array<string, mixed>  $resolution_config
  * @property int                   $priority
@@ -48,6 +49,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'handoff_config',
     'contact_tools_config',
     'product_tools_config',
+    'document_tools_config',
     'memory_config',
     'resolution_config',
     'priority',
@@ -111,6 +113,7 @@ class AgentSpecialist extends Model
             'handoff_config' => 'array',
             'contact_tools_config' => 'array',
             'product_tools_config' => 'array',
+            'document_tools_config' => 'array',
             'memory_config' => 'array',
             'resolution_config' => 'array',
             'llm_temperature' => 'float',

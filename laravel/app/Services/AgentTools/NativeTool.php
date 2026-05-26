@@ -18,5 +18,6 @@ enum NativeTool: string
     case UpdateContactMemory = 'update_contact_memory';
     case ResolveConversation = 'resolve_conversation';
     case QueryProducts = 'query_products';
+    case QueryDocuments = 'query_documents';
     case SendDocument = 'send_document';
 }

@@ -30,6 +30,11 @@ class ProductsTable
                     ->label('Categoria')
                     ->sortable()
                     ->toggleable(),
+                TextColumn::make('documents_count')
+                    ->label('Documentos')
+                    ->counts('documents')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('price')
                     ->label('Preco')
                     ->money('BRL')

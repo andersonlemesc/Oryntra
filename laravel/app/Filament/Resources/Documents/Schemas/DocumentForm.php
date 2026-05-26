@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Documents\Schemas;
 
+use App\Enums\DocumentCategory;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
@@ -24,15 +25,10 @@ class DocumentForm
                     ->schema([
                         Select::make('category')
                             ->label('Categoria')
-                            ->options([
-                                'general' => 'Geral',
-                                'faq' => 'FAQ',
-                                'policy' => 'Politica',
-                                'catalog' => 'Catalogo',
-                                'manual' => 'Manual',
-                            ])
+                            ->options(DocumentCategory::options())
                             ->required()
-                            ->default('general'),
+                            ->default(DocumentCategory::General->value)
+                            ->helperText('"Conhecimento IA" nao e enviado ao cliente; serve apenas de referencia para a IA.'),
                         TextInput::make('title')
                             ->label('Titulo')
                             ->required()
@@ -50,16 +46,7 @@ class DocumentForm
                             ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
                             ->maxSize(20480)
                             ->required()
-                            ->afterStateUpdated(function ($state, $set): void {
-                                if ($state) {
-                                    $set('original_filename', $state->getClientOriginalName());
-                                    $set('mime_type', $state->getMimeType());
-                                    $set('size_bytes', $state->getSize());
-                                }
-                            }),
-                        Hidden::make('original_filename'),
-                        Hidden::make('mime_type'),
-                        Hidden::make('size_bytes'),
+                            ->storeFileNamesIn('original_filename'),
                     ]),
             ]);
     }
