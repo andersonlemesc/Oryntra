@@ -47,9 +47,7 @@ async def handle_chatwoot_messages(
             existing.append(TraceStep(**step_data))
         response = response.model_copy(update={"trace": existing})
 
-    response = _merge_media_usage(response, result.media_usage)
-
-    return response
+    return _merge_media_usage(response, result.media_usage)
 
 
 def _inject_media_usage(media_usage: list | None) -> None:
@@ -60,11 +58,13 @@ def _inject_media_usage(media_usage: list | None) -> None:
     except LookupError:
         return
     for m in media_usage:
-        acc.add_media(LlmUsage(
-            input_tokens=m.input_tokens,
-            output_tokens=m.output_tokens,
-            latency_ms=m.latency_ms,
-        ))
+        acc.add_media(
+            LlmUsage(
+                input_tokens=m.input_tokens,
+                output_tokens=m.output_tokens,
+                latency_ms=m.latency_ms,
+            )
+        )
 
 
 def _merge_media_usage(
@@ -76,14 +76,20 @@ def _merge_media_usage(
     total_in = sum(m.input_tokens for m in media_usage)
     total_out = sum(m.output_tokens for m in media_usage)
     existing = response.usage
-    return response.model_copy(update={
-        "usage": existing.model_copy(update={
-            "media": existing.media.model_copy(update={
-                "input_tokens": existing.media.input_tokens + total_in,
-                "output_tokens": existing.media.output_tokens + total_out,
-            }),
-        }),
-    })
+    return response.model_copy(
+        update={
+            "usage": existing.model_copy(
+                update={
+                    "media": existing.media.model_copy(
+                        update={
+                            "input_tokens": existing.media.input_tokens + total_in,
+                            "output_tokens": existing.media.output_tokens + total_out,
+                        }
+                    ),
+                }
+            ),
+        }
+    )
 
 
 def _prepend_prefix(
