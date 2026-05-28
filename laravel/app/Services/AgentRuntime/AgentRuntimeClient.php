@@ -13,7 +13,9 @@ use App\Models\AgentLlmKey;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
 use App\Models\ContactMemory;
+use App\Models\ExternalTool;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -138,6 +140,7 @@ class AgentRuntimeClient
 
         /** @var array<string, mixed> $input */
         $supervisorCredential = $this->supervisorCredential($agent, $run->workspace_id);
+        $connectors = $this->workspaceConnectors($run->workspace_id);
 
         return [
             'workspace_id' => $run->workspace_id,
@@ -153,7 +156,7 @@ class AgentRuntimeClient
                 'llm_api_key' => $supervisorCredential['api_key'],
             ],
             'specialists' => $agent->specialists
-                ->map(function (AgentSpecialist $specialist) use ($run): array {
+                ->map(function (AgentSpecialist $specialist) use ($run, $connectors): array {
                     $specialistCredential = $this->specialistCredential($specialist, $run->workspace_id);
 
                     return [
@@ -167,6 +170,7 @@ class AgentRuntimeClient
                         'llm_api_key' => $specialistCredential['api_key'],
                         'llm_temperature' => $specialist->llm_temperature,
                         'tools' => $specialist->tools_allowlist,
+                        'external_tools' => $this->connectorsForSpecialist($specialist, $connectors),
                         'handoff_config' => $specialist->handoff_config,
                         'memory_config' => $this->normalizedMemoryConfig($specialist),
                         'intent_keywords' => $specialist->intent_keywords,
@@ -201,6 +205,49 @@ class AgentRuntimeClient
     private function specialistCredential(AgentSpecialist $specialist, int $workspaceId): array
     {
         return $this->credentialFromKey($specialist->llmKey, $workspaceId);
+    }
+
+    /**
+     * Enabled external-tool connectors of the workspace, keyed by slug.
+     *
+     * @return Collection<string, ExternalTool>
+     */
+    private function workspaceConnectors(int $workspaceId): Collection
+    {
+        return ExternalTool::query()
+            ->where('workspace_id', $workspaceId)
+            ->enabled()
+            ->get()
+            ->keyBy('slug');
+    }
+
+    /**
+     * Connector definitions the specialist may call (slug present in its
+     * allowlist). Secrets and base_url are intentionally excluded — Python only
+     * needs the slug, description and the param schema to build the tool.
+     *
+     * @param  Collection<string, ExternalTool>                                                         $connectors
+     * @return array<int, array{slug: string, description: string, param_schema: array<string, mixed>}>
+     */
+    private function connectorsForSpecialist(AgentSpecialist $specialist, Collection $connectors): array
+    {
+        $allowlist = is_array($specialist->tools_allowlist) ? $specialist->tools_allowlist : [];
+
+        $payload = [];
+
+        foreach ($allowlist as $slug) {
+            $connector = $connectors->get($slug);
+
+            if ($connector instanceof ExternalTool) {
+                $payload[] = [
+                    'slug' => $connector->slug,
+                    'description' => $connector->description,
+                    'param_schema' => $connector->paramSchema(),
+                ];
+            }
+        }
+
+        return $payload;
     }
 
     /**

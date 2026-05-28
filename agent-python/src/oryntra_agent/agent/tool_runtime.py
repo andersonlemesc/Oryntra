@@ -22,9 +22,10 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.tools import StructuredTool
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from oryntra_agent.agent.tools import (
+    CallExternalToolRequest,
     GetContactRequest,
     QueryDocumentsRequest,
     QueryProductsRequest,
@@ -32,6 +33,7 @@ from oryntra_agent.agent.tools import (
     SendDocumentRequest,
     UpdateContactMemoryRequest,
     UpdateContactRequest,
+    call_external_tool,
     chatwoot_get_contact,
     chatwoot_update_contact,
     query_documents,
@@ -40,7 +42,7 @@ from oryntra_agent.agent.tools import (
     send_document,
     update_contact_memory,
 )
-from oryntra_agent.api.schemas import SendDocumentArgs
+from oryntra_agent.api.schemas import ExternalToolConfig, SendDocumentArgs
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +151,7 @@ def build_specialist_tools(
     allowed_tools: list[str],
     ctx: ToolRuntimeContext,
     terminal_state: dict[str, Any] | None = None,
+    external_tools: list[ExternalToolConfig] | None = None,
 ) -> list[StructuredTool]:
     tools: list[StructuredTool] = []
 
@@ -174,7 +177,78 @@ def build_specialist_tools(
     if "send_document" in allowed_tools:
         tools.append(_make_send_document_tool(ctx))
 
+    for cfg in external_tools or []:
+        tools.append(build_external_tool(cfg, ctx))
+
     return tools
+
+
+_PARAM_TYPE_MAP: dict[str, type] = {
+    "string": str,
+    "integer": int,
+    "number": float,
+    "boolean": bool,
+}
+
+
+def _build_external_args_model(cfg: ExternalToolConfig) -> type[BaseModel]:
+    """Build a Pydantic args model from the admin-defined ``param_schema`` so the
+    LLM only ever fills declared parameters (extra keys forbidden)."""
+
+    properties = cfg.param_schema.get("properties") if isinstance(cfg.param_schema, dict) else None
+    fields: dict[str, Any] = {}
+
+    if isinstance(properties, dict):
+        for name, definition in properties.items():
+            if not isinstance(name, str) or not isinstance(definition, dict):
+                continue
+
+            py_type = _PARAM_TYPE_MAP.get(str(definition.get("type", "string")), str)
+            description = str(definition.get("description") or "")
+            required = bool(definition.get("required", False))
+
+            if required:
+                fields[name] = (py_type, Field(description=description))
+            else:
+                fields[name] = (py_type | None, Field(default=None, description=description))
+
+    return create_model(
+        f"ExternalTool_{cfg.slug}_Args",
+        __config__=ConfigDict(extra="forbid"),
+        **fields,
+    )
+
+
+def build_external_tool(cfg: ExternalToolConfig, ctx: ToolRuntimeContext) -> StructuredTool:
+    args_model = _build_external_args_model(cfg)
+
+    def run(**kwargs: Any) -> str:
+        args = {key: value for key, value in kwargs.items() if value is not None}
+
+        try:
+            response = call_external_tool(
+                CallExternalToolRequest(
+                    workspace_id=ctx.workspace_id,
+                    agent_id=ctx.agent_id,
+                    agent_run_id=ctx.agent_run_id,
+                    specialist_id=ctx.specialist_id,
+                    conversation_id=ctx.conversation_id,
+                    external_tool_slug=cfg.slug,
+                    args=args,
+                )
+            )
+        except Exception as exc:
+            logger.exception("external tool '%s' call failed", cfg.slug)
+            return f"error: external tool '{cfg.slug}' failed ({exc})."
+
+        return response.result
+
+    return StructuredTool.from_function(
+        name=cfg.slug,
+        description=cfg.description or f"Chama a API externa '{cfg.slug}'.",
+        args_schema=args_model,
+        func=run,
+    )
 
 
 def _make_update_contact_tool(ctx: ToolRuntimeContext) -> StructuredTool:
@@ -703,6 +777,7 @@ __all__ = [
     "LlmUsage",
     "ToolLoopResult",
     "ToolRuntimeContext",
+    "build_external_tool",
     "build_specialist_tools",
     "run_specialist_tool_loop",
     "track_llm_invoke",

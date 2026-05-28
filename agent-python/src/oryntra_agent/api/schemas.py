@@ -149,6 +149,20 @@ class ContactMemorySnapshot(BaseModel):
     conversation_id: int | None = None
 
 
+class ExternalToolConfig(BaseModel):
+    """Admin-defined HTTP connector exposed to the specialist as a dynamic tool.
+
+    Carries only what Python needs to build the tool schema — never base_url,
+    auth or secrets, which stay in Laravel.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str
+    description: str | None = None
+    param_schema: dict[str, Any] = Field(default_factory=dict)
+
+
 class SpecialistConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -162,6 +176,7 @@ class SpecialistConfig(BaseModel):
     llm_api_key: SecretStr | None = Field(default=None, exclude=True)
     llm_temperature: float = Field(ge=0, le=2)
     tools: list[str] = Field(default_factory=list)
+    external_tools: list[ExternalToolConfig] = Field(default_factory=list)
     handoff_config: HandoffConfig = Field(default_factory=HandoffConfig)
     memory_config: MemoryConfig = Field(default_factory=MemoryConfig)
     resolution_config: ResolutionConfig = Field(default_factory=ResolutionConfig)

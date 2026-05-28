@@ -18,6 +18,7 @@ use App\Models\AgentLlmKey;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
 use App\Models\ChatwootConnection;
+use App\Models\ExternalTool;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\AgentRuntime\AgentRuntimeClient;
@@ -240,6 +241,42 @@ it('reconciles document tools into the allowlist from the Documentos tab toggles
     expect($documentConfig['allowed_categories'])->toBe(['catalog', 'manual'])
         ->and($documentConfig['send_enabled'])->toBeTrue()
         ->and($documentConfig['query_enabled'])->toBeTrue();
+});
+
+it('reconciles external-tool connectors into the allowlist from the APIs externas tab', function () {
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+    $agent = Agent::factory()->supervisor()->for($workspace)->create();
+    $llmKey = AgentLlmKey::factory()->provider(AgentLlmProvider::OpenAI)->for($workspace)->create();
+    ExternalTool::factory()->for($workspace)->create(['slug' => 'query_orders', 'label' => 'Status do pedido']);
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(SpecialistsRelationManager::class, [
+        'ownerRecord' => $agent,
+        'pageClass' => EditAgent::class,
+    ])
+        ->callAction(TestAction::make(CreateAction::class)->table(), [
+            'name' => 'Pedidos',
+            'status' => AgentSpecialistStatus::Active->value,
+            'role_prompt' => 'Consulta pedidos via API.',
+            'intent_keywords' => ['pedido'],
+            'llm_key_id' => $llmKey->id,
+            'llm_model' => 'gpt-4.1-nano',
+            'llm_temperature' => 0.2,
+            'tools_allowlist' => [],
+            'external_tool_slugs' => ['query_orders'],
+            'priority' => 10,
+            'confidence_threshold' => 0.6,
+        ])
+        ->assertHasNoFormErrors();
+
+    $specialist = AgentSpecialist::query()
+        ->where('agent_id', $agent->id)
+        ->where('name', 'Pedidos')
+        ->firstOrFail();
+
+    expect($specialist->tools_allowlist)->toContain('query_orders');
 });
 
 it('configures Chatwoot handoff destination on the binding relation manager', function () {

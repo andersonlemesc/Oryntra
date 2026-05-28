@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\ChatwootWebhookController;
 use App\Http\Controllers\Internal\AgentRunResumeController;
+use App\Http\Controllers\Internal\CallExternalToolController;
 use App\Http\Controllers\Internal\GetChatwootContactController;
 use App\Http\Controllers\Internal\QueryDocumentsController;
 use App\Http\Controllers\Internal\QueryProductsController;
@@ -46,6 +47,9 @@ Route::middleware('internal.runtime')->group(function (): void {
 
     Route::post('internal/agent-tools/send-document', SendDocumentController::class)
         ->name('internal.agent-tools.send-document');
+
+    Route::post('internal/agent-tools/call-external-tool', CallExternalToolController::class)
+        ->name('internal.agent-tools.call-external-tool');
 
     Route::post('internal/agent-runs/{agentRun}/resume', AgentRunResumeController::class)
         ->name('internal.agent-runs.resume');

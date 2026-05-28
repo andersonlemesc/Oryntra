@@ -8,6 +8,8 @@ use App\Enums\AgentLlmKeyStatus;
 use App\Enums\AgentSpecialistStatus;
 use App\Enums\DocumentCategory;
 use App\Models\AgentLlmKey;
+use App\Models\AgentSpecialist;
+use App\Models\ExternalTool;
 use App\Services\AgentTools\NativeTool;
 use App\Services\AgentTools\NativeToolRegistry;
 use Filament\Actions\BulkActionGroup;
@@ -308,6 +310,28 @@ class SpecialistsRelationManager extends RelationManager
                                     ]),
                             ]),
 
+                        Tab::make('APIs externas')
+                            ->icon('heroicon-o-globe-alt')
+                            ->schema([
+                                Section::make('Connectors HTTP')
+                                    ->description('Habilita as APIs externas (connectors) que este especialista pode chamar. Cadastre os connectors em "APIs externas" no menu lateral.')
+                                    ->schema([
+                                        Select::make('external_tool_slugs')
+                                            ->label('Connectors habilitados')
+                                            ->multiple()
+                                            ->options(fn (): array => self::externalToolOptions())
+                                            ->afterStateHydrated(function (Select $component, ?AgentSpecialist $record): void {
+                                                if ($record === null) {
+                                                    return;
+                                                }
+
+                                                $allowlist = is_array($record->tools_allowlist) ? $record->tools_allowlist : [];
+                                                $component->state(array_values(array_intersect($allowlist, array_keys(self::externalToolOptions()))));
+                                            })
+                                            ->helperText('A IA so pode chamar connectors marcados aqui. A descricao cadastrada no connector orienta quando usa-lo.'),
+                                    ]),
+                            ]),
+
                         Tab::make('Encerramento')
                             ->icon('heroicon-o-check-circle')
                             ->schema([
@@ -539,6 +563,35 @@ class SpecialistsRelationManager extends RelationManager
     }
 
     /**
+     * Enabled connectors of the current workspace, keyed by slug.
+     *
+     * @return array<string, string>
+     */
+    private static function externalToolOptions(): array
+    {
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return [];
+        }
+
+        return ExternalTool::query()
+            ->where('workspace_id', $tenant->getKey())
+            ->enabled()
+            ->orderBy('label')
+            ->pluck('label', 'slug')
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function externalToolSlugs(): array
+    {
+        return array_keys(self::externalToolOptions());
+    }
+
+    /**
      * @return array<string, string>
      */
     private static function handoffPriorityOptions(): array
@@ -599,6 +652,16 @@ class SpecialistsRelationManager extends RelationManager
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::QueryDocuments->value, $documentQueryEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::SendDocument->value, $documentSendEnabled);
         $toolsAllowlist = self::reconcileTool($toolsAllowlist, NativeTool::ResolveConversation->value, $resolutionEnabled);
+
+        $selectedConnectors = is_array($data['external_tool_slugs'] ?? null)
+            ? $data['external_tool_slugs']
+            : [];
+
+        foreach (self::externalToolSlugs() as $slug) {
+            $toolsAllowlist = self::reconcileTool($toolsAllowlist, $slug, in_array($slug, $selectedConnectors, true));
+        }
+
+        unset($data['external_tool_slugs']);
 
         $handoffConfig['summary_llm_enabled'] = (bool) ($handoffConfig['summary_llm_enabled'] ?? false);
         $handoffConfig['default_priority'] = $handoffConfig['default_priority'] ?? 'normal';

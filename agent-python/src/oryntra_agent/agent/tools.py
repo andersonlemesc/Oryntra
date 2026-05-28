@@ -217,6 +217,27 @@ class SendDocumentResponse(BaseModel):
     error: str | None = None
 
 
+class CallExternalToolRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_id: int
+    agent_run_id: int
+    specialist_id: int | None = None
+    conversation_id: int | None = None
+    external_tool_slug: str
+    args: dict[str, Any] = {}
+
+
+class CallExternalToolResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result: str
+    success: bool
+    error: str | None = None
+    http_status: int | None = None
+
+
 def _post(path: str, payload: BaseModel) -> dict[str, Any]:
     base_url = settings.laravel_internal_base_url.rstrip("/")
 
@@ -288,4 +309,10 @@ def query_documents(payload: QueryDocumentsRequest) -> QueryDocumentsResponse:
 def send_document(payload: SendDocumentRequest) -> SendDocumentResponse:
     return SendDocumentResponse.model_validate(
         _post("/api/internal/agent-tools/send-document", payload)
+    )
+
+
+def call_external_tool(payload: CallExternalToolRequest) -> CallExternalToolResponse:
+    return CallExternalToolResponse.model_validate(
+        _post("/api/internal/agent-tools/call-external-tool", payload)
     )

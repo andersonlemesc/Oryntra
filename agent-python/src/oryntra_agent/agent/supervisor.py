@@ -794,19 +794,25 @@ def run_specialist_with_tool_calling(
     selected_specialist: SpecialistConfig,
 ) -> ToolLoopResult | None:
     """Run the specialist through a LangChain bind_tools loop when it has
-    any executable tool in its allowlist. Returns None when no executable
-    tools are configured, so the caller can fall back to the legacy
-    structured-decision path."""
+    any executable native tool in its allowlist or any external-tool connector.
+    Returns None when neither is configured, so the caller can fall back to the
+    legacy structured-decision path."""
 
     allowed = [tool for tool in selected_specialist.tools if tool in EXECUTABLE_TOOLS]
+    external_tools = selected_specialist.external_tools
 
-    if not allowed:
+    if not allowed and not external_tools:
         return None
 
     ctx = _tool_runtime_context(payload, selected_specialist)
     terminal_state: dict[str, Any] = {}
 
-    tools = build_specialist_tools(allowed, ctx, terminal_state=terminal_state)
+    tools = build_specialist_tools(
+        allowed,
+        ctx,
+        terminal_state=terminal_state,
+        external_tools=external_tools,
+    )
 
     if not tools:
         return None

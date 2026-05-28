@@ -3,9 +3,9 @@
 > Indice vivo do que ja foi entregue e o que esta pendente.
 > Atualize ao concluir ou re-priorizar uma fase. Detalhes completos ficam em cada plano `YYYY-MM-DD-*.md` neste diretorio.
 
-## Estado atual (2026-05-24)
+## Estado atual (2026-05-27)
 
-Branch ativa: `develop` com fases 4–14.2 entregues. Pronta para testar em Chatwoot real.
+Branch ativa: `develop` com fases 4–15 entregues. Pronta para testar em Chatwoot real.
 
 ## Fases entregues
 
@@ -30,6 +30,7 @@ Branch ativa: `develop` com fases 4–14.2 entregues. Pronta para testar em Chat
 | 12.4 | mesmo plano | System prompt agora carrega `Dados do cliente em atendimento:` (name/email/phone_number/lead_status) + `Data e hora atuais:` (ISO + dia da semana em pt-BR, no `workspace.timezone`). `AgentRuntimeClient::contactPayload` expoe os campos basicos; `runtimeConfig` injeta `workspace_timezone`. Filament ganha `EditWorkspaceProfile` (nome/TZ/locale). `supervisor_opening_messages` tambem recebe os blocos injetados, e a instrucao "pergunte o nome" virou "use o nome ja injetado, so pergunte se nao houver". Resolve o caso em que IA pedia nome a cada conversa. |
 | 12.5 | mesmo plano | Aplicacao de label da conversa via Admin API. Chatwoot bloqueia agent_bot do `POST /conversations/{id}/labels` (`Access to this endpoint is not authorized for bots`). `ChatwootAdminApiClient::addConversationLabel` faz GET das labels existentes + POST com merge. `ApplyResolveConversationToChatwootJob` e `ApplyHumanHandoffToChatwootJob` usam admin client pro label step; sem admin token marcam `label=failed/skipped` com error claro. |
 | 12.6 | mesmo plano | Timeline Filament mostra nome do especialista (`Nome (#id)`) em vez do id puro. `AgentRunInfolist::traceSteps` faz pluck de `agent_specialists` e injeta `specialist_label` em cada step, com fallback pro `output.specialist_name` ja existente. |
+| 15 | `jaunty-rolling-mango` (plano local) | Connectors de API externa (HTTP genérico). Registro unificado `external_tools` (coluna `kind`, pensado pra MCP reusar) + log genérico `external_tool_call_logs`. Admin cadastra connector via Filament `ExternalToolResource` (slug snake_case, método CRUD, auth none/api_key/bearer/basic com `credentials` encrypted, params via Repeater tipado **ou** JSON avançado, extração jsonpath/template + truncamento). `ExternalToolExecutor` valida args contra schema, injeta auth+base_url, guarda scheme http/https (modelo confia-no-admin, permite IP interno), retry só GET, grava log. Endpoint `POST /api/internal/agent-tools/call-external-tool` + Action `CallExternalTool` (tenancy + allowlist do especialista). `AgentRuntimeClient` injeta `external_tools[]` (slug/description/param_schema, sem segredo). Python: `ExternalToolConfig` no `SpecialistConfig`, `build_external_tool` monta StructuredTool dinâmico via `create_model`, supervisor roda o loop mesmo com só connector. Aba "APIs externas" no especialista reconcilia slugs no `tools_allowlist`. Auto-executa (sem gate HITL). 297 Pest verdes; 7 pytest novos verdes (9 falhas pré-existentes de isolamento do checkpointer LangGraph, não relacionadas). |
 
 ## Fases pendentes
 
@@ -55,8 +56,8 @@ Branch ativa: `develop` com fases 4–14.2 entregues. Pronta para testar em Chat
 | 13 | **Trace latency real** | ✅ Entregue — `latency_ms` e `tokens` já populados nos trace steps. | Baixa | Nenhum |
 | 13.1 | **Tabela de produtos + tool query_products** | ✅ Entregue — Fase 13.1 completa com Filament resource, CSV import e tool. | Media | Nenhum |
 | 14 | **Send document via MinIO** | ✅ Entregue — Fase 14.4 completa: descoberta de documentos (`query_documents` + docs de produto no `query_products`), `document_type` para evitar colisão de IDs, purpose por categoria (`knowledge` não enviável), aba "Documentos" no especialista. |
-| 15 | **DB query tools whitelisted** | Tools `query_*` parametrizadas por workspace. Ex: `query_orders(customer_email)`, `query_invoice(invoice_id)`. Laravel valida payload + executa SELECT escopado + retorna rows tipadas. | Alta | Schema do DB externo + politica de seguranca |
-| 16 | **MCP servers por workspace** | Tabela `workspace_mcp_servers`. Admin cadastra URL + auth. Tools do MCP viram disponiveis no allowlist dos especialistas. Laravel atua como proxy + valida scopes. | Alta | Nenhum |
+| 15 | **Connectors de API externa (HTTP)** | ✅ Entregue — connector HTTP genérico definido em DB (`external_tools`), Filament CRUD, executor com auth/extração/log. Cobre o caso "query_orders/query_invoice" chamando a API do cliente (inclusive interna). DB-direct (SELECT escopado sem API) fica como ideia separada de menor prioridade. | Alta | Concluído |
+| 16 | **MCP servers por workspace** | Admin cadastra servidor MCP (URL + auth); tools do MCP entram no allowlist. **Reusa o registro `external_tools` (novo `kind='mcp'`) + `external_tool_call_logs` + dispatch do executor** montados na Fase 15 — falta o cliente MCP (handshake/list_tools) e a tradução de schema. | Alta | Fase 15 (feita) |
 | 17 | **Notificacao de handoff** | Email / Slack / Chatwoot notification quando run cai em `waiting_human`. Hoje admin so ve no painel. | Baixa-media | Conta SMTP ou webhook Slack |
 | 18 | **Trace polish** | Replay step-by-step com cursor, edicao inline de step, comparacao de runs. Hoje a timeline ja existe (Fase 9) mas e read-only. | Media | Fase 9 (feita) |
 | 19 | **Drag-and-drop priority especialistas** | UI Filament arrasta especialistas dentro do agent para reordenar `priority`. | Baixa | Nenhum |
