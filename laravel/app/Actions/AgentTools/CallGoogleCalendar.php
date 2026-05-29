@@ -144,11 +144,31 @@ class CallGoogleCalendar
     {
         $this->requireFields($args, ['summary', 'start', 'end'], NativeTool::GcalCreateEvent->value);
 
+        $start = $this->parseDate($args['start']);
+        $end = $this->parseDate($args['end']);
+        $timeZone = (string) ($args['time_zone'] ?? 'UTC');
+        $allowConflicts = (bool) ($args['allow_conflicts'] ?? false);
+
+        if (! $allowConflicts) {
+            $conflicts = $this->detectConflicts($client, $calendarId, $start, $end, $timeZone);
+            if ($conflicts !== []) {
+                $listed = array_map(
+                    fn (array $slot): string => "{$slot['start']} → {$slot['end']}",
+                    $conflicts,
+                );
+                throw ValidationException::withMessages([
+                    'args' => 'Conflito: ja existe evento no calendario nesse intervalo ('
+                        . implode('; ', $listed)
+                        . '). Use gcal_find_free_slots e proponha outro horario, ou passe allow_conflicts=true se o cliente quiser sobreposicao explicita.',
+                ]);
+            }
+        }
+
         $payload = [
             'summary' => (string) $args['summary'],
-            'start' => $this->parseDate($args['start']),
-            'end' => $this->parseDate($args['end']),
-            'time_zone' => (string) ($args['time_zone'] ?? 'UTC'),
+            'start' => $start,
+            'end' => $end,
+            'time_zone' => $timeZone,
         ];
 
         foreach (['description', 'location'] as $field) {
@@ -169,6 +189,16 @@ class CallGoogleCalendar
             : $notifyDefault;
 
         return $client->createEvent($calendarId, $payload, $notify);
+    }
+
+    /**
+     * @return list<array{start:string, end:string}>
+     */
+    private function detectConflicts(GoogleCalendarClient $client, string $calendarId, Carbon $start, Carbon $end, string $timeZone): array
+    {
+        $busy = $client->freeBusy([$calendarId], $start, $end, $timeZone);
+
+        return $busy[$calendarId] ?? [];
     }
 
     /**

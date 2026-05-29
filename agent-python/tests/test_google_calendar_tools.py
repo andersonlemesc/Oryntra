@@ -46,6 +46,23 @@ class TestArgsSchemas:
         )
         assert args.attendees == ["a@example.com", "b@example.com"]
 
+    def test_create_event_allow_conflicts_defaults_false(self) -> None:
+        args = GcalCreateEventArgs(
+            summary="Demo",
+            start="2026-06-01T10:00:00-03:00",
+            end="2026-06-01T11:00:00-03:00",
+        )
+        assert args.allow_conflicts is False
+
+    def test_create_event_accepts_explicit_allow_conflicts(self) -> None:
+        args = GcalCreateEventArgs(
+            summary="Demo",
+            start="2026-06-01T10:00:00-03:00",
+            end="2026-06-01T11:00:00-03:00",
+            allow_conflicts=True,
+        )
+        assert args.allow_conflicts is True
+
     def test_update_event_requires_event_id(self) -> None:
         with pytest.raises(ValidationError):
             GcalUpdateEventArgs(summary="x")  # type: ignore[call-arg]
