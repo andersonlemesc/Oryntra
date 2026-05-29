@@ -685,14 +685,6 @@ class GcalCreateEventArgs(BaseModel):
         default=None,
         description="Se True, envia email aos convidados. Se None, usa default do especialista.",
     )
-    allow_conflicts: bool = Field(
-        default=False,
-        description=(
-            "Se False (padrão), recusa criar quando há evento conflitando no intervalo. "
-            "Passe True APENAS se o cliente pedir explicitamente sobreposição "
-            "(ex.: 'agenda mesmo que esteja ocupado')."
-        ),
-    )
 
 
 class GcalUpdateEventArgs(BaseModel):
@@ -800,7 +792,6 @@ def _make_gcal_create_event_tool(ctx: ToolRuntimeContext) -> StructuredTool:
         attendees: list[str] | None = None,
         time_zone: str = "UTC",
         notify_attendees: bool | None = None,
-        allow_conflicts: bool = False,
     ) -> str:
         return _invoke_gcal(
             ctx,
@@ -814,7 +805,6 @@ def _make_gcal_create_event_tool(ctx: ToolRuntimeContext) -> StructuredTool:
                 "attendees": attendees,
                 "time_zone": time_zone,
                 "notify_attendees": notify_attendees,
-                "allow_conflicts": allow_conflicts,
             },
         )
 
@@ -822,11 +812,10 @@ def _make_gcal_create_event_tool(ctx: ToolRuntimeContext) -> StructuredTool:
         name="gcal_create_event",
         description=(
             "Cria um evento no Google Calendar do specialist. Use pra agendar reunião, "
-            "visita, ligação ou compromisso. Por padrão recusa se houver conflito no "
-            "intervalo — checa freebusy server-side antes de inserir. Confirme data/hora/"
-            "participantes com o cliente antes de criar — a ação é imediata e notifica "
-            "convidados por email por padrão. Passe allow_conflicts=true APENAS se o cliente "
-            "pedir sobreposição explícita."
+            "visita, ligação ou compromisso. Por padrão, se houver conflito no intervalo "
+            "(evento existente), o sistema bloqueia automaticamente — proponha outro horário. "
+            "Confirme data/hora/participantes com o cliente antes de criar — a ação é imediata "
+            "e notifica convidados por email."
         ),
         args_schema=GcalCreateEventArgs,
         func=run,

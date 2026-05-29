@@ -368,6 +368,11 @@ class SpecialistsRelationManager extends RelationManager
                                             ->default(true)
                                             ->visible(fn (Get $get): bool => (bool) $get('google_calendar_config.enabled'))
                                             ->helperText('Default p/ sendUpdates ao criar/editar/deletar eventos. O agente pode sobrescrever por chamada.'),
+                                        Toggle::make('google_calendar_config.allow_conflicts')
+                                            ->label('Permitir sobreposição de eventos')
+                                            ->default(false)
+                                            ->visible(fn (Get $get): bool => (bool) $get('google_calendar_config.enabled'))
+                                            ->helperText('Quando desligado (padrão), a IA é bloqueada de criar eventos em cima de compromissos existentes. Ligue só para agendas que aceitam paralelismo (plantão, open house).'),
                                     ]),
                             ]),
 
@@ -722,6 +727,7 @@ class SpecialistsRelationManager extends RelationManager
         $gcalConfig['connection_id'] = $gcalConnectionId;
         $gcalConfig['calendar_id'] = $gcalCalendarId;
         $gcalConfig['notify_attendees_default'] = (bool) ($gcalConfig['notify_attendees_default'] ?? true);
+        $gcalConfig['allow_conflicts'] = (bool) ($gcalConfig['allow_conflicts'] ?? false);
         $data['google_calendar_config'] = $gcalConfig;
 
         $handoffConfig['summary_llm_enabled'] = (bool) ($handoffConfig['summary_llm_enabled'] ?? false);

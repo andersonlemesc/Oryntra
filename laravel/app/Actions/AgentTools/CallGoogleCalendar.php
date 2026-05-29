@@ -50,6 +50,7 @@ class CallGoogleCalendar
         $connectionId = isset($config['connection_id']) ? (int) $config['connection_id'] : 0;
         $calendarId = (string) ($config['calendar_id'] ?? 'primary');
         $notifyDefault = (bool) ($config['notify_attendees_default'] ?? true);
+        $allowConflicts = (bool) ($config['allow_conflicts'] ?? false);
 
         $connection = $this->loadConnection($payload['workspace_id'], $connectionId);
 
@@ -62,7 +63,7 @@ class CallGoogleCalendar
 
         try {
             $client = new GoogleCalendarClient($connection, GoogleCalendarConfig::fromConfig());
-            $result = $this->dispatch($client, $toolName, $calendarId, $args, $notifyDefault);
+            $result = $this->dispatch($client, $toolName, $calendarId, $args, $notifyDefault, $allowConflicts);
             $eventIdForLog = $this->extractEventId($result);
             $success = true;
         } catch (GoogleCalendarException|Throwable $e) {
@@ -103,11 +104,11 @@ class CallGoogleCalendar
      * @param  array<string, mixed>                            $args
      * @return array<string, mixed>|list<array<string, mixed>>
      */
-    private function dispatch(GoogleCalendarClient $client, string $toolName, string $calendarId, array $args, bool $notifyDefault): array
+    private function dispatch(GoogleCalendarClient $client, string $toolName, string $calendarId, array $args, bool $notifyDefault, bool $allowConflicts): array
     {
         return match ($toolName) {
             NativeTool::GcalListEvents->value => $this->listEvents($client, $calendarId, $args),
-            NativeTool::GcalCreateEvent->value => $this->createEvent($client, $calendarId, $args, $notifyDefault),
+            NativeTool::GcalCreateEvent->value => $this->createEvent($client, $calendarId, $args, $notifyDefault, $allowConflicts),
             NativeTool::GcalUpdateEvent->value => $this->updateEvent($client, $calendarId, $args, $notifyDefault),
             NativeTool::GcalDeleteEvent->value => $this->deleteEvent($client, $calendarId, $args, $notifyDefault),
             NativeTool::GcalFindFreeSlots->value => $this->findFreeSlots($client, $calendarId, $args),
@@ -140,14 +141,13 @@ class CallGoogleCalendar
      * @param  array<string, mixed> $args
      * @return array<string, mixed>
      */
-    private function createEvent(GoogleCalendarClient $client, string $calendarId, array $args, bool $notifyDefault): array
+    private function createEvent(GoogleCalendarClient $client, string $calendarId, array $args, bool $notifyDefault, bool $allowConflicts): array
     {
         $this->requireFields($args, ['summary', 'start', 'end'], NativeTool::GcalCreateEvent->value);
 
         $start = $this->parseDate($args['start']);
         $end = $this->parseDate($args['end']);
         $timeZone = (string) ($args['time_zone'] ?? 'UTC');
-        $allowConflicts = (bool) ($args['allow_conflicts'] ?? false);
 
         if (! $allowConflicts) {
             $conflicts = $this->detectConflicts($client, $calendarId, $start, $end, $timeZone);
@@ -159,7 +159,7 @@ class CallGoogleCalendar
                 throw ValidationException::withMessages([
                     'args' => 'Conflito: ja existe evento no calendario nesse intervalo ('
                         . implode('; ', $listed)
-                        . '). Use gcal_find_free_slots e proponha outro horario, ou passe allow_conflicts=true se o cliente quiser sobreposicao explicita.',
+                        . '). Use gcal_find_free_slots e proponha outro horario ao cliente.',
                 ]);
             }
         }
