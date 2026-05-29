@@ -73,6 +73,18 @@ class UpdateChatwootContact
         }
 
         $localContact = $this->resolveLocalContact($payload, $connection->id);
+
+        $chatwootAttributes = $this->filterChanged($chatwootAttributes, $localContact);
+        $localAttributes = $this->filterChanged($localAttributes, $localContact);
+
+        if ($chatwootAttributes === [] && $localAttributes === []) {
+            return [
+                'status' => 'ok',
+                'contact' => $this->contactPayload($localContact),
+                'unchanged' => true,
+            ];
+        }
+
         $remote = null;
 
         if ($chatwootAttributes !== []) {
@@ -101,7 +113,49 @@ class UpdateChatwootContact
         return [
             'status' => 'ok',
             'contact' => $remote ?? $this->contactPayload($localContact->refresh()),
+            'unchanged' => false,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed> $attributes
+     * @return array<string, mixed>
+     */
+    private function filterChanged(array $attributes, Contact $contact): array
+    {
+        $changed = [];
+        foreach ($attributes as $field => $value) {
+            if (! $this->isDifferent($field, $value, $contact->{$field} ?? null)) {
+                continue;
+            }
+            $changed[$field] = $value;
+        }
+
+        return $changed;
+    }
+
+    private function isDifferent(string $field, mixed $incoming, mixed $current): bool
+    {
+        return $this->normalize($field, $incoming) !== $this->normalize($field, $current);
+    }
+
+    private function normalize(string $field, mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        $value = trim((string) $value);
+
+        if ($field === 'email') {
+            return mb_strtolower($value);
+        }
+
+        if ($field === 'phone_number') {
+            return preg_replace('/[\s\-().]/', '', $value) ?? $value;
+        }
+
+        return $value;
     }
 
     /**

@@ -10,8 +10,11 @@ use App\Enums\DocumentCategory;
 use App\Models\AgentLlmKey;
 use App\Models\AgentSpecialist;
 use App\Models\ExternalTool;
+use App\Models\GoogleCalendarConnection;
 use App\Services\AgentTools\NativeTool;
 use App\Services\AgentTools\NativeToolRegistry;
+use App\Services\GoogleCalendar\GoogleCalendarClient;
+use App\Services\GoogleCalendar\GoogleCalendarConfig;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -34,6 +37,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class SpecialistsRelationManager extends RelationManager
 {
@@ -329,6 +333,41 @@ class SpecialistsRelationManager extends RelationManager
                                                 $component->state(array_values(array_intersect($allowlist, array_keys(self::externalToolOptions()))));
                                             })
                                             ->helperText('A IA so pode chamar connectors marcados aqui. A descricao cadastrada no connector orienta quando usa-lo.'),
+                                    ]),
+                            ]),
+
+                        Tab::make('Google Calendar')
+                            ->icon('heroicon-o-calendar-days')
+                            ->schema([
+                                Section::make('Acesso à agenda')
+                                    ->description('Permite o especialista listar, criar, editar, deletar eventos e buscar horários livres no Google Calendar. Cadastre conexões em "Integrações > Google Calendar" no menu lateral.')
+                                    ->schema([
+                                        Toggle::make('google_calendar_config.enabled')
+                                            ->label('Habilitar Google Calendar')
+                                            ->live()
+                                            ->default(false)
+                                            ->helperText('Adiciona as 5 tools gcal_* ao especialista.'),
+                                        Select::make('google_calendar_config.connection_id')
+                                            ->label('Conexão')
+                                            ->options(fn (): array => self::googleCalendarConnectionOptions())
+                                            ->visible(fn (Get $get): bool => (bool) $get('google_calendar_config.enabled'))
+                                            ->required(fn (Get $get): bool => (bool) $get('google_calendar_config.enabled'))
+                                            ->live()
+                                            ->helperText('Apenas conexões ativas do workspace atual.'),
+                                        Select::make('google_calendar_config.calendar_id')
+                                            ->label('Calendário')
+                                            ->options(fn (Get $get): array => self::googleCalendarCalendarOptions($get('google_calendar_config.connection_id')))
+                                            ->visible(fn (Get $get): bool => (bool) $get('google_calendar_config.enabled')
+                                                && filled($get('google_calendar_config.connection_id')))
+                                            ->required(fn (Get $get): bool => (bool) $get('google_calendar_config.enabled')
+                                                && filled($get('google_calendar_config.connection_id')))
+                                            ->searchable()
+                                            ->helperText('Qual calendário da conexão escolhida. Carregado em tempo real do Google.'),
+                                        Toggle::make('google_calendar_config.notify_attendees_default')
+                                            ->label('Notificar convidados por padrão')
+                                            ->default(true)
+                                            ->visible(fn (Get $get): bool => (bool) $get('google_calendar_config.enabled'))
+                                            ->helperText('Default p/ sendUpdates ao criar/editar/deletar eventos. O agente pode sobrescrever por chamada.'),
                                     ]),
                             ]),
 
@@ -663,6 +702,28 @@ class SpecialistsRelationManager extends RelationManager
 
         unset($data['external_tool_slugs']);
 
+        $gcalConfig = is_array($data['google_calendar_config'] ?? null)
+            ? $data['google_calendar_config']
+            : [];
+        $gcalEnabled = (bool) ($gcalConfig['enabled'] ?? false);
+        $gcalConnectionId = $gcalEnabled && filled($gcalConfig['connection_id'] ?? null)
+            ? (int) $gcalConfig['connection_id']
+            : null;
+        $gcalCalendarId = $gcalEnabled && filled($gcalConfig['calendar_id'] ?? null)
+            ? (string) $gcalConfig['calendar_id']
+            : null;
+        $gcalReady = $gcalEnabled && $gcalConnectionId !== null && $gcalCalendarId !== null;
+
+        foreach (self::googleCalendarToolSlugs() as $slug) {
+            $toolsAllowlist = self::reconcileTool($toolsAllowlist, $slug, $gcalReady);
+        }
+
+        $gcalConfig['enabled'] = $gcalEnabled;
+        $gcalConfig['connection_id'] = $gcalConnectionId;
+        $gcalConfig['calendar_id'] = $gcalCalendarId;
+        $gcalConfig['notify_attendees_default'] = (bool) ($gcalConfig['notify_attendees_default'] ?? true);
+        $data['google_calendar_config'] = $gcalConfig;
+
         $handoffConfig['summary_llm_enabled'] = (bool) ($handoffConfig['summary_llm_enabled'] ?? false);
         $handoffConfig['default_priority'] = $handoffConfig['default_priority'] ?? 'normal';
         $handoffConfig['customer_message'] = $handoffConfig['customer_message']
@@ -785,6 +846,76 @@ class SpecialistsRelationManager extends RelationManager
         }
 
         return $toolsAllowlist;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function googleCalendarToolSlugs(): array
+    {
+        return [
+            NativeTool::GcalListEvents->value,
+            NativeTool::GcalCreateEvent->value,
+            NativeTool::GcalUpdateEvent->value,
+            NativeTool::GcalDeleteEvent->value,
+            NativeTool::GcalFindFreeSlots->value,
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function googleCalendarConnectionOptions(): array
+    {
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return [];
+        }
+
+        return GoogleCalendarConnection::query()
+            ->where('workspace_id', $tenant->getKey())
+            ->where('is_active', true)
+            ->orderBy('label')
+            ->pluck('label', 'id')
+            ->map(fn (mixed $label): string => (string) $label)
+            ->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function googleCalendarCalendarOptions(mixed $connectionId): array
+    {
+        if (! is_numeric($connectionId)) {
+            return [];
+        }
+
+        $tenant = Filament::getTenant();
+
+        $connection = GoogleCalendarConnection::query()
+            ->when($tenant !== null, fn ($q) => $q->where('workspace_id', $tenant->getKey()))
+            ->find((int) $connectionId);
+
+        if ($connection === null) {
+            return [];
+        }
+
+        try {
+            $client = new GoogleCalendarClient($connection, GoogleCalendarConfig::fromConfig());
+            $calendars = $client->listCalendars();
+        } catch (Throwable) {
+            $fallback = $connection->default_calendar_id ?? 'primary';
+
+            return [$fallback => $fallback . ' (não foi possível listar agora)'];
+        }
+
+        $options = [];
+        foreach ($calendars as $calendar) {
+            $options[$calendar['id']] = $calendar['summary'] . ($calendar['primary'] ? ' (primary)' : '');
+        }
+
+        return $options;
     }
 
     /**

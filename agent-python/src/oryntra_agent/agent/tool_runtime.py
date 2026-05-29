@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from oryntra_agent.agent.tools import (
     CallExternalToolRequest,
+    CallGoogleCalendarRequest,
     GetContactRequest,
     QueryDocumentsRequest,
     QueryProductsRequest,
@@ -34,6 +35,7 @@ from oryntra_agent.agent.tools import (
     UpdateContactMemoryRequest,
     UpdateContactRequest,
     call_external_tool,
+    call_google_calendar,
     chatwoot_get_contact,
     chatwoot_update_contact,
     query_documents,
@@ -56,6 +58,22 @@ EXECUTABLE_TOOLS: frozenset[str] = frozenset(
         "query_products",
         "query_documents",
         "send_document",
+        "gcal_list_events",
+        "gcal_create_event",
+        "gcal_update_event",
+        "gcal_delete_event",
+        "gcal_find_free_slots",
+    }
+)
+
+
+GCAL_TOOLS: frozenset[str] = frozenset(
+    {
+        "gcal_list_events",
+        "gcal_create_event",
+        "gcal_update_event",
+        "gcal_delete_event",
+        "gcal_find_free_slots",
     }
 )
 
@@ -176,6 +194,17 @@ def build_specialist_tools(
 
     if "send_document" in allowed_tools:
         tools.append(_make_send_document_tool(ctx))
+
+    if "gcal_list_events" in allowed_tools:
+        tools.append(_make_gcal_list_events_tool(ctx))
+    if "gcal_create_event" in allowed_tools:
+        tools.append(_make_gcal_create_event_tool(ctx))
+    if "gcal_update_event" in allowed_tools:
+        tools.append(_make_gcal_update_event_tool(ctx))
+    if "gcal_delete_event" in allowed_tools:
+        tools.append(_make_gcal_delete_event_tool(ctx))
+    if "gcal_find_free_slots" in allowed_tools:
+        tools.append(_make_gcal_find_free_slots_tool(ctx))
 
     for cfg in external_tools or []:
         tools.append(build_external_tool(cfg, ctx))
@@ -309,6 +338,12 @@ def _make_update_contact_tool(ctx: ToolRuntimeContext) -> StructuredTool:
         except Exception as exc:
             logger.exception("chatwoot_update_contact tool call failed")
             return f"error: chatwoot_update_contact failed ({exc})."
+
+        if response.unchanged:
+            return (
+                "noop: o contato ja possuia exatamente esses dados, nada foi atualizado. "
+                "NAO chame esta tool de novo para confirmar dado existente."
+            )
 
         return f"ok: contato atualizado. status={response.status}."
 
@@ -611,6 +646,271 @@ def _make_send_document_tool(ctx: ToolRuntimeContext) -> StructuredTool:
     )
 
 
+# ---------------------------------------------------------------------------
+# Google Calendar tools
+# ---------------------------------------------------------------------------
+
+
+class GcalListEventsArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    time_min: str = Field(
+        description="Início do intervalo (ISO 8601, ex.: 2026-06-01T00:00:00Z).",
+    )
+    time_max: str = Field(
+        description="Fim do intervalo (ISO 8601, ex.: 2026-06-08T23:59:59Z).",
+    )
+    query: str | None = Field(
+        default=None,
+        description="Filtro textual (opcional) que casa contra título/descrição/participantes.",
+    )
+    max_results: int = Field(default=25, ge=1, le=250, description="Quantidade máxima de eventos.")
+    time_zone: str = Field(default="UTC", description="Timezone IANA, ex.: America/Sao_Paulo.")
+
+
+class GcalCreateEventArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(description="Título do evento.")
+    start: str = Field(description="Início (ISO 8601 com timezone, ex.: 2026-06-01T10:00:00-03:00).")
+    end: str = Field(description="Fim (ISO 8601 com timezone).")
+    description: str | None = Field(default=None, description="Descrição/notas do evento.")
+    location: str | None = Field(default=None, description="Local físico ou link de reunião.")
+    attendees: list[str] | None = Field(
+        default=None,
+        description="Lista de emails dos convidados. Cada convidado recebe email do Google.",
+    )
+    time_zone: str = Field(default="UTC", description="Timezone IANA do evento.")
+    notify_attendees: bool | None = Field(
+        default=None,
+        description="Se True, envia email aos convidados. Se None, usa default do especialista.",
+    )
+
+
+class GcalUpdateEventArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: str = Field(description="ID do evento Google a atualizar (vindo de list_events).")
+    summary: str | None = Field(default=None, description="Novo título.")
+    description: str | None = Field(default=None, description="Nova descrição.")
+    location: str | None = Field(default=None, description="Novo local.")
+    start: str | None = Field(default=None, description="Novo início (ISO 8601).")
+    end: str | None = Field(default=None, description="Novo fim (ISO 8601).")
+    attendees: list[str] | None = Field(default=None, description="Nova lista de emails de convidados.")
+    time_zone: str | None = Field(default=None, description="Timezone IANA.")
+    notify_attendees: bool | None = Field(
+        default=None,
+        description="Notificar convidados sobre a mudança. None usa default.",
+    )
+
+
+class GcalDeleteEventArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: str = Field(description="ID do evento Google a deletar.")
+    notify_attendees: bool | None = Field(
+        default=None,
+        description="Notificar convidados sobre cancelamento. None usa default.",
+    )
+
+
+class GcalFindFreeSlotsArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    duration_minutes: int = Field(ge=5, description="Duração mínima do slot livre em minutos.")
+    range_start: str = Field(description="Início da janela de busca (ISO 8601).")
+    range_end: str = Field(description="Fim da janela de busca (ISO 8601).")
+    time_zone: str = Field(default="UTC", description="Timezone IANA.")
+    calendar_ids: list[str] | None = Field(
+        default=None,
+        description="Calendários adicionais pra cruzar busy. Vazio = apenas o calendário do specialist.",
+    )
+
+
+def _invoke_gcal(ctx: ToolRuntimeContext, tool_name: str, args: dict[str, Any]) -> str:
+    clean_args = {k: v for k, v in args.items() if v is not None}
+    try:
+        response = call_google_calendar(
+            CallGoogleCalendarRequest(
+                workspace_id=ctx.workspace_id,
+                agent_id=ctx.agent_id,
+                agent_run_id=ctx.agent_run_id,
+                specialist_id=int(ctx.specialist_id),  # type: ignore[arg-type]
+                conversation_id=ctx.conversation_id,
+                tool_name=tool_name,
+                args=clean_args,
+            )
+        )
+    except Exception as exc:
+        logger.exception("%s tool call failed", tool_name)
+        return f"error: {tool_name} failed ({exc})."
+
+    if not response.success:
+        return f"error: {tool_name} returned failure: {response.error or 'desconhecido'}"
+
+    return response.result
+
+
+def _make_gcal_list_events_tool(ctx: ToolRuntimeContext) -> StructuredTool:
+    def run(
+        time_min: str,
+        time_max: str,
+        query: str | None = None,
+        max_results: int = 25,
+        time_zone: str = "UTC",
+    ) -> str:
+        return _invoke_gcal(
+            ctx,
+            "gcal_list_events",
+            {
+                "time_min": time_min,
+                "time_max": time_max,
+                "query": query,
+                "max_results": max_results,
+                "time_zone": time_zone,
+            },
+        )
+
+    return StructuredTool.from_function(
+        name="gcal_list_events",
+        description=(
+            "Lista eventos do Google Calendar do specialist entre time_min e time_max. "
+            "Use pra checar agenda antes de propor horário, ou pra mostrar próximos compromissos."
+        ),
+        args_schema=GcalListEventsArgs,
+        func=run,
+    )
+
+
+def _make_gcal_create_event_tool(ctx: ToolRuntimeContext) -> StructuredTool:
+    def run(
+        summary: str,
+        start: str,
+        end: str,
+        description: str | None = None,
+        location: str | None = None,
+        attendees: list[str] | None = None,
+        time_zone: str = "UTC",
+        notify_attendees: bool | None = None,
+    ) -> str:
+        return _invoke_gcal(
+            ctx,
+            "gcal_create_event",
+            {
+                "summary": summary,
+                "start": start,
+                "end": end,
+                "description": description,
+                "location": location,
+                "attendees": attendees,
+                "time_zone": time_zone,
+                "notify_attendees": notify_attendees,
+            },
+        )
+
+    return StructuredTool.from_function(
+        name="gcal_create_event",
+        description=(
+            "Cria um evento no Google Calendar do specialist. Use pra agendar reunião, "
+            "visita, ligação ou compromisso. Confirme data/hora/participantes com o cliente "
+            "antes de criar — a ação é imediata e notifica convidados por email por padrão."
+        ),
+        args_schema=GcalCreateEventArgs,
+        func=run,
+    )
+
+
+def _make_gcal_update_event_tool(ctx: ToolRuntimeContext) -> StructuredTool:
+    def run(
+        event_id: str,
+        summary: str | None = None,
+        description: str | None = None,
+        location: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        attendees: list[str] | None = None,
+        time_zone: str | None = None,
+        notify_attendees: bool | None = None,
+    ) -> str:
+        return _invoke_gcal(
+            ctx,
+            "gcal_update_event",
+            {
+                "event_id": event_id,
+                "summary": summary,
+                "description": description,
+                "location": location,
+                "start": start,
+                "end": end,
+                "attendees": attendees,
+                "time_zone": time_zone,
+                "notify_attendees": notify_attendees,
+            },
+        )
+
+    return StructuredTool.from_function(
+        name="gcal_update_event",
+        description=(
+            "Atualiza um evento existente do Google Calendar (remarcar horário, mudar título, "
+            "ajustar convidados). Precisa do event_id retornado por gcal_list_events ou "
+            "gcal_create_event. Passe só os campos que mudaram."
+        ),
+        args_schema=GcalUpdateEventArgs,
+        func=run,
+    )
+
+
+def _make_gcal_delete_event_tool(ctx: ToolRuntimeContext) -> StructuredTool:
+    def run(event_id: str, notify_attendees: bool | None = None) -> str:
+        return _invoke_gcal(
+            ctx,
+            "gcal_delete_event",
+            {"event_id": event_id, "notify_attendees": notify_attendees},
+        )
+
+    return StructuredTool.from_function(
+        name="gcal_delete_event",
+        description=(
+            "Remove um evento do Google Calendar. Use quando o cliente cancelar um compromisso. "
+            "A ação é definitiva — confirme antes de chamar."
+        ),
+        args_schema=GcalDeleteEventArgs,
+        func=run,
+    )
+
+
+def _make_gcal_find_free_slots_tool(ctx: ToolRuntimeContext) -> StructuredTool:
+    def run(
+        duration_minutes: int,
+        range_start: str,
+        range_end: str,
+        time_zone: str = "UTC",
+        calendar_ids: list[str] | None = None,
+    ) -> str:
+        return _invoke_gcal(
+            ctx,
+            "gcal_find_free_slots",
+            {
+                "duration_minutes": duration_minutes,
+                "range_start": range_start,
+                "range_end": range_end,
+                "time_zone": time_zone,
+                "calendar_ids": calendar_ids,
+            },
+        )
+
+    return StructuredTool.from_function(
+        name="gcal_find_free_slots",
+        description=(
+            "Acha janelas livres na agenda do specialist (e opcionalmente em calendários "
+            "adicionais via calendar_ids) com pelo menos duration_minutes de duração, "
+            "dentro do intervalo [range_start, range_end]. Use pra propor horários ao cliente."
+        ),
+        args_schema=GcalFindFreeSlotsArgs,
+        func=run,
+    )
+
+
 @dataclass
 class LlmUsage:
     input_tokens: int = 0
@@ -773,6 +1073,7 @@ def track_llm_invoke(
 
 __all__ = [
     "EXECUTABLE_TOOLS",
+    "GCAL_TOOLS",
     "MAX_TOOL_ITERATIONS",
     "LlmUsage",
     "ToolLoopResult",

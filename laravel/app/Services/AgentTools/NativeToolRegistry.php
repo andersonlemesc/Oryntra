@@ -68,6 +68,26 @@ final class NativeToolRegistry
                 'label' => 'Enviar documento',
                 'description' => 'Envia um documento (PDF, imagem) ao cliente via Chatwoot.',
             ],
+            NativeTool::GcalListEvents->value => [
+                'label' => 'Google Calendar — listar eventos',
+                'description' => 'Lista eventos da agenda Google em um intervalo de tempo. Aceita filtro de texto.',
+            ],
+            NativeTool::GcalCreateEvent->value => [
+                'label' => 'Google Calendar — criar evento',
+                'description' => 'Cria um evento na agenda Google com título, início, fim e convidados opcionais.',
+            ],
+            NativeTool::GcalUpdateEvent->value => [
+                'label' => 'Google Calendar — editar evento',
+                'description' => 'Atualiza campos de um evento existente da agenda Google.',
+            ],
+            NativeTool::GcalDeleteEvent->value => [
+                'label' => 'Google Calendar — deletar evento',
+                'description' => 'Remove um evento da agenda Google.',
+            ],
+            NativeTool::GcalFindFreeSlots->value => [
+                'label' => 'Google Calendar — achar horários livres',
+                'description' => 'Busca janelas livres na agenda Google (FreeBusy) em um intervalo.',
+            ],
         ];
     }
 

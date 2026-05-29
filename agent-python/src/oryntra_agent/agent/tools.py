@@ -68,6 +68,8 @@ class ContactResponse(BaseModel):
 
     status: Literal["ok"]
     contact: dict[str, Any]
+    source: Literal["cache", "cache_stale", "chatwoot"] | None = None
+    unchanged: bool | None = None
 
 
 class UpdateContactRequest(BaseModel):
@@ -238,6 +240,27 @@ class CallExternalToolResponse(BaseModel):
     http_status: int | None = None
 
 
+class CallGoogleCalendarRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_id: int
+    agent_run_id: int
+    specialist_id: int
+    conversation_id: int | None = None
+    tool_name: str
+    args: dict[str, Any] = {}
+
+
+class CallGoogleCalendarResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result: str
+    success: bool
+    error: str | None = None
+    http_status: int | None = None
+
+
 def _post(path: str, payload: BaseModel) -> dict[str, Any]:
     base_url = settings.laravel_internal_base_url.rstrip("/")
 
@@ -315,4 +338,10 @@ def send_document(payload: SendDocumentRequest) -> SendDocumentResponse:
 def call_external_tool(payload: CallExternalToolRequest) -> CallExternalToolResponse:
     return CallExternalToolResponse.model_validate(
         _post("/api/internal/agent-tools/call-external-tool", payload)
+    )
+
+
+def call_google_calendar(payload: CallGoogleCalendarRequest) -> CallGoogleCalendarResponse:
+    return CallGoogleCalendarResponse.model_validate(
+        _post("/api/internal/agent-tools/call-google-calendar", payload)
     )

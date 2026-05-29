@@ -30,6 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property array<string, mixed>  $document_tools_config
  * @property array<string, mixed>  $memory_config
  * @property array<string, mixed>  $resolution_config
+ * @property array<string, mixed>  $google_calendar_config
  * @property int                   $priority
  * @property float                 $confidence_threshold
  * @property int|null              $fallback_specialist_id
@@ -52,6 +53,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'document_tools_config',
     'memory_config',
     'resolution_config',
+    'google_calendar_config',
     'priority',
     'confidence_threshold',
     'fallback_specialist_id',
@@ -116,6 +118,7 @@ class AgentSpecialist extends Model
             'document_tools_config' => 'array',
             'memory_config' => 'array',
             'resolution_config' => 'array',
+            'google_calendar_config' => 'array',
             'llm_temperature' => 'float',
             'priority' => 'integer',
             'confidence_threshold' => 'float',

@@ -47,4 +47,11 @@ return [
         'internal_base_url' => env('CHATWOOT_PLATFORM_BASE_URL'),
     ],
 
+    'google_calendar' => [
+        'client_id' => env('GOOGLE_CALENDAR_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CALENDAR_CLIENT_SECRET'),
+        'redirect_uri' => env('GOOGLE_CALENDAR_REDIRECT_URI'),
+        'application_name' => env('GOOGLE_CALENDAR_APP_NAME', 'Oryntra'),
+    ],
+
 ];

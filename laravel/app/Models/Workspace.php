@@ -37,6 +37,14 @@ class Workspace extends Model implements HasName
     }
 
     /**
+     * @return HasMany<GoogleCalendarConnection, $this>
+     */
+    public function googleCalendarConnections(): HasMany
+    {
+        return $this->hasMany(GoogleCalendarConnection::class);
+    }
+
+    /**
      * @return HasMany<Agent, $this>
      */
     public function agents(): HasMany

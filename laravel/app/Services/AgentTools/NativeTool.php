@@ -20,4 +20,9 @@ enum NativeTool: string
     case QueryProducts = 'query_products';
     case QueryDocuments = 'query_documents';
     case SendDocument = 'send_document';
+    case GcalListEvents = 'gcal_list_events';
+    case GcalCreateEvent = 'gcal_create_event';
+    case GcalUpdateEvent = 'gcal_update_event';
+    case GcalDeleteEvent = 'gcal_delete_event';
+    case GcalFindFreeSlots = 'gcal_find_free_slots';
 }
