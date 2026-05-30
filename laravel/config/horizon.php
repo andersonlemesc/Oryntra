@@ -106,6 +106,7 @@ return [
         'redis:chatwoot-send' => 60,
         'redis:agent' => 120,
         'redis:documents' => 600,
+        'redis:playground' => 200,
     ],
 
     /*
@@ -289,6 +290,18 @@ return [
             'timeout' => 1200,
             'backoff' => 60,
         ],
+
+        'playground-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['playground'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 2,
+            'memory' => 256,
+            'tries' => 1,
+            'timeout' => 200,
+            'backoff' => 5,
+        ],
     ],
 
     'environments' => [
@@ -300,6 +313,7 @@ return [
             'chatwoot-send-supervisor' => ['maxProcesses' => 4],
             'agent-supervisor' => ['maxProcesses' => 6],
             'documents-supervisor' => ['maxProcesses' => 2],
+            'playground-supervisor' => ['maxProcesses' => 4],
         ],
 
         'local' => [
@@ -310,6 +324,7 @@ return [
             'chatwoot-send-supervisor' => ['maxProcesses' => 1],
             'agent-supervisor' => ['maxProcesses' => 1],
             'documents-supervisor' => ['maxProcesses' => 1],
+            'playground-supervisor' => ['maxProcesses' => 1],
         ],
     ],
 
