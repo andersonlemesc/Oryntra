@@ -6,11 +6,16 @@ namespace App\Filament\Resources\AgentLlmKeys\Tables;
 
 use App\Enums\AgentLlmKeyStatus;
 use App\Enums\AgentLlmProvider;
+use App\Models\AgentLlmKey;
+use App\Services\Llm\LlmModelCatalog;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Throwable;
 
 class AgentLlmKeysTable
 {
@@ -39,10 +44,16 @@ class AgentLlmKeysTable
                         ? 'success'
                         : 'gray')
                     ->sortable(),
-                TextColumn::make('agents_count')
-                    ->label('Agentes')
-                    ->counts('agents')
+                TextColumn::make('specialists_count')
+                    ->label('Especialistas')
+                    ->counts('specialists')
                     ->sortable(),
+                TextColumn::make('models_count')
+                    ->label('Modelos')
+                    ->counts('models')
+                    ->placeholder('0')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('last_used_at')
                     ->label('Ultimo uso')
                     ->dateTime()
@@ -59,6 +70,28 @@ class AgentLlmKeysTable
                 //
             ])
             ->recordActions([
+                Action::make('syncModels')
+                    ->label('Sincronizar modelos')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('info')
+                    ->action(function (AgentLlmKey $record, LlmModelCatalog $catalog): void {
+                        try {
+                            $count = $catalog->sync($record);
+                        } catch (Throwable $e) {
+                            Notification::make()
+                                ->title('Falha ao sincronizar modelos')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title("{$count} modelos sincronizados")
+                            ->success()
+                            ->send();
+                    }),
                 EditAction::make(),
             ])
             ->toolbarActions([

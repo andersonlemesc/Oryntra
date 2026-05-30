@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 from oryntra_agent.agent.tools import (
     CallExternalToolRequest,
     CallGoogleCalendarRequest,
+    CallMcpToolRequest,
     GetContactRequest,
     QueryDocumentsRequest,
     QueryProductsRequest,
@@ -36,6 +37,7 @@ from oryntra_agent.agent.tools import (
     UpdateContactRequest,
     call_external_tool,
     call_google_calendar,
+    call_mcp_tool,
     chatwoot_get_contact,
     chatwoot_update_contact,
     query_documents,
@@ -44,7 +46,7 @@ from oryntra_agent.agent.tools import (
     send_document,
     update_contact_memory,
 )
-from oryntra_agent.api.schemas import ExternalToolConfig, SendDocumentArgs
+from oryntra_agent.api.schemas import ExternalToolConfig, McpServerRuntimeConfig, McpToolConfig, SendDocumentArgs
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +172,7 @@ def build_specialist_tools(
     ctx: ToolRuntimeContext,
     terminal_state: dict[str, Any] | None = None,
     external_tools: list[ExternalToolConfig] | None = None,
+    mcp_servers: list[McpServerRuntimeConfig] | None = None,
 ) -> list[StructuredTool]:
     tools: list[StructuredTool] = []
 
@@ -209,6 +212,10 @@ def build_specialist_tools(
     for cfg in external_tools or []:
         tools.append(build_external_tool(cfg, ctx))
 
+    for server in mcp_servers or []:
+        for tool_cfg in server.tools:
+            tools.append(build_mcp_tool(tool_cfg, ctx))
+
     return tools
 
 
@@ -220,11 +227,9 @@ _PARAM_TYPE_MAP: dict[str, type] = {
 }
 
 
-def _build_external_args_model(cfg: ExternalToolConfig) -> type[BaseModel]:
-    """Build a Pydantic args model from the admin-defined ``param_schema`` so the
-    LLM only ever fills declared parameters (extra keys forbidden)."""
-
-    properties = cfg.param_schema.get("properties") if isinstance(cfg.param_schema, dict) else None
+def _build_param_schema_args_model(model_name: str, param_schema: dict[str, Any]) -> type[BaseModel]:
+    """Build a Pydantic args model from a ``param_schema`` dict (extra keys forbidden)."""
+    properties = param_schema.get("properties") if isinstance(param_schema, dict) else None
     fields: dict[str, Any] = {}
 
     if isinstance(properties, dict):
@@ -242,10 +247,14 @@ def _build_external_args_model(cfg: ExternalToolConfig) -> type[BaseModel]:
                 fields[name] = (py_type | None, Field(default=None, description=description))
 
     return create_model(
-        f"ExternalTool_{cfg.slug}_Args",
+        model_name,
         __config__=ConfigDict(extra="forbid"),
         **fields,
     )
+
+
+def _build_external_args_model(cfg: ExternalToolConfig) -> type[BaseModel]:
+    return _build_param_schema_args_model(f"ExternalTool_{cfg.slug}_Args", cfg.param_schema)
 
 
 def build_external_tool(cfg: ExternalToolConfig, ctx: ToolRuntimeContext) -> StructuredTool:
@@ -275,6 +284,41 @@ def build_external_tool(cfg: ExternalToolConfig, ctx: ToolRuntimeContext) -> Str
     return StructuredTool.from_function(
         name=cfg.slug,
         description=cfg.description or f"Chama a API externa '{cfg.slug}'.",
+        args_schema=args_model,
+        func=run,
+    )
+
+
+def build_mcp_tool(cfg: McpToolConfig, ctx: ToolRuntimeContext) -> StructuredTool:
+    tool_id = f"{cfg.server_slug}__{cfg.tool_name}"
+    args_model = _build_param_schema_args_model(f"McpTool_{tool_id}_Args", cfg.param_schema)
+
+    def run(**kwargs: Any) -> str:
+        args = {key: value for key, value in kwargs.items() if value is not None}
+
+        try:
+            response = call_mcp_tool(
+                CallMcpToolRequest(
+                    workspace_id=ctx.workspace_id,
+                    agent_id=ctx.agent_id,
+                    agent_run_id=ctx.agent_run_id,
+                    specialist_id=ctx.specialist_id,
+                    conversation_id=ctx.conversation_id,
+                    server_slug=cfg.server_slug,
+                    session_id=cfg.session_id,
+                    tool_name=cfg.tool_name,
+                    args=args,
+                )
+            )
+        except Exception as exc:
+            logger.exception("mcp tool '%s' on server '%s' call failed", cfg.tool_name, cfg.server_slug)
+            return f"error: mcp tool '{cfg.tool_name}' on '{cfg.server_slug}' failed ({exc})."
+
+        return response.result
+
+    return StructuredTool.from_function(
+        name=tool_id,
+        description=cfg.description or f"Chama a tool '{cfg.tool_name}' no servidor MCP '{cfg.server_slug}'.",
         args_schema=args_model,
         func=run,
     )

@@ -20,4 +20,18 @@ enum AgentLlmProvider: string
             self::Local => 'Local',
         };
     }
+
+    /**
+     * Default API base URL for the provider. `null` when the provider has no
+     * canonical endpoint (Local must always supply its own base URL).
+     */
+    public function defaultBaseUrl(): ?string
+    {
+        return match ($this) {
+            self::OpenAI => 'https://api.openai.com/v1',
+            self::Anthropic => 'https://api.anthropic.com',
+            self::Gemini => 'https://generativelanguage.googleapis.com',
+            self::Local => null,
+        };
+    }
 }

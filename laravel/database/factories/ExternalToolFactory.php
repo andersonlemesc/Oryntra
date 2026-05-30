@@ -57,4 +57,19 @@ class ExternalToolFactory extends Factory
     {
         return $this->state(fn (): array => ['enabled' => false]);
     }
+
+    public function mcp(): static
+    {
+        return $this->state(fn (): array => [
+            'kind' => ExternalToolKind::Mcp,
+            'slug' => 'mcp_' . fake()->unique()->word(),
+            'config' => [
+                'base_url' => 'https://mcp.example.test/mcp',
+                'auth_type' => 'none',
+                'auth_config' => [],
+                'timeout_seconds' => 30,
+            ],
+            'credentials' => null,
+        ]);
+    }
 }

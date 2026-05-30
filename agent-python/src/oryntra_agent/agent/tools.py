@@ -345,3 +345,31 @@ def call_google_calendar(payload: CallGoogleCalendarRequest) -> CallGoogleCalend
     return CallGoogleCalendarResponse.model_validate(
         _post("/api/internal/agent-tools/call-google-calendar", payload)
     )
+
+
+class CallMcpToolRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_id: int
+    agent_run_id: int
+    specialist_id: int | None = None
+    conversation_id: int | None = None
+    server_slug: str
+    session_id: str | None = None
+    tool_name: str
+    args: dict[str, Any] = {}
+
+
+class CallMcpToolResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result: str
+    success: bool
+    error: str | None = None
+
+
+def call_mcp_tool(payload: CallMcpToolRequest) -> CallMcpToolResponse:
+    return CallMcpToolResponse.model_validate(
+        _post("/api/internal/agent-tools/call-mcp-tool", payload)
+    )

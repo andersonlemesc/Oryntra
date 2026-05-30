@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Enums\AgentLlmProvider;
 use App\Enums\AgentMode;
 use App\Enums\AgentResponseMode;
 use App\Enums\AgentStatus;
@@ -25,14 +24,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'locale',
     'timezone',
     'response_mode',
-    'llm_provider',
-    'llm_key_id',
-    'llm_model',
-    'llm_temperature',
-    'llm_max_tokens',
-    'system_prompt',
-    'behavior_prompt',
-    'fallback_message',
     'supervisor_prompt',
     'supervisor_llm_key_id',
     'supervisor_llm_model',
@@ -78,14 +69,6 @@ class Agent extends Model
     /**
      * @return BelongsTo<AgentLlmKey, $this>
      */
-    public function llmKey(): BelongsTo
-    {
-        return $this->belongsTo(AgentLlmKey::class, 'llm_key_id');
-    }
-
-    /**
-     * @return BelongsTo<AgentLlmKey, $this>
-     */
     public function supervisorLlmKey(): BelongsTo
     {
         return $this->belongsTo(AgentLlmKey::class, 'supervisor_llm_key_id');
@@ -124,9 +107,6 @@ class Agent extends Model
             'status' => AgentStatus::class,
             'mode' => AgentMode::class,
             'response_mode' => AgentResponseMode::class,
-            'llm_provider' => AgentLlmProvider::class,
-            'llm_temperature' => 'float',
-            'llm_max_tokens' => 'integer',
             'debounce_config' => 'array',
             'media_policy' => 'array',
             'guard_config' => 'array',

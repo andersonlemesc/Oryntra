@@ -47,14 +47,12 @@ it('shows supervisor fields only for supervisor agents', function () {
 
     Livewire::test(CreateAgent::class)
         ->assertFormFieldHidden('supervisor_llm_key_id')
-        ->assertFormFieldHidden('supervisor_llm_model')
+        ->assertFormFieldHidden('supervisor_llm_model__choice')
         ->assertFormFieldHidden('supervisor_prompt')
-        ->assertFormFieldVisible('llm_key_id')
         ->fillForm(['mode' => AgentMode::Supervisor->value])
         ->assertFormFieldVisible('supervisor_llm_key_id')
-        ->assertFormFieldVisible('supervisor_llm_model')
-        ->assertFormFieldVisible('supervisor_prompt')
-        ->assertFormFieldHidden('llm_key_id');
+        ->assertFormFieldVisible('supervisor_llm_model__choice')
+        ->assertFormFieldVisible('supervisor_prompt');
 });
 
 it('requires supervisor llm configuration when creating a supervisor agent', function () {
@@ -73,7 +71,7 @@ it('requires supervisor llm configuration when creating a supervisor agent', fun
         ->call('create')
         ->assertHasFormErrors([
             'supervisor_llm_key_id' => 'required',
-            'supervisor_llm_model' => 'required',
+            'supervisor_llm_model__choice' => 'required',
             'supervisor_prompt' => 'required',
         ]);
 });
@@ -116,7 +114,7 @@ it('requires runtime-ready llm fields for specialists created in the relation ma
             'status' => AgentSpecialistStatus::Active->value,
             'role_prompt' => 'Answer support questions.',
             'llm_key_id' => null,
-            'llm_model' => null,
+            'llm_model__choice' => null,
             'llm_temperature' => 0.2,
             'intent_keywords' => ['ajuda'],
             'tools_allowlist' => [],
@@ -125,7 +123,7 @@ it('requires runtime-ready llm fields for specialists created in the relation ma
         ])
         ->assertHasFormErrors([
             'llm_key_id' => 'required',
-            'llm_model' => 'required',
+            'llm_model__choice' => 'required',
         ]);
 });
 
@@ -148,6 +146,7 @@ it('creates specialists scoped to the current Filament tenant', function () {
             'role_prompt' => 'Answer support questions.',
             'intent_keywords' => ['ajuda', 'suporte'],
             'llm_key_id' => $llmKey->id,
+            'llm_model__choice' => '__custom__',
             'llm_model' => 'gpt-4.1-nano',
             'llm_temperature' => 0.2,
             'tools_allowlist' => [],
@@ -214,6 +213,7 @@ it('reconciles document tools into the allowlist from the Documentos tab toggles
             'role_prompt' => 'Vende e envia catalogos.',
             'intent_keywords' => ['catalogo'],
             'llm_key_id' => $llmKey->id,
+            'llm_model__choice' => '__custom__',
             'llm_model' => 'gpt-4.1-nano',
             'llm_temperature' => 0.2,
             'tools_allowlist' => [],
@@ -262,6 +262,7 @@ it('reconciles external-tool connectors into the allowlist from the APIs externa
             'role_prompt' => 'Consulta pedidos via API.',
             'intent_keywords' => ['pedido'],
             'llm_key_id' => $llmKey->id,
+            'llm_model__choice' => '__custom__',
             'llm_model' => 'gpt-4.1-nano',
             'llm_temperature' => 0.2,
             'tools_allowlist' => [],
@@ -512,11 +513,6 @@ function supervisorAdminUxAgentFormData(array $overrides = []): array
         'locale' => 'pt_BR',
         'timezone' => 'America/Sao_Paulo',
         'response_mode' => AgentResponseMode::Automatic->value,
-        'llm_provider' => AgentLlmProvider::OpenAI->value,
-        'llm_model' => 'gpt-4.1-nano',
-        'llm_temperature' => 0.2,
-        'llm_max_tokens' => 1024,
-        'system_prompt' => 'You are a helpful assistant.',
         'debounce_config' => [
             'enabled' => true,
             'window_seconds' => 8,

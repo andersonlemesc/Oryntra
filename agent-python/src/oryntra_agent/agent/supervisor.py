@@ -319,13 +319,15 @@ def route_node(state: SupervisorState) -> SupervisorState:
     routing_payload = payload_with_conversation_messages(payload, conversation_messages)
 
     if payload.agent_mode != "supervisor":
+        single = payload.specialists[0] if payload.specialists else None
+
         return {
-            "selected_specialist": None,
+            "selected_specialist": single.model_dump(mode="json") if single is not None else None,
             "confidence": 1.0,
             "reason": "single_agent",
             "turn_count": turn_count,
             "conversation_messages": conversation_messages,
-            "active_specialist_id": None,
+            "active_specialist_id": single.id if single is not None else None,
         }
 
     active_specialist = specialist_by_id(
@@ -384,9 +386,21 @@ def respond_node(state: SupervisorState) -> SupervisorState:
     response: ChatwootRuntimeResponse
 
     if payload.agent_mode != "supervisor":
-        response = single_agent_response(payload, turn_count=turn_count)
+        if selected_specialist is None:
+            response = single_agent_response(payload, turn_count=turn_count)
 
-        return response_state_update(state, response, None)
+            return response_state_update(state, response, None)
+
+        response = routed_specialist_response(
+            payload=payload,
+            selected_specialist=selected_specialist,
+            confidence=confidence,
+            reason=reason,
+            turn_count=turn_count,
+            allow_reroute=False,
+        )
+
+        return response_state_update(state, response, response.specialist_id)
 
     if selected_specialist is None:
         response = no_route_response(
@@ -800,8 +814,9 @@ def run_specialist_with_tool_calling(
 
     allowed = [tool for tool in selected_specialist.tools if tool in EXECUTABLE_TOOLS]
     external_tools = selected_specialist.external_tools
+    mcp_servers = selected_specialist.mcp_servers
 
-    if not allowed and not external_tools:
+    if not allowed and not external_tools and not mcp_servers:
         return None
 
     ctx = _tool_runtime_context(payload, selected_specialist)
@@ -812,6 +827,7 @@ def run_specialist_with_tool_calling(
         ctx,
         terminal_state=terminal_state,
         external_tools=external_tools,
+        mcp_servers=mcp_servers,
     )
 
     if not tools:
@@ -1439,6 +1455,7 @@ def supervisor_llm_credential_from_payload(payload: ChatwootRuntimeRequest) -> L
 
     return LlmCredential(
         provider=payload.supervisor.llm_provider,
+        base_url=payload.supervisor.llm_base_url,
         model=payload.supervisor.llm_model,
         api_key=api_key.get_secret_value(),
     )
@@ -1457,6 +1474,7 @@ def specialist_llm_credentials_from_payload(
 
         credentials[specialist.id] = LlmCredential(
             provider=specialist.llm_provider,
+            base_url=specialist.llm_base_url,
             model=specialist.llm_model,
             api_key=api_key.get_secret_value(),
         )
@@ -1465,25 +1483,39 @@ def specialist_llm_credentials_from_payload(
 
 
 def chat_model_for_credential(credential: LlmCredential, temperature: float) -> Any | None:
-    if credential.provider == "openai":
+    base_url = credential.base_url or None
+
+    if credential.provider in ("openai", "local"):
+        kwargs: dict[str, Any] = {}
+        if base_url is not None:
+            kwargs["base_url"] = base_url
         return ChatOpenAI(
             model=credential.model,
             api_key=credential.api_key,
             temperature=temperature,
+            **kwargs,
         )
 
     if credential.provider == "anthropic":
+        kwargs = {}
+        if base_url is not None:
+            kwargs["base_url"] = base_url
         return ChatAnthropic(
             model=credential.model,
             api_key=credential.api_key,
             temperature=temperature,
+            **kwargs,
         )
 
     if credential.provider == "gemini":
+        kwargs = {}
+        if base_url is not None:
+            kwargs["client_options"] = {"api_endpoint": base_url}
         return ChatGoogleGenerativeAI(
             model=credential.model,
             api_key=credential.api_key,
             temperature=temperature,
+            **kwargs,
         )
 
     return None

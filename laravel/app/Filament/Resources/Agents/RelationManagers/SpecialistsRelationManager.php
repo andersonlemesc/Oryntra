@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Agents\RelationManagers;
 
 use App\Enums\AgentLlmKeyStatus;
+use App\Enums\AgentLlmProvider;
+use App\Enums\AgentMode;
 use App\Enums\AgentSpecialistStatus;
 use App\Enums\DocumentCategory;
+use App\Enums\ExternalToolKind;
+use App\Filament\Support\LlmModelField;
+use App\Models\Agent;
 use App\Models\AgentLlmKey;
 use App\Models\AgentSpecialist;
 use App\Models\ExternalTool;
@@ -36,6 +41,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -44,6 +50,24 @@ class SpecialistsRelationManager extends RelationManager
     protected static string $relationship = 'specialists';
 
     protected static ?string $title = 'Especialistas';
+
+    public static function getTitle(Model $ownerRecord, string $pageClass): string
+    {
+        return $ownerRecord instanceof Agent && $ownerRecord->mode === AgentMode::Single
+            ? 'Configuracao'
+            : 'Especialistas';
+    }
+
+    /**
+     * Single-mode agents carry exactly one specialist and never route, so the
+     * routing fields and the add/delete affordances are hidden.
+     */
+    private function isSingleMode(): bool
+    {
+        $owner = $this->getOwnerRecord();
+
+        return $owner instanceof Agent && $owner->mode === AgentMode::Single;
+    }
 
     public function form(Schema $schema): Schema
     {
@@ -81,7 +105,8 @@ class SpecialistsRelationManager extends RelationManager
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Instrucao em texto que define o "papel" do especialista. Exemplo: "Voce e especialista em vendas. Tire duvidas sobre precos, planos e prazos. Nunca fale de suporte tecnico."'),
                                         TagsInput::make('intent_keywords')
                                             ->label('Palavras-chave de intencao')
-                                            ->required()
+                                            ->required(fn (): bool => ! $this->isSingleMode())
+                                            ->visible(fn (): bool => ! $this->isSingleMode())
                                             ->separator(',')
                                             ->helperText('Ajuda o roteamento deterministico quando o supervisor LLM nao estiver disponivel.')
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Lista de palavras que o cliente pode usar para indicar essa intencao. Ex.: para Vendas use "preco, comprar, cotacao, plano". Funciona como fallback se o supervisor LLM falhar.'),
@@ -99,11 +124,14 @@ class SpecialistsRelationManager extends RelationManager
                                             ->label('Chave LLM')
                                             ->options(fn (): array => self::llmKeyOptions())
                                             ->searchable()
+                                            ->live()
                                             ->required(),
-                                        TextInput::make('llm_model')
-                                            ->label('Modelo')
-                                            ->required()
-                                            ->maxLength(128),
+                                        ...LlmModelField::components(
+                                            'llm_model',
+                                            'llm_key_id',
+                                            required: true,
+                                            label: 'Modelo',
+                                        ),
                                         TextInput::make('llm_temperature')
                                             ->label('Temperature')
                                             ->numeric()
@@ -129,7 +157,8 @@ class SpecialistsRelationManager extends RelationManager
                                             ->label('Prioridade')
                                             ->numeric()
                                             ->default(100)
-                                            ->required()
+                                            ->required(fn (): bool => ! $this->isSingleMode())
+                                            ->visible(fn (): bool => ! $this->isSingleMode())
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Em caso de empate de intencao, o especialista com menor numero atende primeiro. Use 100 como padrao e ajuste somente se precisar forcar ordem.'),
                                         TextInput::make('confidence_threshold')
                                             ->label('Threshold confianca')
@@ -138,7 +167,8 @@ class SpecialistsRelationManager extends RelationManager
                                             ->maxValue(1)
                                             ->step(0.01)
                                             ->default(0.6)
-                                            ->required()
+                                            ->required(fn (): bool => ! $this->isSingleMode())
+                                            ->visible(fn (): bool => ! $this->isSingleMode())
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Confianca minima (0 a 1) para o supervisor rotear esta conversa para o especialista. 0.6 = so envia se tiver 60%+ de certeza de que e esta intencao.'),
                                     ]),
                             ]),
@@ -333,6 +363,28 @@ class SpecialistsRelationManager extends RelationManager
                                                 $component->state(array_values(array_intersect($allowlist, array_keys(self::externalToolOptions()))));
                                             })
                                             ->helperText('A IA so pode chamar connectors marcados aqui. A descricao cadastrada no connector orienta quando usa-lo.'),
+                                    ]),
+                            ]),
+
+                        Tab::make('Servidores MCP')
+                            ->icon('heroicon-o-server-stack')
+                            ->schema([
+                                Section::make('Servidores MCP habilitados')
+                                    ->description('Habilita os servidores MCP que este especialista pode usar. Cada servidor expoe suas tools automaticamente a cada execucao via tools/list. Cadastre os servidores em "Servidores MCP" no menu lateral.')
+                                    ->schema([
+                                        Select::make('mcp_server_slugs')
+                                            ->label('Servidores habilitados')
+                                            ->multiple()
+                                            ->options(fn (): array => self::mcpServerOptions())
+                                            ->afterStateHydrated(function (Select $component, ?AgentSpecialist $record): void {
+                                                if ($record === null) {
+                                                    return;
+                                                }
+
+                                                $allowlist = is_array($record->tools_allowlist) ? $record->tools_allowlist : [];
+                                                $component->state(array_values(array_intersect($allowlist, array_keys(self::mcpServerOptions()))));
+                                            })
+                                            ->helperText('A IA recebe todas as tools expostas pelo servidor. O slug do servidor vai para o allowlist.'),
                                     ]),
                             ]),
 
@@ -558,6 +610,7 @@ class SpecialistsRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->label('Adicionar especialista')
+                    ->visible(fn (): bool => ! $this->isSingleMode() || ! $this->getOwnerRecord()->specialists()->exists())
                     ->mutateFormDataUsing(function (array $data): array {
                         $tenant = Filament::getTenant();
                         $data['workspace_id'] = $tenant?->getKey();
@@ -568,7 +621,8 @@ class SpecialistsRelationManager extends RelationManager
             ->recordActions([
                 EditAction::make()
                     ->mutateFormDataUsing(fn (array $data): array => self::normalizeSpecialistFormData($data)),
-                DeleteAction::make(),
+                DeleteAction::make()
+                    ->visible(fn (): bool => ! $this->isSingleMode()),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -592,7 +646,14 @@ class SpecialistsRelationManager extends RelationManager
             ->where('workspace_id', $tenant->getKey())
             ->where('status', AgentLlmKeyStatus::Active->value)
             ->orderBy('name')
-            ->pluck('name', 'id')
+            ->get()
+            ->mapWithKeys(function (AgentLlmKey $key): array {
+                $provider = $key->provider instanceof AgentLlmProvider
+                    ? $key->provider->label()
+                    : (string) $key->provider;
+
+                return [$key->getKey() => "{$key->name} ({$provider})"];
+            })
             ->all();
     }
 
@@ -621,6 +682,7 @@ class SpecialistsRelationManager extends RelationManager
 
         return ExternalTool::query()
             ->where('workspace_id', $tenant->getKey())
+            ->where('kind', ExternalToolKind::HttpConnector)
             ->enabled()
             ->orderBy('label')
             ->pluck('label', 'slug')
@@ -633,6 +695,36 @@ class SpecialistsRelationManager extends RelationManager
     private static function externalToolSlugs(): array
     {
         return array_keys(self::externalToolOptions());
+    }
+
+    /**
+     * Enabled MCP servers of the current workspace, keyed by slug.
+     *
+     * @return array<string, string>
+     */
+    private static function mcpServerOptions(): array
+    {
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return [];
+        }
+
+        return ExternalTool::query()
+            ->where('workspace_id', $tenant->getKey())
+            ->where('kind', ExternalToolKind::Mcp)
+            ->enabled()
+            ->orderBy('label')
+            ->pluck('label', 'slug')
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function mcpServerSlugs(): array
+    {
+        return array_keys(self::mcpServerOptions());
     }
 
     /**
@@ -654,6 +746,16 @@ class SpecialistsRelationManager extends RelationManager
      */
     private static function normalizeSpecialistFormData(array $data): array
     {
+        $data = LlmModelField::resolve($data, 'llm_model');
+
+        // Routing fields are hidden in single mode — backfill safe defaults so
+        // the NOT NULL columns are always populated.
+        $data['intent_keywords'] = is_array($data['intent_keywords'] ?? null) ? $data['intent_keywords'] : [];
+        $data['priority'] = is_numeric($data['priority'] ?? null) ? (int) $data['priority'] : 100;
+        $data['confidence_threshold'] = is_numeric($data['confidence_threshold'] ?? null)
+            ? (float) $data['confidence_threshold']
+            : 0.0;
+
         $handoffConfig = is_array($data['handoff_config'] ?? null)
             ? $data['handoff_config']
             : [];
@@ -706,6 +808,16 @@ class SpecialistsRelationManager extends RelationManager
         }
 
         unset($data['external_tool_slugs']);
+
+        $selectedMcpServers = is_array($data['mcp_server_slugs'] ?? null)
+            ? $data['mcp_server_slugs']
+            : [];
+
+        foreach (self::mcpServerSlugs() as $slug) {
+            $toolsAllowlist = self::reconcileTool($toolsAllowlist, $slug, in_array($slug, $selectedMcpServers, true));
+        }
+
+        unset($data['mcp_server_slugs']);
 
         $gcalConfig = is_array($data['google_calendar_config'] ?? null)
             ? $data['google_calendar_config']

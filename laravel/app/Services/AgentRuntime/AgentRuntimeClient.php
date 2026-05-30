@@ -8,12 +8,15 @@ use App\Enums\AgentLlmKeyStatus;
 use App\Enums\AgentLlmProvider;
 use App\Enums\AgentMode;
 use App\Enums\AgentSpecialistStatus;
+use App\Enums\ExternalToolKind;
 use App\Models\Agent;
 use App\Models\AgentLlmKey;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
 use App\Models\ContactMemory;
 use App\Models\ExternalTool;
+use App\Services\MCP\McpHttpClient;
+use App\Services\MCP\McpSchemaTranslator;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
@@ -141,6 +144,7 @@ class AgentRuntimeClient
         /** @var array<string, mixed> $input */
         $supervisorCredential = $this->supervisorCredential($agent, $run->workspace_id);
         $connectors = $this->workspaceConnectors($run->workspace_id);
+        $mcpServers = $this->workspaceMcpServers($run->workspace_id);
 
         return [
             'workspace_id' => $run->workspace_id,
@@ -152,11 +156,12 @@ class AgentRuntimeClient
                 'prompt' => $agent->supervisor_prompt,
                 'llm_key_id' => $agent->supervisor_llm_key_id,
                 'llm_provider' => $supervisorCredential['provider'],
+                'llm_base_url' => $supervisorCredential['base_url'],
                 'llm_model' => $agent->supervisor_llm_model,
                 'llm_api_key' => $supervisorCredential['api_key'],
             ],
             'specialists' => $agent->specialists
-                ->map(function (AgentSpecialist $specialist) use ($run, $connectors): array {
+                ->map(function (AgentSpecialist $specialist) use ($run, $connectors, $mcpServers): array {
                     $specialistCredential = $this->specialistCredential($specialist, $run->workspace_id);
 
                     return [
@@ -166,14 +171,16 @@ class AgentRuntimeClient
                         'role_prompt' => $specialist->role_prompt,
                         'llm_key_id' => $specialist->llm_key_id,
                         'llm_provider' => $specialistCredential['provider'],
+                        'llm_base_url' => $specialistCredential['base_url'],
                         'llm_model' => $specialist->llm_model,
                         'llm_api_key' => $specialistCredential['api_key'],
                         'llm_temperature' => $specialist->llm_temperature,
-                        'tools' => $specialist->tools_allowlist,
+                        'tools' => is_array($specialist->tools_allowlist) ? $specialist->tools_allowlist : [],
                         'external_tools' => $this->connectorsForSpecialist($specialist, $connectors),
-                        'handoff_config' => $specialist->handoff_config,
+                        'mcp_servers' => $this->mcpServersForSpecialist($specialist, $mcpServers),
+                        'handoff_config' => $this->objectOrEmpty($specialist->handoff_config),
                         'memory_config' => $this->normalizedMemoryConfig($specialist),
-                        'intent_keywords' => $specialist->intent_keywords,
+                        'intent_keywords' => is_array($specialist->intent_keywords) ? $specialist->intent_keywords : [],
                         'confidence_threshold' => $specialist->confidence_threshold,
                         'fallback_specialist_id' => $specialist->fallback_specialist_id,
                     ];
@@ -200,7 +207,7 @@ class AgentRuntimeClient
     }
 
     /**
-     * @return array{provider: string|null, api_key: string|null}
+     * @return array{provider: string|null, base_url: string|null, api_key: string|null}
      */
     private function specialistCredential(AgentSpecialist $specialist, int $workspaceId): array
     {
@@ -208,7 +215,22 @@ class AgentRuntimeClient
     }
 
     /**
-     * Enabled external-tool connectors of the workspace, keyed by slug.
+     * Normalize a jsonb config column for transport: a populated array stays an
+     * array (encodes to a JSON object via string keys), but an empty/null value
+     * becomes ``(object) []`` so it serializes as ``{}`` — Pydantic models on the
+     * Python side reject a bare ``[]`` for object fields.
+     *
+     * @return array<string, mixed>|object
+     */
+    private function objectOrEmpty(mixed $value): array|object
+    {
+        $array = is_array($value) ? $value : [];
+
+        return $array === [] ? (object) [] : $array;
+    }
+
+    /**
+     * Enabled HTTP connector tools of the workspace, keyed by slug.
      *
      * @return Collection<string, ExternalTool>
      */
@@ -216,6 +238,22 @@ class AgentRuntimeClient
     {
         return ExternalTool::query()
             ->where('workspace_id', $workspaceId)
+            ->where('kind', ExternalToolKind::HttpConnector)
+            ->enabled()
+            ->get()
+            ->keyBy('slug');
+    }
+
+    /**
+     * Enabled MCP servers of the workspace, keyed by slug.
+     *
+     * @return Collection<string, ExternalTool>
+     */
+    private function workspaceMcpServers(int $workspaceId): Collection
+    {
+        return ExternalTool::query()
+            ->where('workspace_id', $workspaceId)
+            ->where('kind', ExternalToolKind::Mcp)
             ->enabled()
             ->get()
             ->keyBy('slug');
@@ -245,6 +283,68 @@ class AgentRuntimeClient
                     'param_schema' => $connector->paramSchema(),
                 ];
             }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * MCP servers the specialist may use (slug present in its allowlist).
+     * For each server: initialize session, list tools, translate schemas.
+     * Failures are logged and skipped — they must not abort the run.
+     *
+     * @param  Collection<string, ExternalTool>                                                                         $mcpServers
+     * @return array<int, array{server_slug: string, session_id: string|null, tools: array<int, array<string, mixed>>}>
+     */
+    private function mcpServersForSpecialist(AgentSpecialist $specialist, Collection $mcpServers): array
+    {
+        $allowlist = is_array($specialist->tools_allowlist) ? $specialist->tools_allowlist : [];
+        $client = app(McpHttpClient::class);
+        $translator = app(McpSchemaTranslator::class);
+
+        $payload = [];
+
+        foreach ($allowlist as $slug) {
+            $server = $mcpServers->get($slug);
+
+            if (! $server instanceof ExternalTool) {
+                continue;
+            }
+
+            try {
+                $session = $client->initialize($server);
+                $rawTools = $client->listTools($server, $session);
+            } catch (Throwable $e) {
+                Log::warning('MCP server unreachable during run setup — skipping', [
+                    'server_slug' => $slug,
+                    'error' => $e->getMessage(),
+                ]);
+
+                continue;
+            }
+
+            $tools = [];
+            foreach ($rawTools as $tool) {
+                if (! is_array($tool) || ! isset($tool['name'])) {
+                    continue;
+                }
+
+                $tools[] = [
+                    'server_slug' => $server->slug,
+                    'session_id' => $session->sessionId,
+                    'tool_name' => (string) $tool['name'],
+                    'description' => (string) ($tool['description'] ?? ''),
+                    'param_schema' => $translator->translate(
+                        is_array($tool['inputSchema'] ?? null) ? $tool['inputSchema'] : [],
+                    ),
+                ];
+            }
+
+            $payload[] = [
+                'server_slug' => $server->slug,
+                'session_id' => $session->sessionId,
+                'tools' => $tools,
+            ];
         }
 
         return $payload;
@@ -358,7 +458,7 @@ class AgentRuntimeClient
     }
 
     /**
-     * @return array{provider: string|null, api_key: string|null}
+     * @return array{provider: string|null, base_url: string|null, api_key: string|null}
      */
     private function supervisorCredential(Agent $agent, int $workspaceId): array
     {
@@ -366,7 +466,7 @@ class AgentRuntimeClient
     }
 
     /**
-     * @return array{provider: string|null, api_key: string|null}
+     * @return array{provider: string|null, base_url: string|null, api_key: string|null}
      */
     private function credentialFromKey(?AgentLlmKey $llmKey, int $workspaceId): array
     {
@@ -375,7 +475,7 @@ class AgentRuntimeClient
             || $llmKey->workspace_id !== $workspaceId
             || $llmKey->status !== AgentLlmKeyStatus::Active
         ) {
-            return ['provider' => null, 'api_key' => null];
+            return ['provider' => null, 'base_url' => null, 'api_key' => null];
         }
 
         $provider = $llmKey->getAttribute('provider');
@@ -384,8 +484,11 @@ class AgentRuntimeClient
             $provider = $provider->value;
         }
 
+        $baseUrl = $llmKey->base_url;
+
         return [
             'provider' => is_string($provider) ? $provider : null,
+            'base_url' => (is_string($baseUrl) && trim($baseUrl) !== '') ? $baseUrl : null,
             'api_key' => $llmKey->api_key,
         ];
     }
@@ -493,7 +596,7 @@ class AgentRuntimeClient
     }
 
     /**
-     * @return array{provider: string, model: string, api_key: string}|null
+     * @return array{provider: string, base_url: string|null, model: string, api_key: string}|null
      */
     private function mediaCredentialFromKey(?AgentLlmKey $llmKey, int $workspaceId, ?string $model): ?array
     {
@@ -515,8 +618,11 @@ class AgentRuntimeClient
             return null;
         }
 
+        $baseUrl = $llmKey->base_url;
+
         return [
             'provider' => $provider,
+            'base_url' => (is_string($baseUrl) && trim($baseUrl) !== '') ? $baseUrl : null,
             'model' => $model,
             'api_key' => (string) $llmKey->api_key,
         ];

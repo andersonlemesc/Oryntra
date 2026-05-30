@@ -368,7 +368,10 @@ async def _whisper_with_usage(
     filename = f"audio{ext}"
 
     try:
-        client = openai.AsyncOpenAI(api_key=key.api_key.get_secret_value())
+        client_kwargs: dict[str, Any] = {"api_key": key.api_key.get_secret_value()}
+        if key.base_url:
+            client_kwargs["base_url"] = key.base_url
+        client = openai.AsyncOpenAI(**client_kwargs)
         transcript = await client.audio.transcriptions.create(
             model=key.model or "whisper-1",
             file=(filename, data, content_type),
@@ -405,10 +408,14 @@ async def _gemini_audio_with_usage(
     model_name = key.model or "gemini-2.0-flash"
 
     try:
+        gemini_kwargs: dict[str, Any] = {}
+        if key.base_url:
+            gemini_kwargs["client_options"] = {"api_endpoint": key.base_url}
         llm = ChatGoogleGenerativeAI(
             model=model_name,
             google_api_key=key.api_key.get_secret_value(),
             temperature=0,
+            **gemini_kwargs,
         )
         b64 = base64.b64encode(data).decode("utf-8")
         message = HumanMessage(
@@ -517,31 +524,45 @@ async def _process_image_with_usage(
 
 
 def _build_vision_chat_model(key: LlmCredentialPayload) -> Any | None:
+    base_url = key.base_url or None
+
     if key.provider == "openai":
         from langchain_openai import ChatOpenAI
 
+        kwargs: dict[str, Any] = {}
+        if base_url is not None:
+            kwargs["base_url"] = base_url
         return ChatOpenAI(
             model=key.model,
             api_key=key.api_key,
             temperature=0,
+            **kwargs,
         )
     if key.provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
+        kwargs = {}
+        if base_url is not None:
+            kwargs["base_url"] = base_url
         return ChatAnthropic(
             model_name=key.model,
             api_key=key.api_key,
             temperature=0,
             timeout=None,
             stop=None,
+            **kwargs,
         )
     if key.provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
 
+        kwargs = {}
+        if base_url is not None:
+            kwargs["client_options"] = {"api_endpoint": base_url}
         return ChatGoogleGenerativeAI(
             model=key.model,
             google_api_key=key.api_key.get_secret_value(),
             temperature=0,
+            **kwargs,
         )
     return None
 

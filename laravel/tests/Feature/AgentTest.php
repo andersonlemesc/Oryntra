@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Enums\AgentLlmProvider;
 use App\Enums\AgentResponseMode;
 use App\Enums\AgentStatus;
 use App\Models\Agent;
@@ -30,15 +29,13 @@ it('creates agent associated with workspace with FK', function () {
         && $fk['foreign_table'] === 'workspaces'))->toBeTrue();
 });
 
-it('casts status, response_mode and llm_provider as enums', function () {
+it('casts status and response_mode as enums', function () {
     $agent = Agent::factory()->active()->create([
         'response_mode' => AgentResponseMode::HumanApproval,
-        'llm_provider' => AgentLlmProvider::Anthropic,
     ]);
 
     expect($agent->status)->toBe(AgentStatus::Active)
-        ->and($agent->response_mode)->toBe(AgentResponseMode::HumanApproval)
-        ->and($agent->llm_provider)->toBe(AgentLlmProvider::Anthropic);
+        ->and($agent->response_mode)->toBe(AgentResponseMode::HumanApproval);
 });
 
 it('casts jsonb configs as arrays', function () {

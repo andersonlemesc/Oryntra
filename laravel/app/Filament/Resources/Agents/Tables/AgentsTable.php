@@ -83,7 +83,7 @@ class AgentsTable
             return self::providerValue($agent->supervisorLlmKey?->provider);
         }
 
-        return self::providerValue($agent->llm_provider);
+        return self::providerValue($agent->specialists()->with('llmKey')->first()?->llmKey?->provider);
     }
 
     private static function runtimeModel(Agent $agent): ?string
@@ -92,7 +92,7 @@ class AgentsTable
             return $agent->supervisor_llm_model;
         }
 
-        return $agent->llm_model;
+        return $agent->specialists()->first()?->llm_model;
     }
 
     private static function isSupervisor(Agent $agent): bool

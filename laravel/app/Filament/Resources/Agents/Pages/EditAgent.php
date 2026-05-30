@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Agents\Pages;
 
 use App\Enums\AgentRunStatus;
 use App\Filament\Resources\Agents\AgentResource;
+use App\Filament\Support\LlmModelField;
 use App\Models\Agent;
 use App\Models\AgentRun;
 use App\Models\ChatwootConnection;
@@ -22,6 +23,15 @@ use Throwable;
 class EditAgent extends EditRecord
 {
     protected static string $resource = AgentResource::class;
+
+    /**
+     * @param  array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        return LlmModelField::resolve($data, 'supervisor_llm_model', 'audio_llm_model', 'vision_llm_model');
+    }
 
     protected function getHeaderActions(): array
     {

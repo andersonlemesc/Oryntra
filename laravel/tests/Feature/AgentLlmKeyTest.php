@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Enums\AgentLlmKeyStatus;
 use App\Enums\AgentLlmProvider;
-use App\Models\Agent;
 use App\Models\AgentLlmKey;
 use App\Models\Workspace;
 use Illuminate\Database\QueryException;
@@ -60,25 +59,6 @@ it('cascades keys deletion when workspace deleted', function () {
     $workspace->delete();
 
     expect(AgentLlmKey::find($key->id))->toBeNull();
-});
-
-it('associates agent to llm key', function () {
-    $workspace = Workspace::factory()->create();
-    $key = AgentLlmKey::factory()->for($workspace)->create();
-    $agent = Agent::factory()->for($workspace)->create(['llm_key_id' => $key->id]);
-
-    expect($agent->llmKey?->is($key))->toBeTrue()
-        ->and($key->fresh()?->agents()->count())->toBe(1);
-});
-
-it('nulls agent llm_key_id when key is deleted (no cascade delete)', function () {
-    $workspace = Workspace::factory()->create();
-    $key = AgentLlmKey::factory()->for($workspace)->create();
-    $agent = Agent::factory()->for($workspace)->create(['llm_key_id' => $key->id]);
-
-    $key->delete();
-
-    expect($agent->fresh()?->llm_key_id)->toBeNull();
 });
 
 it('hides api_key from model array output', function () {

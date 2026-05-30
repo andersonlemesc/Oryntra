@@ -9,10 +9,12 @@ use App\Enums\AgentLlmProvider;
 use App\Enums\AgentMode;
 use App\Enums\AgentResponseMode;
 use App\Enums\AgentStatus;
+use App\Filament\Support\LlmModelField;
 use App\Models\Agent;
 use App\Models\AgentLlmKey;
 use App\Models\AgentSpecialist;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -23,6 +25,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 
 class AgentForm
 {
@@ -63,14 +66,16 @@ class AgentForm
                                             ->rows(2),
                                         TextInput::make('locale')
                                             ->label('Idioma')
-                                            ->default('en')
+                                            ->default(fn (): string => Filament::getTenant()?->locale ?? 'en')
                                             ->required()
-                                            ->maxLength(16),
+                                            ->maxLength(16)
+                                            ->helperText('Padrao herdado do workspace. Ajuste se este agente atende em outro idioma.'),
                                         TextInput::make('timezone')
                                             ->label('Timezone')
-                                            ->default('UTC')
+                                            ->default(fn (): string => Filament::getTenant()?->timezone ?? 'UTC')
                                             ->required()
-                                            ->maxLength(64),
+                                            ->maxLength(64)
+                                            ->helperText('Padrao herdado do workspace.'),
                                         Select::make('response_mode')
                                             ->label('Modo de resposta')
                                             ->options(self::responseModeOptions())
@@ -79,21 +84,6 @@ class AgentForm
                                             ->required(),
                                     ]),
 
-                                Section::make('Prompts')
-                                    ->schema([
-                                        Textarea::make('system_prompt')
-                                            ->label('System prompt')
-                                            ->rows(6)
-                                            ->columnSpanFull(),
-                                        Textarea::make('behavior_prompt')
-                                            ->label('Prompt de comportamento')
-                                            ->rows(4)
-                                            ->columnSpanFull(),
-                                        Textarea::make('fallback_message')
-                                            ->label('Mensagem de fallback')
-                                            ->rows(2)
-                                            ->columnSpanFull(),
-                                    ]),
                             ]),
 
                         Tab::make('Modelo')
@@ -108,13 +98,15 @@ class AgentForm
                                             ->label('Chave LLM do supervisor')
                                             ->options(fn (): array => self::llmKeyOptions(null))
                                             ->searchable()
+                                            ->live()
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Credencial API (OpenAI, Anthropic, etc.) usada pelo supervisor para classificar a intencao. Pode ser diferente da chave dos especialistas.')
                                             ->required(fn (Get $get): bool => $get('mode') === AgentMode::Supervisor->value),
-                                        TextInput::make('supervisor_llm_model')
-                                            ->label('Modelo do supervisor')
-                                            ->required(fn (Get $get): bool => $get('mode') === AgentMode::Supervisor->value)
-                                            ->maxLength(128)
-                                            ->helperText('Use um modelo barato/rapido para classificacao.'),
+                                        ...LlmModelField::components(
+                                            'supervisor_llm_model',
+                                            'supervisor_llm_key_id',
+                                            required: fn (Get $get): bool => $get('mode') === AgentMode::Supervisor->value,
+                                            label: 'Modelo do supervisor',
+                                        ),
                                         Textarea::make('supervisor_prompt')
                                             ->label('Prompt do supervisor')
                                             ->required(fn (Get $get): bool => $get('mode') === AgentMode::Supervisor->value)
@@ -131,37 +123,12 @@ class AgentForm
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Especialista que assume conversas que o supervisor nao classificou. Recomenda-se escolher o que tem o escopo mais amplo (ex: Vendas, ou um "Atendimento Geral").'),
                                     ]),
 
-                                Section::make('LLM do agente unico')
-                                    ->description('Usado quando este agente responde diretamente sem especialistas.')
-                                    ->columns(2)
+                                Section::make('Configuracao do agente')
                                     ->visible(fn (Get $get): bool => $get('mode') !== AgentMode::Supervisor->value)
                                     ->schema([
-                                        Select::make('llm_provider')
-                                            ->label('Provider')
-                                            ->options(self::llmProviderOptions())
-                                            ->live()
-                                            ->nullable(),
-                                        Select::make('llm_key_id')
-                                            ->label('Chave LLM')
-                                            ->options(fn (callable $get): array => self::llmKeyOptions($get('llm_provider')))
-                                            ->searchable()
-                                            ->nullable()
-                                            ->helperText('Nao tem chave? Cadastre em Agentes -> Chaves LLM.'),
-                                        TextInput::make('llm_model')
-                                            ->label('Modelo')
-                                            ->maxLength(128),
-                                        TextInput::make('llm_temperature')
-                                            ->label('Temperature')
-                                            ->numeric()
-                                            ->minValue(0)
-                                            ->maxValue(2)
-                                            ->step(0.01)
-                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Controla a "criatividade" da resposta. 0 = sempre a resposta mais provavel (deterministico). 1+ = mais variacao. Para atendimento, use entre 0.1 e 0.3.'),
-                                        TextInput::make('llm_max_tokens')
-                                            ->label('Max tokens')
-                                            ->numeric()
-                                            ->minValue(1)
-                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Tamanho maximo da resposta gerada (em tokens; ~1 token = 4 caracteres). Limita o quanto a IA pode escrever em uma mensagem.'),
+                                        Placeholder::make('single_mode_hint')
+                                            ->hiddenLabel()
+                                            ->content('Em modo Unico, o modelo LLM, prompt e ferramentas ficam na aba "Configuracao" (criada automaticamente ao salvar o agente).'),
                                     ]),
                             ]),
 
@@ -294,14 +261,16 @@ class AgentForm
                                             ->label('Chave LLM (audio)')
                                             ->options(fn (): array => self::llmKeyOptionsForProviders(['openai', 'gemini']))
                                             ->searchable()
+                                            ->live()
                                             ->nullable()
                                             ->visible(fn (Get $get): bool => (bool) $get('media_policy.audio.enabled'))
                                             ->helperText('Apenas chaves OpenAI ou Gemini suportam transcricao de audio.'),
-                                        TextInput::make('audio_llm_model')
-                                            ->label('Modelo')
-                                            ->maxLength(128)
-                                            ->placeholder('whisper-1, gemini-2.0-flash')
-                                            ->visible(fn (Get $get): bool => (bool) $get('media_policy.audio.enabled')),
+                                        ...LlmModelField::components(
+                                            'audio_llm_model',
+                                            'audio_llm_key_id',
+                                            label: 'Modelo',
+                                            visible: fn (Get $get): bool => (bool) $get('media_policy.audio.enabled'),
+                                        ),
                                         Textarea::make('media_policy.audio.fallback_message')
                                             ->label('Mensagem de fallback')
                                             ->rows(2)
@@ -320,14 +289,16 @@ class AgentForm
                                             ->label('Chave LLM (visao)')
                                             ->options(fn (): array => self::llmKeyOptionsForProviders(['openai', 'anthropic', 'gemini']))
                                             ->searchable()
+                                            ->live()
                                             ->nullable()
                                             ->visible(fn (Get $get): bool => (bool) $get('media_policy.image.enabled'))
                                             ->helperText('Se vazia, tenta usar a chave do especialista quando o provedor dele suportar visao.'),
-                                        TextInput::make('vision_llm_model')
-                                            ->label('Modelo')
-                                            ->maxLength(128)
-                                            ->placeholder('gpt-4o, claude-sonnet-4-20250514, gemini-2.0-flash')
-                                            ->visible(fn (Get $get): bool => (bool) $get('media_policy.image.enabled')),
+                                        ...LlmModelField::components(
+                                            'vision_llm_model',
+                                            'vision_llm_key_id',
+                                            label: 'Modelo',
+                                            visible: fn (Get $get): bool => (bool) $get('media_policy.image.enabled'),
+                                        ),
                                         Textarea::make('media_policy.image.fallback_message')
                                             ->label('Mensagem de fallback')
                                             ->rows(2)
@@ -376,13 +347,14 @@ class AgentForm
             return [];
         }
 
-        return AgentLlmKey::query()
-            ->where('workspace_id', $tenant->getKey())
-            ->where('status', AgentLlmKeyStatus::Active->value)
-            ->whereIn('provider', $providers)
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->all();
+        return self::keyLabels(
+            AgentLlmKey::query()
+                ->where('workspace_id', $tenant->getKey())
+                ->where('status', AgentLlmKeyStatus::Active->value)
+                ->whereIn('provider', $providers)
+                ->orderBy('name')
+                ->get(),
+        );
     }
 
     /**
@@ -416,16 +388,6 @@ class AgentForm
     }
 
     /**
-     * @return array<string, string>
-     */
-    private static function llmProviderOptions(): array
-    {
-        return collect(AgentLlmProvider::cases())
-            ->mapWithKeys(fn (AgentLlmProvider $p): array => [$p->value => $p->label()])
-            ->all();
-    }
-
-    /**
      * @return array<int, string>
      */
     private static function llmKeyOptions(?string $provider): array
@@ -445,7 +407,24 @@ class AgentForm
             $query->where('provider', $provider);
         }
 
-        return $query->pluck('name', 'id')->all();
+        return self::keyLabels($query->get());
+    }
+
+    /**
+     * @param  Collection<int, AgentLlmKey> $keys
+     * @return array<int, string>
+     */
+    private static function keyLabels(Collection $keys): array
+    {
+        return $keys
+            ->mapWithKeys(function (AgentLlmKey $key): array {
+                $provider = $key->provider instanceof AgentLlmProvider
+                    ? $key->provider->label()
+                    : (string) $key->provider;
+
+                return [$key->getKey() => "{$key->name} ({$provider})"];
+            })
+            ->all();
     }
 
     /**

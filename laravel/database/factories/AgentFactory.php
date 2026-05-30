@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Enums\AgentLlmProvider;
 use App\Enums\AgentMode;
 use App\Enums\AgentResponseMode;
 use App\Enums\AgentStatus;
@@ -31,13 +30,6 @@ class AgentFactory extends Factory
             'locale' => 'en',
             'timezone' => 'UTC',
             'response_mode' => AgentResponseMode::Automatic,
-            'llm_provider' => AgentLlmProvider::OpenAI,
-            'llm_model' => 'gpt-4.1-mini',
-            'llm_temperature' => 0.2,
-            'llm_max_tokens' => 1024,
-            'system_prompt' => 'You are a helpful assistant.',
-            'behavior_prompt' => null,
-            'fallback_message' => null,
             'supervisor_prompt' => null,
             'supervisor_llm_model' => null,
             'debounce_config' => [

@@ -39,6 +39,7 @@ class LlmCredentialPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     provider: Literal["openai", "anthropic", "gemini", "local"]
+    base_url: str | None = None
     model: str
     api_key: SecretStr = Field(exclude=True)
 
@@ -47,6 +48,7 @@ class LlmCredential(BaseModel):
     """Internal credential used by supervisor.py (plain string api_key)."""
 
     provider: Literal["openai", "anthropic", "gemini", "local"]
+    base_url: str | None = None
     model: str
     api_key: str
 
@@ -76,6 +78,7 @@ class SupervisorConfig(BaseModel):
     prompt: str | None = None
     llm_key_id: int | None = None
     llm_provider: Literal["openai", "anthropic", "gemini", "local"] | None = None
+    llm_base_url: str | None = None
     llm_model: str | None = None
     llm_api_key: SecretStr | None = Field(default=None, exclude=True)
 
@@ -163,6 +166,28 @@ class ExternalToolConfig(BaseModel):
     param_schema: dict[str, Any] = Field(default_factory=dict)
 
 
+class McpToolConfig(BaseModel):
+    """A single tool exposed by an MCP server, ready to be wired as a StructuredTool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    server_slug: str
+    session_id: str | None = None
+    tool_name: str
+    description: str | None = None
+    param_schema: dict[str, Any] = Field(default_factory=dict)
+
+
+class McpServerRuntimeConfig(BaseModel):
+    """MCP server runtime state: session + discovered tools for one run."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    server_slug: str
+    session_id: str | None = None
+    tools: list[McpToolConfig] = Field(default_factory=list)
+
+
 class SpecialistConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -172,11 +197,13 @@ class SpecialistConfig(BaseModel):
     role_prompt: str
     llm_key_id: int | None = None
     llm_provider: Literal["openai", "anthropic", "gemini", "local"] | None = None
+    llm_base_url: str | None = None
     llm_model: str | None = None
     llm_api_key: SecretStr | None = Field(default=None, exclude=True)
     llm_temperature: float = Field(ge=0, le=2)
     tools: list[str] = Field(default_factory=list)
     external_tools: list[ExternalToolConfig] = Field(default_factory=list)
+    mcp_servers: list[McpServerRuntimeConfig] = Field(default_factory=list)
     handoff_config: HandoffConfig = Field(default_factory=HandoffConfig)
     memory_config: MemoryConfig = Field(default_factory=MemoryConfig)
     resolution_config: ResolutionConfig = Field(default_factory=ResolutionConfig)

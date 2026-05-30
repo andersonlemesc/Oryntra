@@ -10,6 +10,8 @@ use App\Models\AgentLlmKey;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 
 class AgentLlmKeyForm
@@ -30,6 +32,11 @@ class AgentLlmKeyForm
                             ->label('Provider')
                             ->options(self::providerOptions())
                             ->default(AgentLlmProvider::OpenAI->value)
+                            ->live()
+                            ->afterStateUpdated(function (Set $set, ?string $state): void {
+                                $provider = AgentLlmProvider::tryFrom((string) $state);
+                                $set('base_url', $provider?->defaultBaseUrl());
+                            })
                             ->required(),
                         Select::make('status')
                             ->label('Status')
@@ -40,6 +47,14 @@ class AgentLlmKeyForm
 
                 Section::make('Credencial')
                     ->schema([
+                        TextInput::make('base_url')
+                            ->label('Base URL')
+                            ->url()
+                            ->maxLength(512)
+                            ->default(AgentLlmProvider::OpenAI->defaultBaseUrl())
+                            ->placeholder(fn (Get $get): string => AgentLlmProvider::tryFrom((string) $get('provider'))?->defaultBaseUrl() ?? 'https://...')
+                            ->helperText('Endpoint da API. Deixe no padrao do provider ou aponte para qualquer endpoint compativel com OpenAI (Groq, Together, Ollama, vLLM...).')
+                            ->columnSpanFull(),
                         TextInput::make('api_key')
                             ->label('API Key')
                             ->password()

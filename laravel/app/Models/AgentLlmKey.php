@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'workspace_id',
     'name',
     'provider',
+    'base_url',
     'api_key',
     'status',
     'last_used_at',
@@ -39,14 +40,6 @@ class AgentLlmKey extends Model
     /**
      * @return HasMany<Agent, $this>
      */
-    public function agents(): HasMany
-    {
-        return $this->hasMany(Agent::class, 'llm_key_id');
-    }
-
-    /**
-     * @return HasMany<Agent, $this>
-     */
     public function supervisedAgents(): HasMany
     {
         return $this->hasMany(Agent::class, 'supervisor_llm_key_id');
@@ -58,6 +51,14 @@ class AgentLlmKey extends Model
     public function specialists(): HasMany
     {
         return $this->hasMany(AgentSpecialist::class, 'llm_key_id');
+    }
+
+    /**
+     * @return HasMany<AgentLlmModel, $this>
+     */
+    public function models(): HasMany
+    {
+        return $this->hasMany(AgentLlmModel::class);
     }
 
     /**
