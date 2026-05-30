@@ -6,17 +6,24 @@
     $messages = $this->messages();
     $agentOptions = $this->agentOptions();
     $contactOptions = $this->contactOptions();
+    $homeUrl = \Filament\Facades\Filament::getUrl();
 @endphp
 
 <x-filament-panels::page>
     @vite('resources/js/echo.js')
 
+    {{-- Full-screen ChatGPT-style overlay: covers the panel chrome. --}}
     <div
-        class="grid h-[72vh] grid-cols-1 gap-4 md:grid-cols-[16rem_minmax(0,1fr)]"
+        class="fixed inset-0 z-40 grid grid-cols-1 bg-white md:grid-cols-[17rem_minmax(0,1fr)] dark:bg-gray-950"
         x-data="playgroundChat(@js($conversationId))"
     >
         {{-- Sidebar: conversations --}}
-        <aside class="flex min-h-0 flex-col gap-3 rounded-xl bg-white p-3 ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
+        <aside class="flex min-h-0 flex-col gap-3 border-r border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-gray-900">
+            <a href="{{ $homeUrl }}" class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200">
+                <x-filament::icon icon="heroicon-o-arrow-left" class="h-4 w-4" />
+                Voltar ao workspace
+            </a>
+
             <x-filament::button wire:click="startNewConversation" icon="heroicon-o-plus" size="sm" class="w-full">
                 Nova conversa
             </x-filament::button>
@@ -49,7 +56,7 @@
         </aside>
 
         {{-- Chat column --}}
-        <section class="flex min-h-0 flex-col rounded-xl bg-white ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
+        <section class="flex min-h-0 flex-col bg-white dark:bg-gray-950">
             {{-- Header: agent + contact --}}
             <div class="flex flex-wrap items-center gap-3 border-b border-gray-100 p-3 dark:border-white/10">
                 <label class="flex items-center gap-2 text-sm">
@@ -104,7 +111,7 @@
                                 {{ $message->content ?: ($message->error_message ?: '—') }}
                             </div>
 
-                            @if (filled($message->trace) || $message->specialist_id !== null)
+                            @if (filled($message->events) || filled($message->trace) || $message->specialist_id !== null)
                                 <x-playground.debug-panel :message="$message" />
                             @endif
                         </div>

@@ -76,6 +76,8 @@ class StreamPlaygroundRunJob implements ShouldQueue
 
         /** @var array<string, mixed>|null $finalData */
         $finalData = null;
+        /** @var array<int, array{kind: string, payload: array<string, mixed>}> $debugEvents */
+        $debugEvents = [];
 
         try {
             foreach ($client->streamEvents($run) as $event) {
@@ -90,6 +92,7 @@ class StreamPlaygroundRunJob implements ShouldQueue
                     }
                 } elseif (in_array($name, ['routing', 'tool_call', 'tool_result'], true)) {
                     $this->flushTokens();
+                    $debugEvents[] = ['kind' => $name, 'payload' => $data];
                     broadcast(new PlaygroundStreamEvent($this->streamConversationId, $this->streamMessageId, $name, $data));
                 } elseif ($name === 'final') {
                     $this->flushTokens();
@@ -102,7 +105,7 @@ class StreamPlaygroundRunJob implements ShouldQueue
             }
 
             $this->flushTokens();
-            $this->persistFinal($message, $run, $finalData);
+            $this->persistFinal($message, $run, $finalData, $debugEvents);
         } catch (Throwable $exception) {
             $this->persistFailure($message, $run, $exception->getMessage());
 
@@ -133,9 +136,10 @@ class StreamPlaygroundRunJob implements ShouldQueue
     }
 
     /**
-     * @param array<string, mixed>|null $data
+     * @param array<string, mixed>|null                                      $data
+     * @param array<int, array{kind: string, payload: array<string, mixed>}> $debugEvents
      */
-    private function persistFinal(PlaygroundMessage $message, AgentRun $run, ?array $data): void
+    private function persistFinal(PlaygroundMessage $message, AgentRun $run, ?array $data, array $debugEvents = []): void
     {
         $data ??= [];
         $runtimeStatus = is_string($data['status'] ?? null) ? $data['status'] : 'failed';
@@ -156,6 +160,7 @@ class StreamPlaygroundRunJob implements ShouldQueue
             'content' => $content,
             'specialist_id' => $specialistId,
             'trace' => $trace,
+            'events' => $debugEvents === [] ? null : $debugEvents,
             'usage' => $usage,
             'response' => $response,
         ])->save();

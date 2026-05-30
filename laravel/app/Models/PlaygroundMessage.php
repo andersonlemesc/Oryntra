@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property PlaygroundMessageStatus|null $status
  * @property int|null                     $specialist_id
  * @property array<int, mixed>|null       $trace
+ * @property array<int, mixed>|null       $events
  * @property array<string, mixed>|null    $usage
  * @property array<string, mixed>|null    $response
  * @property string|null                  $error_message
@@ -36,6 +37,7 @@ use Illuminate\Support\Carbon;
     'status',
     'specialist_id',
     'trace',
+    'events',
     'usage',
     'response',
     'error_message',
@@ -70,6 +72,7 @@ class PlaygroundMessage extends Model
             'role' => PlaygroundMessageRole::class,
             'status' => PlaygroundMessageStatus::class,
             'trace' => 'array',
+            'events' => 'array',
             'usage' => 'array',
             'response' => 'array',
         ];

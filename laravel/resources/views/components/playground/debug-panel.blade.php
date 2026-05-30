@@ -2,59 +2,87 @@
 
 @php
     /** @var \App\Models\PlaygroundMessage $message */
+    $events = is_array($message->events) ? $message->events : [];
     $trace = is_array($message->trace) ? $message->trace : [];
     $usage = is_array($message->usage) ? $message->usage : [];
     $cost = data_get($usage, 'total_cost_cents');
+
+    // Build an ordered timeline. Prefer the streamed debug events (routing +
+    // tool calls/results, in real-time order); fall back to the runtime trace.
+    $timeline = [];
+
+    foreach ($events as $event) {
+        $kind = data_get($event, 'kind');
+        $p = is_array(data_get($event, 'payload')) ? data_get($event, 'payload') : [];
+
+        if ($kind === 'routing') {
+            $timeline[] = [
+                'icon' => 'heroicon-o-arrows-right-left',
+                'color' => 'text-primary-500',
+                'title' => 'Roteado para especialista #'.data_get($p, 'specialist_id', '—'),
+                'meta' => 'confiança '.data_get($p, 'confidence', '—').' · '.data_get($p, 'reason', ''),
+                'body' => null,
+            ];
+        } elseif ($kind === 'tool_call') {
+            $timeline[] = [
+                'icon' => 'heroicon-o-wrench-screwdriver',
+                'color' => 'text-amber-500',
+                'title' => 'Tool ▶ '.data_get($p, 'tool', '?'),
+                'meta' => null,
+                'body' => json_encode(data_get($p, 'input', []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
+            ];
+        } elseif ($kind === 'tool_result') {
+            $timeline[] = [
+                'icon' => 'heroicon-o-check-circle',
+                'color' => 'text-success-500',
+                'title' => 'Tool ◀ '.data_get($p, 'tool', '?'),
+                'meta' => null,
+                'body' => (string) data_get($p, 'output', ''),
+            ];
+        }
+    }
+
+    if ($timeline === []) {
+        foreach ($trace as $step) {
+            $timeline[] = [
+                'icon' => 'heroicon-o-cpu-chip',
+                'color' => 'text-gray-400',
+                'title' => data_get($step, 'type', 'step'),
+                'meta' => data_get($step, 'latency_ms') ? data_get($step, 'latency_ms').'ms' : null,
+                'body' => filled(data_get($step, 'output')) ? json_encode(data_get($step, 'output'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) : null,
+            ];
+        }
+    }
 @endphp
 
-<details class="max-w-[80%] rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-white/5">
-    <summary class="flex cursor-pointer items-center gap-2 font-medium text-gray-500">
-        <x-filament::icon icon="heroicon-o-bug-ant" class="h-3.5 w-3.5" />
-        Debug
-        @if ($message->specialist_id !== null)
-            <span class="rounded bg-gray-200 px-1.5 py-0.5 font-mono text-[10px] text-gray-600 dark:bg-white/10 dark:text-gray-300">
-                especialista #{{ $message->specialist_id }}
-            </span>
-        @endif
-        @if ($cost !== null)
-            <span class="ml-auto font-mono text-[10px] text-gray-400">{{ number_format(((int) $cost) / 100, 2) }}¢</span>
-        @endif
-    </summary>
+@if ($timeline !== [])
+    <div class="mt-1 max-w-[85%] rounded-xl bg-gray-50 p-3 text-xs ring-1 ring-gray-950/5 dark:bg-white/5 dark:ring-white/10">
+        <div class="mb-2 flex items-center gap-2 text-[11px] font-medium text-gray-500">
+            <x-filament::icon icon="heroicon-o-bolt" class="h-3.5 w-3.5" />
+            <span>Linha do tempo do agente</span>
+            @if ($message->specialist_id !== null)
+                <span class="rounded bg-gray-200 px-1.5 py-0.5 font-mono text-[10px] text-gray-600 dark:bg-white/10 dark:text-gray-300">esp #{{ $message->specialist_id }}</span>
+            @endif
+            @if ($cost !== null)
+                <span class="ml-auto font-mono text-[10px] text-gray-400">{{ number_format(((int) $cost) / 100, 2) }}¢</span>
+            @endif
+        </div>
 
-    <ul class="mt-2 space-y-2">
-        @foreach ($trace as $step)
-            @php
-                $type = data_get($step, 'type', 'step');
-                $tool = data_get($step, 'tool');
-                $input = data_get($step, 'input');
-                $output = data_get($step, 'output');
-                $latency = data_get($step, 'latency_ms');
-                $tokensIn = data_get($step, 'tokens.input');
-                $tokensOut = data_get($step, 'tokens.output');
-            @endphp
-
-            <li class="border-l-2 border-gray-200 pl-2 dark:border-white/10">
-                <div class="flex items-center gap-2 font-mono text-[11px] font-semibold text-gray-600 dark:text-gray-300">
-                    <span>{{ data_get($step, 'step', '·') }}.</span>
-                    <span>{{ $type }}</span>
-                    @if ($tool)
-                        <span class="rounded bg-primary-100 px-1 text-primary-700 dark:bg-primary-500/10 dark:text-primary-400">{{ $tool }}</span>
+        <ol class="relative space-y-3 border-l border-gray-200 pl-4 dark:border-white/10">
+            @foreach ($timeline as $item)
+                <li class="relative">
+                    <span class="absolute -left-[1.30rem] flex h-4 w-4 items-center justify-center rounded-full bg-white ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-white/10">
+                        <x-filament::icon :icon="$item['icon']" @class(['h-3 w-3', $item['color']]) />
+                    </span>
+                    <div class="font-medium text-gray-700 dark:text-gray-200">{{ $item['title'] }}</div>
+                    @if ($item['meta'])
+                        <div class="text-[11px] text-gray-400">{{ $item['meta'] }}</div>
                     @endif
-                    @if ($latency)
-                        <span class="ml-auto text-gray-400">{{ $latency }}ms</span>
+                    @if ($item['body'])
+                        <pre class="mt-1 overflow-x-auto rounded bg-white/70 p-1.5 text-[10px] leading-snug text-gray-500 dark:bg-black/20">{{ $item['body'] }}</pre>
                     @endif
-                    @if ($tokensIn || $tokensOut)
-                        <span class="text-gray-400">{{ $tokensIn ?? 0 }}↓/{{ $tokensOut ?? 0 }}↑</span>
-                    @endif
-                </div>
-
-                @if (filled($input))
-                    <pre class="mt-1 overflow-x-auto rounded bg-white/60 p-1 text-[10px] text-gray-500 dark:bg-black/20">{{ json_encode($input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) }}</pre>
-                @endif
-                @if (filled($output))
-                    <pre class="mt-1 overflow-x-auto rounded bg-white/60 p-1 text-[10px] text-gray-500 dark:bg-black/20">{{ is_string($output) ? $output : json_encode($output, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) }}</pre>
-                @endif
-            </li>
-        @endforeach
-    </ul>
-</details>
+                </li>
+            @endforeach
+        </ol>
+    </div>
+@endif
