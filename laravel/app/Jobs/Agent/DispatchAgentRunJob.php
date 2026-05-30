@@ -155,6 +155,16 @@ class DispatchAgentRunJob implements ShouldQueue
             return $output;
         }
 
+        // The resolve_conversation tool already wrote resolution.side_effects and
+        // queued ApplyResolveConversationToChatwootJob, which delivers the closing
+        // customer_message. The runtime echoes that same text as response.content,
+        // so delivering it here would send the message twice.
+        if (data_get($run->fresh()?->output, 'resolution.side_effects') !== null) {
+            $output['response_delivery'] = $this->skippedResponseDelivery('resolution_message_dispatched_separately');
+
+            return $output;
+        }
+
         $response = $this->arrayValue($output['response'] ?? []);
         $responseType = $this->stringValue($response['type'] ?? null);
         $content = $this->stringValue($response['content'] ?? null);
