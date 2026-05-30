@@ -33,9 +33,9 @@ class StreamPlaygroundRunJob implements ShouldQueue
     public int $timeout = 200;
 
     /** Flush the token buffer at most this often / once this many chars accrue. */
-    private const FLUSH_INTERVAL_SECONDS = 0.075;
+    private const FLUSH_INTERVAL_SECONDS = 0.05;
 
-    private const FLUSH_CHARS = 24;
+    private const FLUSH_CHARS = 6;
 
     private string $tokenBuffer = '';
 
