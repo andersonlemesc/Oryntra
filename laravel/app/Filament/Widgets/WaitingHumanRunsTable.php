@@ -60,7 +60,7 @@ class WaitingHumanRunsTable extends TableWidget
     {
         $tenantId = $this->tenantId();
 
-        $query = AgentRun::query()->where('status', AgentRunStatus::WaitingHuman->value);
+        $query = AgentRun::query()->fromChatwoot()->where('status', AgentRunStatus::WaitingHuman->value);
 
         if ($tenantId !== null) {
             $query->where('workspace_id', $tenantId);

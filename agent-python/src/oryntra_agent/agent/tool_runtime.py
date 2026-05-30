@@ -24,6 +24,7 @@ from langchain_core.messages import (
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
+from oryntra_agent.agent.streaming import emit_event, invoke_or_stream
 from oryntra_agent.agent.tools import (
     CallExternalToolRequest,
     CallGoogleCalendarRequest,
@@ -46,7 +47,12 @@ from oryntra_agent.agent.tools import (
     send_document,
     update_contact_memory,
 )
-from oryntra_agent.api.schemas import ExternalToolConfig, McpServerRuntimeConfig, McpToolConfig, SendDocumentArgs
+from oryntra_agent.api.schemas import (
+    ExternalToolConfig,
+    McpServerRuntimeConfig,
+    McpToolConfig,
+    SendDocumentArgs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1039,6 +1045,8 @@ def run_specialist_tool_loop(
 
             tool = tool_by_name.get(name) if isinstance(name, str) else None
 
+            emit_event({"type": "tool_call", "tool": name, "input": args or {}})
+
             if tool is None:
                 result = f"error: tool '{name}' is not available."
             else:
@@ -1048,11 +1056,14 @@ def run_specialist_tool_loop(
                     logger.exception("tool dispatch failed")
                     result = f"error: tool '{name}' raised {exc}."
 
+            truncated_output = _truncate(str(result), 500)
+            emit_event({"type": "tool_result", "tool": name, "output": truncated_output})
+
             tool_calls_trace.append(
                 {
                     "tool": name,
                     "input": args or {},
-                    "output": _truncate(str(result), 500),
+                    "output": truncated_output,
                 }
             )
             messages.append(
@@ -1100,7 +1111,7 @@ def track_llm_invoke(
     messages: list[Any],
 ) -> tuple[AIMessage, LlmUsage]:
     start = time.perf_counter()
-    ai_message: AIMessage = chat_with_tools.invoke(messages)
+    ai_message: AIMessage = invoke_or_stream(chat_with_tools, messages)
     latency_ms = int((time.perf_counter() - start) * 1000)
 
     input_tokens = 0
