@@ -142,10 +142,10 @@
                 <div class="flex items-end gap-2">
                     <textarea
                         wire:model="draft"
-                        x-on:keydown.enter.prevent="$wire.sendMessage()"
-                        rows="1"
-                        placeholder="Mensagem para o agente…"
-                        class="flex-1 resize-none rounded-xl border-gray-300 text-sm dark:border-white/10 dark:bg-gray-800"
+                        x-on:keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); $wire.sendMessage(); }"
+                        rows="3"
+                        placeholder="Mensagem para o agente…  (Enter envia, Shift+Enter quebra linha)"
+                        class="min-h-[5rem] flex-1 resize-y rounded-xl border-gray-300 text-sm dark:border-white/10 dark:bg-gray-800"
                     ></textarea>
                     <x-filament::button type="submit" icon="heroicon-o-paper-airplane">
                         Enviar
