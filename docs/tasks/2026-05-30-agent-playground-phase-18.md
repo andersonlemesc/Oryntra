@@ -36,7 +36,26 @@
 > - `config/services.php`: `agent_runtime.stream_timeout` (180s).
 > - Testes: `tests/Feature/PlaygroundModelsTest.php` passa; regressão DispatchAgentRun/EnqueueAgentRun OK (12 pass).
 >
-> ### FALTA ⬜ (retomar aqui)
+> ### CONCLUÍDO (commit 4a240ea) — Partes D–G
+> - Broadcasting instalado: `config/broadcasting.php` (reverb), `routes/channels.php` (auth canal privado
+>   `playground.conversation.{id}`), `withBroadcasting()` em `bootstrap/app.php`, `REVERB_*`/`VITE_REVERB_*` no `.env.example`.
+> - `app/Jobs/Playground/StreamPlaygroundRunJob.php` (fila `playground`): lê SSE, batch de tokens (~75ms/24), broadcast
+>   `PlaygroundStreamEvent` (ShouldBroadcastNow), persiste final (msg+trace+usage, AgentRun completed), extração de memória.
+> - `app/Events/Playground/PlaygroundStreamEvent.php`. Horizon: supervisor+fila `playground`.
+> - Front: `laravel-echo`+`pusher-js`, `resources/js/echo.js` (no build Vite, 73KB).
+> - `app/Filament/Pages/AgentPlayground.php` + `resources/views/filament/pages/agent-playground.blade.php` (chat GPT-style,
+>   sidebar conversas, selects agente/contato, Alpine+Echo append token-a-token + debug ao vivo) +
+>   `resources/views/components/playground/debug-panel.blade.php` (trace do DB nas msgs terminais).
+> - Testes: job (final/erro), fluxo de envio da page, scoping de ownership, models — **todos verde**. Pint limpo, Larastan limpo.
+>
+> ### FALTA p/ rodar em ambiente (usuário, no docker)
+> - `php artisan migrate` (3 migrações novas) no container.
+> - `cp .env.example .env`-equivalente: garantir `BROADCAST_CONNECTION=reverb` + `REVERB_*`/`VITE_REVERB_*` no `.env` real.
+> - `npm install && npm run build` (já feito localmente; refazer no container se necessário).
+> - Subir o container `laravel-reverb` (já existe no compose) + worker Horizon (fila `playground`).
+> - Validação manual: abrir /admin/{tenant}/playground, escolher agente, enviar mensagem, ver streaming token-a-token + debug.
+>
+> ### (histórico) FALTA original ⬜
 > 1. **Broadcasting NÃO está instalado no app** (sem `config/broadcasting.php`, `routes/channels.php`, nem
 >    `withBroadcasting()` em `bootstrap/app.php`). Só o container Reverb existe. Precisa instalar server-side.
 > 2. **Parte D**: `app/Jobs/Playground/StreamPlaygroundRunJob.php` (fila `playground`) — lê `PlaygroundRuntimeClient::streamEvents`,
