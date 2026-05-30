@@ -8,6 +8,7 @@ use App\Enums\ChatwootConnectionStatus;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -51,6 +52,9 @@ class ChatwootConnectionsTable
                     ->limit(48)
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->emptyStateHeading('Nenhuma conexão Chatwoot configurada')
+            ->emptyStateDescription('Crie uma conexão para provisionar o Agent Bot e ativar os agentes neste workspace.')
+            ->emptyStateIcon(Heroicon::OutlinedChatBubbleLeftRight)
             ->filters([
                 //
             ])

@@ -16,10 +16,16 @@ class BlockRegisterAfterBootstrap
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->is('register') && User::query()->exists()) {
+        $usersExist = User::query()->exists();
+
+        if ($request->is('register') && $usersExist) {
             return $request->isMethod('GET')
                 ? redirect()->route('login')
                 : redirect()->route('login', [], 303);
+        }
+
+        if ($request->is('login') && ! $usersExist) {
+            return redirect('/register');
         }
 
         return $next($request);

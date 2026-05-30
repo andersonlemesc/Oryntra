@@ -6,6 +6,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\Tenancy\EditWorkspaceProfile;
 use App\Filament\Pages\Tenancy\RegisterWorkspace;
+use App\Http\Middleware\RedirectToRegisterIfNoUsers;
 use App\Filament\Widgets\AgentRunStatsOverview;
 use App\Filament\Widgets\RecentContactsTable;
 use App\Filament\Widgets\RecentFailedRunsTable;
@@ -80,6 +81,7 @@ class AdminPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
+                RedirectToRegisterIfNoUsers::class,
             ])
             ->plugins([
                 FilamentShieldPlugin::make(),

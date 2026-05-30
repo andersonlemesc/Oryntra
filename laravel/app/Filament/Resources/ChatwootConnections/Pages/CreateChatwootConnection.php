@@ -70,7 +70,7 @@ class CreateChatwootConnection extends CreateRecord
 
         Notification::make()
             ->title('Robô Chatwoot em provisionamento')
-            ->body('O Agent Bot será criado no Chatwoot em segundo plano. Acompanhe pelo Horizon ou recarregue em alguns segundos.')
+            ->body('O Agent Bot será criado no Chatwoot em segundo plano. Após o provisionamento, edite a conexão e informe o Admin API Token para habilitar sincronização de times, labels e edição de contatos.')
             ->success()
             ->send();
     }
