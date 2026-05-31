@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\AgentDocuments\Schemas;
 
 use App\Models\AgentLlmKey;
+use App\Models\AgentLlmModel;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
@@ -12,6 +13,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 class AgentDocumentForm
@@ -53,10 +55,13 @@ class AgentDocumentForm
                             ->label('Chave LLM extratora')
                             ->options(fn (): array => self::visionKeyOptions())
                             ->searchable()
+                            ->live()
                             ->helperText('LLM com visao (OpenAI, Anthropic, Gemini) para transcrever PDFs escaneados.'),
                         TextInput::make('extractor_model')
                             ->label('Modelo extrator')
                             ->placeholder('ex.: gpt-4.1-mini')
+                            ->datalist(fn (Get $get): array => self::modelSuggestions($get('extractor_llm_key_id')))
+                            ->helperText('Modelos sincronizados da chave selecionada. Pode digitar outro manualmente.')
                             ->maxLength(255),
                     ])
                     ->collapsed(),
@@ -78,6 +83,25 @@ class AgentDocumentForm
             ->where('workspace_id', $tenant->getKey())
             ->get()
             ->mapWithKeys(fn (AgentLlmKey $key): array => [$key->getKey() => $key->name])
+            ->all();
+    }
+
+    /**
+     * Synced model ids for the selected key (datalist suggestions; free typing
+     * is still allowed).
+     *
+     * @return array<int, string>
+     */
+    private static function modelSuggestions(mixed $keyId): array
+    {
+        if (blank($keyId)) {
+            return [];
+        }
+
+        return AgentLlmModel::query()
+            ->where('agent_llm_key_id', $keyId)
+            ->orderBy('model_id')
+            ->pluck('model_id')
             ->all();
     }
 }

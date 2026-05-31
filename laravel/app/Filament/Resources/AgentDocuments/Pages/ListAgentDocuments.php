@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\AgentDocuments\Pages;
 
 use App\Enums\AgentDocumentStatus;
+use App\Enums\AgentLlmProvider;
 use App\Filament\Resources\AgentDocuments\AgentDocumentResource;
 use App\Jobs\Rag\IndexKnowledgeDocumentJob;
 use App\Models\AgentDocument;
@@ -16,6 +17,7 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Utilities\Get;
 use Illuminate\Support\Facades\DB;
 
 class ListAgentDocuments extends ListRecords
@@ -41,10 +43,13 @@ class ListAgentDocuments extends ListRecords
                     ->label('Chave LLM de embedding')
                     ->options(fn (): array => $this->workspaceKeyOptions())
                     ->required()
-                    ->searchable(),
+                    ->searchable()
+                    ->live(),
                 TextInput::make('embedding_model')
                     ->label('Modelo de embedding')
                     ->placeholder('ex.: text-embedding-3-small')
+                    ->datalist(fn (Get $get): array => $this->embeddingModelSuggestions($get('embedding_llm_key_id')))
+                    ->helperText('Modelos de embedding conhecidos do provedor. Pode digitar outro manualmente.')
                     ->required()
                     ->maxLength(255),
             ])
@@ -130,6 +135,34 @@ class ListAgentDocuments extends ListRecords
             ->get()
             ->mapWithKeys(fn (AgentLlmKey $key): array => [$key->getKey() => $key->name])
             ->all();
+    }
+
+    /**
+     * Known embedding models for the provider of the selected key (datalist
+     * suggestions; free typing still allowed).
+     *
+     * @return array<int, string>
+     */
+    private function embeddingModelSuggestions(mixed $keyId): array
+    {
+        if (blank($keyId)) {
+            return [];
+        }
+
+        $key = AgentLlmKey::query()->find($keyId);
+
+        if (! $key instanceof AgentLlmKey) {
+            return [];
+        }
+
+        $provider = $key->getAttribute('provider');
+        $provider = $provider instanceof AgentLlmProvider ? $provider->value : (string) $provider;
+
+        return match ($provider) {
+            'openai', 'local' => ['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002'],
+            'gemini' => ['gemini-embedding-001', 'text-embedding-004'],
+            default => [],
+        };
     }
 
     private function workspaceDocumentCount(): int
