@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { OryntraApiClient, OryntraApiError } from './api-client.js';
 import type { OryntraMcpConfig } from './config.js';
+import { AGENT_DESIGN, GETTING_STARTED, INTAKE, SERVER_INSTRUCTIONS, TOOLS_AND_SCOPES } from './guides.js';
 
 const perPage = z
     .number()
@@ -14,10 +15,50 @@ const perPage = z
 export function createServer(config: OryntraMcpConfig): McpServer {
     const server = new McpServer(
         { name: 'oryntra', version: '0.1.0' },
-        { capabilities: { logging: {} } },
+        { capabilities: { logging: {}, resources: {} }, instructions: SERVER_INSTRUCTIONS },
     );
 
     const api = new OryntraApiClient(config);
+
+    // ───────────────────────── Guides (resources) ─────────────────────────
+
+    const guides: Array<{ slug: string; title: string; description: string; body: string }> = [
+        {
+            slug: 'intake',
+            title: 'Before You Build: Interview the User',
+            description: 'Questions to ask before create_agent — mode, voice, LLM, routing, tools, knowledge.',
+            body: INTAKE,
+        },
+        {
+            slug: 'getting-started',
+            title: 'Getting Started',
+            description: 'Order of operations, workspace scoping, async knowledge, write-only secrets, errors.',
+            body: GETTING_STARTED,
+        },
+        {
+            slug: 'agent-design',
+            title: 'Designing Agents (LangGraph)',
+            description: 'How agents map to the LangGraph graph; modes, specialists, tools_allowlist, RAG.',
+            body: AGENT_DESIGN,
+        },
+        {
+            slug: 'tools-and-scopes',
+            title: 'Tools, Scopes & Conventions',
+            description: 'Ability→tool map, pagination, connectors vs MCP servers.',
+            body: TOOLS_AND_SCOPES,
+        },
+    ];
+
+    for (const guide of guides) {
+        server.registerResource(
+            guide.slug,
+            `oryntra://guide/${guide.slug}`,
+            { title: guide.title, description: guide.description, mimeType: 'text/markdown' },
+            async (uri) => ({
+                contents: [{ uri: uri.href, mimeType: 'text/markdown', text: guide.body }],
+            }),
+        );
+    }
 
     // ───────────────────────── Connection ─────────────────────────
 

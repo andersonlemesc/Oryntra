@@ -9,7 +9,7 @@ const distRoot = join(packageRoot, 'dist');
 /** When set, parse diagnostics only — avoids a slow full-program tsc. */
 const emitOutputs = !process.argv.includes('--no-emit');
 
-const sourceFiles = ['config.ts', 'api-client.ts', 'server.ts', 'index.ts'];
+const sourceFiles = ['config.ts', 'api-client.ts', 'guides.ts', 'server.ts', 'index.ts'];
 
 const formatHost = {
     getCurrentDirectory: () => packageRoot,
