@@ -93,3 +93,34 @@ it('scopes deletes to the token workspace', function () {
     deleteJson("/api/v1/mcp-servers/{$foreign->id}", [], $headers)->assertNotFound();
     expect(ExternalTool::query()->whereKey($foreign->id)->exists())->toBeTrue();
 });
+
+it('creates a specialist and serializes its default status', function () {
+    [, $headers] = workspaceToken(['agent:write', 'specialist:write']);
+
+    $agentId = postJson('/api/v1/agents', ['name' => 'Suporte', 'mode' => 'single'], $headers)
+        ->assertCreated()
+        ->json('data.id');
+
+    postJson("/api/v1/agents/{$agentId}/specialists", [
+        'name' => 'Cobranças',
+        'role_prompt' => 'Você cuida de cobranças.',
+    ], $headers)
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'active')
+        ->assertJsonPath('data.name', 'Cobranças');
+});
+
+it('rejects a duplicate specialist name within the same agent', function () {
+    [, $headers] = workspaceToken(['agent:write', 'specialist:write']);
+
+    $agentId = postJson('/api/v1/agents', ['name' => 'Vendas', 'mode' => 'single'], $headers)
+        ->assertCreated()
+        ->json('data.id');
+
+    $payload = ['name' => 'Repetido', 'role_prompt' => 'Prompt.'];
+
+    postJson("/api/v1/agents/{$agentId}/specialists", $payload, $headers)->assertCreated();
+    postJson("/api/v1/agents/{$agentId}/specialists", $payload, $headers)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('name');
+});

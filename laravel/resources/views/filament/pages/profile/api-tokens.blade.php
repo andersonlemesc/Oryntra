@@ -11,7 +11,10 @@
 
                     <div class="mt-3 text-xs text-amber-800 dark:text-amber-300">
                         <p class="mb-1 font-medium">Conectar via MCP:</p>
-                        <code class="block break-all rounded bg-white dark:bg-gray-900 px-3 py-2 font-mono select-all">claude mcp add oryntra --env ORYNTRA_API_URL={{ url('/api/v1') }} --env ORYNTRA_API_TOKEN={{ $plainTextToken }} -- npx -y @oryntra/mcp</code>
+                        <pre class="overflow-x-auto rounded bg-white dark:bg-gray-900 px-3 py-2 font-mono text-xs leading-relaxed"><code class="select-all whitespace-pre">claude mcp add oryntra \
+  --env ORYNTRA_API_URL={{ url('/api/v1') }} \
+  --env ORYNTRA_API_TOKEN={{ $plainTextToken }} \
+  -- npx -y @oryntra/mcp</code></pre>
                     </div>
                 </div>
                 <x-filament::button color="gray" size="sm" wire:click="dismissPlainTextToken">

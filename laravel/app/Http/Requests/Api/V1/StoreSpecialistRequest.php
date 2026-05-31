@@ -20,7 +20,14 @@ class StoreSpecialistRequest extends ApiFormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('agent_specialists', 'name')
+                    ->where('agent_id', (int) $this->route('agent'))
+                    ->where('workspace_id', $this->workspaceId()),
+            ],
             'description' => ['nullable', 'string', 'max:2000'],
             'role_prompt' => ['required', 'string'],
             'intent_keywords' => ['nullable', 'array'],

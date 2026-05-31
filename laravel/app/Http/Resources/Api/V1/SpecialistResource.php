@@ -39,7 +39,7 @@ class SpecialistResource extends JsonResource
             'priority' => $this->priority,
             'confidence_threshold' => $this->confidence_threshold,
             'fallback_specialist_id' => $this->fallback_specialist_id,
-            'status' => $this->status->value,
+            'status' => $this->status?->value,
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

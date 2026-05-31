@@ -32,7 +32,7 @@ class SpecialistController extends ApiController
             'workspace_id' => $this->workspaceId(),
         ]);
 
-        return new SpecialistResource($specialist);
+        return new SpecialistResource($specialist->refresh());
     }
 
     public function show(int $specialist): SpecialistResource
