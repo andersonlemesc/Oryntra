@@ -85,6 +85,7 @@ class RunsThroughputChart extends ChartWidget
         }
 
         $rows = AgentRun::query()
+            ->fromChatwoot()
             ->where('workspace_id', $tenantId)
             ->whereIn('status', self::STATUSES)
             ->where('started_at', '>=', $from)

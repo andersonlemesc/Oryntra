@@ -54,6 +54,7 @@ class RecentFailedRunsTable extends TableWidget
         $tenantId = $this->tenantId();
 
         $query = AgentRun::query()
+            ->fromChatwoot()
             ->where('status', AgentRunStatus::Failed->value)
             ->where('finished_at', '>=', now()->subDays(7));
 

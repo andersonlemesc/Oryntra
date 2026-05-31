@@ -50,7 +50,7 @@ class AgentRuntimeClient
             ->acceptJson()
             ->timeout((int) config('services.agent_runtime.timeout', 30))
             ->withHeaders(['X-Internal-Token' => $token])
-            ->post("{$baseUrl}/internal/chatwoot/messages", $this->payload($run))
+            ->post("{$baseUrl}/internal/chatwoot/messages", $this->buildPayload($run))
             ->throw()
             ->json();
 
@@ -112,9 +112,12 @@ class AgentRuntimeClient
     }
 
     /**
+     * Build the full runtime request payload for an agent run. Public so the
+     * playground (which streams the same contract over SSE) can reuse it.
+     *
      * @return array<string, mixed>
      */
-    private function payload(AgentRun $run): array
+    public function buildPayload(AgentRun $run): array
     {
         $run->loadMissing([
             'agent',

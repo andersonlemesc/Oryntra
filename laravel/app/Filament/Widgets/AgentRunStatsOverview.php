@@ -59,6 +59,7 @@ class AgentRunStatsOverview extends StatsOverviewWidget
     {
         /** @var array<int, object{status:string,total:int}> $rows */
         $rows = AgentRun::query()
+            ->fromChatwoot()
             ->where('workspace_id', $tenantId)
             ->where('started_at', '>=', $from)
             ->where('started_at', '<', $to)

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\AgentRunSource;
 use App\Enums\AgentRunStatus;
 use Database\Factories\AgentRunFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +19,7 @@ use Illuminate\Support\Carbon;
  * @property int                       $id
  * @property int                       $workspace_id
  * @property int                       $agent_id
+ * @property AgentRunSource            $source
  * @property int|null                  $chatwoot_connection_id
  * @property int|null                  $contact_id
  * @property int|null                  $chatwoot_webhook_event_id
@@ -38,6 +41,7 @@ use Illuminate\Support\Carbon;
 #[Fillable([
     'workspace_id',
     'agent_id',
+    'source',
     'chatwoot_connection_id',
     'contact_id',
     'chatwoot_webhook_event_id',
@@ -107,6 +111,17 @@ class AgentRun extends Model
         return $this->hasMany(ChatwootWebhookEvent::class, 'agent_run_id');
     }
 
+    /**
+     * Limit a query to Chatwoot-originated runs (excludes playground test runs).
+     *
+     * @param  Builder<AgentRun> $query
+     * @return Builder<AgentRun>
+     */
+    public function scopeFromChatwoot(Builder $query): Builder
+    {
+        return $query->where('source', AgentRunSource::Chatwoot->value);
+    }
+
     public function buildThreadId(): string
     {
         return sprintf(
@@ -124,6 +139,7 @@ class AgentRun extends Model
     {
         return [
             'status' => AgentRunStatus::class,
+            'source' => AgentRunSource::class,
             'input' => 'array',
             'output' => 'array',
             'debounce_started_at' => 'datetime',

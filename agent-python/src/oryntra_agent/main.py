@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from oryntra_agent.api.chatwoot_messages import router as chatwoot_messages_router
 from oryntra_agent.api.health import router as health_router
 from oryntra_agent.api.memory_extraction import router as memory_extraction_router
+from oryntra_agent.api.playground import router as playground_router
 from oryntra_agent.manage import setup_checkpointer
 
 logger = logging.getLogger(__name__)
@@ -38,3 +39,4 @@ app = FastAPI(
 app.include_router(health_router)
 app.include_router(chatwoot_messages_router)
 app.include_router(memory_extraction_router)
+app.include_router(playground_router)

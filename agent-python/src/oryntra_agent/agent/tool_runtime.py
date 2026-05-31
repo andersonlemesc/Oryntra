@@ -10,6 +10,7 @@ invoke them mid-turn instead of just describing the action in plain text.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -24,6 +25,7 @@ from langchain_core.messages import (
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
+from oryntra_agent.agent.streaming import emit_event, invoke_or_stream
 from oryntra_agent.agent.tools import (
     CallExternalToolRequest,
     CallGoogleCalendarRequest,
@@ -46,7 +48,12 @@ from oryntra_agent.agent.tools import (
     send_document,
     update_contact_memory,
 )
-from oryntra_agent.api.schemas import ExternalToolConfig, McpServerRuntimeConfig, McpToolConfig, SendDocumentArgs
+from oryntra_agent.api.schemas import (
+    ExternalToolConfig,
+    McpServerRuntimeConfig,
+    McpToolConfig,
+    SendDocumentArgs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1003,6 +1010,20 @@ def run_specialist_tool_loop(
 
     total_usage = LlmUsage()
 
+    # Cache of already-executed (tool, args) calls. A weak model can emit the
+    # same tool call repeatedly (e.g. an empty-arg call that errors); we must not
+    # hit the underlying tool/MCP server again — reuse the prior result so the
+    # bounded loop converges instead of spamming external calls.
+    executed_calls: dict[str, str] = {}
+
+    def _call_signature(call_name: str | None, call_args: Any) -> str:
+        try:
+            encoded_args = json.dumps(call_args or {}, sort_keys=True, default=str)
+        except (TypeError, ValueError):
+            encoded_args = str(call_args)
+
+        return f"{call_name}:{encoded_args}"
+
     def _terminal_result() -> ToolLoopResult:
         state = terminal_state or {}
         resolution = state.get("resolution") if isinstance(state, dict) else None
@@ -1038,6 +1059,25 @@ def run_specialist_tool_loop(
             call_id = call.get("id") if isinstance(call, dict) else getattr(call, "id", "")
 
             tool = tool_by_name.get(name) if isinstance(name, str) else None
+            signature = _call_signature(name, args)
+
+            if signature in executed_calls:
+                # Identical call already ran this turn: reuse the result instead
+                # of invoking the tool/MCP again. Nudge the model to stop looping.
+                cached = executed_calls[signature]
+                messages.append(
+                    ToolMessage(
+                        content=(
+                            f"{cached}\n\n(Resultado ja obtido nesta conversa para os mesmos parametros. "
+                            "Use este valor e prossiga; nao chame a mesma ferramenta de novo.)"
+                        ),
+                        tool_call_id=str(call_id) if call_id else "",
+                    )
+                )
+
+                continue
+
+            emit_event({"type": "tool_call", "tool": name, "input": args or {}})
 
             if tool is None:
                 result = f"error: tool '{name}' is not available."
@@ -1048,11 +1088,15 @@ def run_specialist_tool_loop(
                     logger.exception("tool dispatch failed")
                     result = f"error: tool '{name}' raised {exc}."
 
+            truncated_output = _truncate(str(result), 500)
+            executed_calls[signature] = truncated_output
+            emit_event({"type": "tool_result", "tool": name, "output": truncated_output})
+
             tool_calls_trace.append(
                 {
                     "tool": name,
                     "input": args or {},
-                    "output": _truncate(str(result), 500),
+                    "output": truncated_output,
                 }
             )
             messages.append(
@@ -1100,7 +1144,7 @@ def track_llm_invoke(
     messages: list[Any],
 ) -> tuple[AIMessage, LlmUsage]:
     start = time.perf_counter()
-    ai_message: AIMessage = chat_with_tools.invoke(messages)
+    ai_message: AIMessage = invoke_or_stream(chat_with_tools, messages)
     latency_ms = int((time.perf_counter() - start) * 1000)
 
     input_tokens = 0

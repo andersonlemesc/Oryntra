@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator
 from contextlib import AbstractContextManager
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -16,6 +18,14 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
+from oryntra_agent.agent.streaming import (
+    emit_event,
+    invoke_or_stream,
+    reset_event_sink,
+    reset_token_sink,
+    set_event_sink,
+    set_token_sink,
+)
 from oryntra_agent.agent.tool_runtime import (
     EXECUTABLE_TOOLS,
     LlmUsage,
@@ -190,6 +200,61 @@ def run_chatwoot_runtime(payload: ChatwootRuntimeRequest) -> ChatwootRuntimeResp
         _accumulated_usage.reset(usage_token)
         _supervisor_llm_credential.reset(supervisor_credential_token)
         _runtime_llm_credentials.reset(credentials_token)
+
+
+async def stream_chatwoot_runtime(
+    payload: ChatwootRuntimeRequest,
+) -> AsyncIterator[dict[str, Any]]:
+    """Run the (synchronous) runtime in a worker thread, bridging token and
+    event sinks to the async caller through a queue.
+
+    Yields dicts: ``{"type": "token", "delta": str}``, ``{"type": "routing", ...}``,
+    ``{"type": "tool_call"/"tool_result", ...}``, ``{"type": "final", "data": {...}}``
+    and ``{"type": "error", "message": str}``. The graph, checkpointer and the
+    production code path are untouched — sinks are only active for this run.
+    """
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+    def push(item: dict[str, Any]) -> None:
+        loop.call_soon_threadsafe(queue.put_nowait, item)
+
+    def token_sink(delta: str) -> None:
+        push({"type": "token", "delta": delta})
+
+    def event_sink(event: dict[str, Any]) -> None:
+        push(event)
+
+    def _run() -> dict[str, Any]:
+        token_token = set_token_sink(token_sink)
+        event_token = set_event_sink(event_sink)
+        try:
+            response = run_chatwoot_runtime(payload)
+            return {"type": "final", "data": response.model_dump(mode="json")}
+        finally:
+            reset_event_sink(event_token)
+            reset_token_sink(token_token)
+
+    async def runner() -> None:
+        try:
+            result = await asyncio.to_thread(_run)
+            push(result)
+        except Exception as exc:
+            logger.exception("playground stream run failed")
+            push({"type": "error", "message": str(exc)})
+        finally:
+            push({"type": "__end__"})
+
+    task = asyncio.create_task(runner())
+
+    try:
+        while True:
+            item = await queue.get()
+            if item.get("type") == "__end__":
+                break
+            yield item
+    finally:
+        await task
 
 
 @lru_cache(maxsize=1)
@@ -384,6 +449,15 @@ def respond_node(state: SupervisorState) -> SupervisorState:
     reason = state.get("reason", "unknown")
     turn_count = state.get("turn_count", 1)
     response: ChatwootRuntimeResponse
+
+    emit_event(
+        {
+            "type": "routing",
+            "specialist_id": getattr(selected_specialist, "id", None),
+            "confidence": confidence,
+            "reason": reason,
+        }
+    )
 
     if payload.agent_mode != "supervisor":
         if selected_specialist is None:
@@ -1545,7 +1619,10 @@ def generate_specialist_response_with_llm(
 
     try:
         start = time.perf_counter()
-        response = chat_model.invoke(specialist_response_messages(payload, selected_specialist))
+        response = invoke_or_stream(
+            chat_model,
+            specialist_response_messages(payload, selected_specialist),
+        )
         latency_ms = int((time.perf_counter() - start) * 1000)
         usage = LlmUsage(latency_ms=latency_ms)
         _accumulated_usage.get().add_specialist(usage)
@@ -1657,7 +1734,7 @@ def generate_supervisor_opening_with_llm(payload: ChatwootRuntimeRequest) -> str
 
     try:
         start = time.perf_counter()
-        response = chat_model.invoke(supervisor_opening_messages(payload))
+        response = invoke_or_stream(chat_model, supervisor_opening_messages(payload))
         latency_ms = int((time.perf_counter() - start) * 1000)
         usage = LlmUsage(latency_ms=latency_ms)
         _accumulated_usage.get().add_supervisor(usage)

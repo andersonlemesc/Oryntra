@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\AgentTools;
 
+use App\Enums\AgentRunSource;
 use App\Models\AgentRun;
 use App\Models\Document;
 use App\Models\ProductDocument;
@@ -67,6 +68,23 @@ class SendDocument
         $connection = $run?->chatwootConnection;
 
         if ($connection === null) {
+            // Playground runs have no Chatwoot connection. Simulate a successful
+            // delivery (documents already validated above) so the sales flow can
+            // be tested end-to-end without actually sending anything.
+            if ($run instanceof AgentRun && $run->source === AgentRunSource::Playground) {
+                /** @var array<int, string> $simulatedFilenames */
+                $simulatedFilenames = array_map(
+                    fn (Document|ProductDocument $doc): string => $doc->original_filename,
+                    $docs,
+                );
+
+                return [
+                    'sent' => true,
+                    'filenames' => $simulatedFilenames,
+                    'count' => count($simulatedFilenames),
+                ];
+            }
+
             throw ValidationException::withMessages([
                 'agent_run_id' => 'Chatwoot connection not found for agent run.',
             ]);

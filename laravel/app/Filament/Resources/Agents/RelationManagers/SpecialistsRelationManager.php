@@ -105,9 +105,9 @@ class SpecialistsRelationManager extends RelationManager
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Instrucao em texto que define o "papel" do especialista. Exemplo: "Voce e especialista em vendas. Tire duvidas sobre precos, planos e prazos. Nunca fale de suporte tecnico."'),
                                         TagsInput::make('intent_keywords')
                                             ->label('Palavras-chave de intencao')
+                                            ->splitKeys([',', 'Enter'])
                                             ->required(fn (): bool => ! $this->isSingleMode())
                                             ->visible(fn (): bool => ! $this->isSingleMode())
-                                            ->separator(',')
                                             ->helperText('Ajuda o roteamento deterministico quando o supervisor LLM nao estiver disponivel.')
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Lista de palavras que o cliente pode usar para indicar essa intencao. Ex.: para Vendas use "preco, comprar, cotacao, plano". Funciona como fallback se o supervisor LLM falhar.'),
                                     ]),
@@ -150,8 +150,8 @@ class SpecialistsRelationManager extends RelationManager
                                     ->schema([
                                         TagsInput::make('tools_allowlist')
                                             ->label('Tools permitidas')
+                                            ->splitKeys([',', 'Enter'])
                                             ->suggestions(fn (): array => app(NativeToolRegistry::class)->options())
-                                            ->separator(',')
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Lista das ferramentas que este especialista pode chamar (enviar mensagem, transferir para humano, atribuir time, etc.). Sem isso, o especialista so consegue responder em texto.'),
                                         TextInput::make('priority')
                                             ->label('Prioridade')
@@ -268,7 +268,6 @@ class SpecialistsRelationManager extends RelationManager
                                                     ->default(true),
                                                 TagsInput::make('keywords')
                                                     ->label('Palavras-chave')
-                                                    ->separator(',')
                                                     ->required()
                                                     ->helperText('Ex: humano, atendente, cancelar, reembolso.'),
                                                 Select::make('priority')
@@ -474,7 +473,6 @@ class SpecialistsRelationManager extends RelationManager
                                                     ->default(true),
                                                 TagsInput::make('keywords')
                                                     ->label('Palavras-chave')
-                                                    ->separator(',')
                                                     ->required()
                                                     ->helperText('Ex: obrigado, resolveu, era so isso, ja entendi.'),
                                                 Textarea::make('reason')
