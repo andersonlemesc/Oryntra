@@ -224,18 +224,23 @@
                             this.scroll();
                             break;
                         case 'routing':
+                            this.live.active = true;
                             this.live.debug.push({ label: 'roteamento → ', detail: 'especialista #' + (p.specialist_id ?? '—') + ' (conf ' + (p.confidence ?? '—') + ')' });
+                            this.scroll();
                             break;
                         case 'tool_call':
+                            this.live.active = true;
                             this.live.debug.push({ label: 'tool ▶ ' + (p.tool ?? '?') + ' ', detail: JSON.stringify(p.input ?? {}) });
+                            this.scroll();
                             break;
                         case 'tool_result':
                             this.live.debug.push({ label: 'tool ◀ ' + (p.tool ?? '?') + ' ', detail: String(p.output ?? '') });
+                            this.scroll();
                             break;
                         case 'completed':
                         case 'failed':
                             this.live.status = e.kind;
-                            this.$wire.$refresh().then(() => this.resetLive());
+                            this.$wire.$refresh().then(() => { this.resetLive(); this.scroll(true); });
                             break;
                     }
                 },
@@ -244,10 +249,18 @@
                     this.live = { active: false, messageId: null, text: '', debug: [], status: null };
                 },
 
-                scroll() {
+                scroll(force = false) {
+                    const el = this.$refs.transcript;
+                    if (! el) return;
+
+                    // Only stick to the bottom if the user is already near it, so we
+                    // don't yank the view down while they scroll up to read.
+                    const nearBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 150;
+
                     this.$nextTick(() => {
-                        const el = this.$refs.transcript;
-                        if (el) el.scrollTop = el.scrollHeight;
+                        if (force || nearBottom) {
+                            el.scrollTop = el.scrollHeight;
+                        }
                     });
                 },
             };
