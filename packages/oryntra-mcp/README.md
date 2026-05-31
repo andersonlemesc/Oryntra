@@ -70,6 +70,7 @@ Call `whoami` first to confirm the connection and see which abilities your token
 - **Catalog** — `list_categories`, `create_category`, `list_products`, `create_product`, `update_product`, `delete_product`
 - **Knowledge (RAG)** — `list_knowledge`, `add_knowledge_from_text`, `delete_knowledge`
 - **External tools** — `list_connectors`, `create_connector`, `delete_connector`, `list_mcp_servers`, `create_mcp_server`, `list_mcp_server_tools`, `delete_mcp_server`
+- **Lookups** — `list_chatwoot_teams`, `list_chatwoot_agents`, `list_chatwoot_labels`, `list_calendar_connections`, `list_calendar_calendars` (resolve the id fields used by `handoff_config` and `google_calendar_config`)
 
 ### Typical flow to build a working agent
 
@@ -85,9 +86,10 @@ Call `whoami` first to confirm the connection and see which abilities your token
 Advanced behaviour is configurable inline: agents take `debounce_config`, `guard_config`,
 `rag_config`; specialists take `contact_tools_config`, `product_tools_config`,
 `document_tools_config`, `memory_config`, `resolution_config`, `handoff_config`,
-`google_calendar_config`. All optional with sane defaults. The id fields inside
+`google_calendar_config`. All optional with sane defaults. Resolve the id fields inside
 `handoff_config` (Chatwoot team/agent) and `google_calendar_config` (connection/calendar)
-come from the panel — leave them unset otherwise.
+with the lookup tools (`list_chatwoot_teams`, `list_calendar_connections`, …) — don't
+guess them.
 
 ## How agents run (LangGraph)
 

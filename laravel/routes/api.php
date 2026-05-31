@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\ConnectorController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\KnowledgeDocumentController;
 use App\Http\Controllers\Api\V1\LlmKeyController;
+use App\Http\Controllers\Api\V1\LookupController;
 use App\Http\Controllers\Api\V1\McpServerController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ProductController;
@@ -105,6 +106,13 @@ Route::middleware(['auth:sanctum', 'throttle:mcp', 'api.workspace'])
         Route::get('specialists/{specialist}', [SpecialistController::class, 'show'])->middleware('ability:specialist:read')->name('specialists.show');
         Route::match(['put', 'patch'], 'specialists/{specialist}', [SpecialistController::class, 'update'])->middleware('ability:specialist:write')->name('specialists.update');
         Route::delete('specialists/{specialist}', [SpecialistController::class, 'destroy'])->middleware('ability:specialist:write')->name('specialists.destroy');
+
+        // Reference lookups for config-block id fields (handoff_config, google_calendar_config)
+        Route::get('lookups/chatwoot/teams', [LookupController::class, 'chatwootTeams'])->middleware('ability:specialist:read')->name('lookups.chatwoot.teams');
+        Route::get('lookups/chatwoot/agents', [LookupController::class, 'chatwootAgents'])->middleware('ability:specialist:read')->name('lookups.chatwoot.agents');
+        Route::get('lookups/chatwoot/labels', [LookupController::class, 'chatwootLabels'])->middleware('ability:specialist:read')->name('lookups.chatwoot.labels');
+        Route::get('lookups/calendar/connections', [LookupController::class, 'calendarConnections'])->middleware('ability:specialist:read')->name('lookups.calendar.connections');
+        Route::get('lookups/calendar/connections/{connection}/calendars', [LookupController::class, 'calendarCalendars'])->middleware('ability:specialist:read')->name('lookups.calendar.calendars');
 
         // LLM keys (BYOK)
         Route::get('llm-keys', [LlmKeyController::class, 'index'])->middleware('ability:llmkey:read')->name('llm-keys.index');

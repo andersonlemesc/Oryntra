@@ -54,6 +54,19 @@ panel lookup (`handoff_config.team_id`/`agent_id`, `google_calendar_config.conne
 `calendar_id`) are typed but flagged "Advanced". Guides/README updated to match. Verified
 round-trip via a stdio client against the live API.
 
+## Follow-up — reference lookup tools (close the Advanced id fields)
+
+`LookupController` (gated `specialist:read`) + 5 routes under `/api/v1/lookups/*`:
+chatwoot teams, chatwoot agents (optional `team_id`), chatwoot labels, calendar
+connections, and live calendar listing for a connection. Data sources mirror the panel
+form helpers (`chatwoot_teams`, `workspace_members⋈users`, `chatwoot_labels`,
+`GoogleCalendarConnection`, `GoogleCalendarClient::listCalendars`). Five MCP tools wrap
+them (`list_chatwoot_teams`, `list_chatwoot_agents`, `list_chatwoot_labels`,
+`list_calendar_connections`, `list_calendar_calendars`) — total tools 30 → 35. The config
+schemas now point their id fields at these lookups instead of "panel-only". Verified live
+(real teams/agents/labels/calendars) + Pest (`LookupApiTest`: workspace scoping + ability
+gating).
+
 ## Verification
 
 - `npm run build` clean (transpile diagnostics gate).

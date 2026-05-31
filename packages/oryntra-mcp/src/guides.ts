@@ -128,9 +128,15 @@ metadata (\`meta.current_page\`, \`meta.last_page\`, \`links.next\`).
 \`create_specialist\`/\`update_specialist\` accept \`contact_tools_config\`,
 \`product_tools_config\`, \`document_tools_config\`, \`memory_config\`, \`resolution_config\`,
 \`handoff_config\`, \`google_calendar_config\`. All optional with sane defaults — only send
-what you mean to change. The id fields \`handoff_config.team_id\`/\`agent_id\` and
-\`google_calendar_config.connection_id\`/\`calendar_id\` come from the panel; leave them unset
-otherwise. See the intake guide.
+what you mean to change. Resolve their id fields with the lookup tools first:
+\`list_chatwoot_teams\`, \`list_chatwoot_agents\`, \`list_chatwoot_labels\`,
+\`list_calendar_connections\`, \`list_calendar_calendars\`. See the intake guide.
+
+## Lookups (reference data)
+\`list_chatwoot_teams\`, \`list_chatwoot_agents\` (optional \`team_id\` filter),
+\`list_chatwoot_labels\`, \`list_calendar_connections\`, \`list_calendar_calendars\`
+(\`connection_id\`) — all \`specialist:read\`. They exist to fill the id fields of
+\`handoff_config\` and \`google_calendar_config\`.
 `;
 
 export const INTAKE = `# Before you build: interview the user
@@ -202,10 +208,12 @@ These are settable here too — offer them only if the user cares; sensible defa
   (which doc categories it may send), \`memory_config\` (extract/inject contact memory,
   tool-call budget), \`resolution_config\` (auto-close rules), \`handoff_config\` (human
   handoff rules), \`google_calendar_config\`.
-- **Needs an id from the panel** (no lookup tool here): \`handoff_config.team_id\` /
-  \`handoff_config.agent_id\` (Chatwoot) and \`google_calendar_config.connection_id\` /
-  \`calendar_id\`. Leave these unset unless the user provides the id; everything else in
-  those blocks works without it.
+- **Id fields — resolve them with a lookup tool first:** \`handoff_config.team_id\` ←
+  \`list_chatwoot_teams\`; \`handoff_config.agent_id\` ← \`list_chatwoot_agents\`;
+  \`*.label_name\` ← \`list_chatwoot_labels\`; \`google_calendar_config.connection_id\` ←
+  \`list_calendar_connections\`; \`google_calendar_config.calendar_id\` ←
+  \`list_calendar_calendars\`. Never guess these ids — call the lookup, show the user the
+  options, and use the chosen value.
 
 ## 8. Confirm, then build
 Summarize the plan (mode, specialists, models, tools, knowledge, advanced config, status)

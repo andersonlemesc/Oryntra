@@ -116,14 +116,14 @@ export const handoffConfig = z
             .positive()
             .nullable()
             .optional()
-            .describe('Advanced: Chatwoot team numeric id. Leave unset unless the user gives it from the panel.'),
+            .describe('Chatwoot team id — get it from list_chatwoot_teams.'),
         agent_id: z
             .number()
             .int()
             .positive()
             .nullable()
             .optional()
-            .describe('Advanced: Chatwoot agent numeric id. Leave unset unless the user gives it from the panel.'),
+            .describe('Chatwoot agent id — get it from list_chatwoot_agents.'),
         rules: z
             .array(
                 z.object({
@@ -152,12 +152,12 @@ export const googleCalendarConfig = z
             .positive()
             .nullable()
             .optional()
-            .describe('Advanced: Google connection id from the panel. Required when enabled.'),
+            .describe('Google connection id — get it from list_calendar_connections. Required when enabled.'),
         calendar_id: z
             .string()
             .nullable()
             .optional()
-            .describe('Advanced: calendar id from the panel. Required when enabled.'),
+            .describe('Calendar id — get it from list_calendar_calendars. Required when enabled.'),
     })
     .optional()
     .describe('Google Calendar access for the gcal_* tools.');

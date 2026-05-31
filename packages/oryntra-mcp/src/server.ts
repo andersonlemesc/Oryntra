@@ -543,6 +543,68 @@ export function createServer(config: OryntraMcpConfig): McpServer {
         async ({ mcp_server_id }) => handleTool(() => api.request('DELETE', `/mcp-servers/${mcp_server_id}`)),
     );
 
+    // ───────────────────────── Lookups (config-block ids) ─────────────────────────
+
+    server.registerTool(
+        'list_chatwoot_teams',
+        {
+            title: 'List Chatwoot Teams',
+            description:
+                'List Chatwoot teams in the workspace. Use a returned team_id for handoff_config.team_id. Required scope: specialist:read.',
+            inputSchema: {},
+        },
+        async () => handleTool(() => api.request('GET', '/lookups/chatwoot/teams')),
+    );
+
+    server.registerTool(
+        'list_chatwoot_agents',
+        {
+            title: 'List Chatwoot Agents',
+            description:
+                'List Chatwoot agents (workspace members linked to Chatwoot). Use a returned agent_id for handoff_config.agent_id. Optionally filter by team_id. Required scope: specialist:read.',
+            inputSchema: {
+                team_id: z.number().int().positive().optional().describe('Only agents in this Chatwoot team.'),
+            },
+        },
+        async (input) => handleTool(() => api.request('GET', api.withQuery('/lookups/chatwoot/agents', input))),
+    );
+
+    server.registerTool(
+        'list_chatwoot_labels',
+        {
+            title: 'List Chatwoot Labels',
+            description:
+                'List Chatwoot label titles in the workspace. Use a title for handoff_config.label_name or resolution_config.label_name. Required scope: specialist:read.',
+            inputSchema: {},
+        },
+        async () => handleTool(() => api.request('GET', '/lookups/chatwoot/labels')),
+    );
+
+    server.registerTool(
+        'list_calendar_connections',
+        {
+            title: 'List Google Calendar Connections',
+            description:
+                'List active Google Calendar connections. Use a returned connection_id for google_calendar_config.connection_id. Required scope: specialist:read.',
+            inputSchema: {},
+        },
+        async () => handleTool(() => api.request('GET', '/lookups/calendar/connections')),
+    );
+
+    server.registerTool(
+        'list_calendar_calendars',
+        {
+            title: 'List Calendars Of A Connection',
+            description:
+                'Live discovery: list the calendars a Google connection can access. Use a returned calendar_id for google_calendar_config.calendar_id. Required scope: specialist:read.',
+            inputSchema: {
+                connection_id: z.number().int().positive().describe('The connection id (from list_calendar_connections).'),
+            },
+        },
+        async ({ connection_id }) =>
+            handleTool(() => api.request('GET', `/lookups/calendar/connections/${connection_id}/calendars`)),
+    );
+
     return server;
 }
 
