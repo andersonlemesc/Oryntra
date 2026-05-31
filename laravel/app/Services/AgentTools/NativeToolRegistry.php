@@ -64,6 +64,10 @@ final class NativeToolRegistry
                 'label' => 'Consultar documentos',
                 'description' => 'Busca documentos da biblioteca geral (catalogos, FAQs, manuais) por categoria ou termo. Retorna IDs para envio via send_document.',
             ],
+            NativeTool::SearchKnowledgeBase->value => [
+                'label' => 'Buscar na base de conhecimento',
+                'description' => 'Busca semantica na base de conhecimento do workspace (documentos vetorizados) e retorna trechos relevantes para fundamentar a resposta. Nao envia arquivos ao cliente.',
+            ],
             NativeTool::SendDocument->value => [
                 'label' => 'Enviar documento',
                 'description' => 'Envia um documento (PDF, imagem) ao cliente via Chatwoot.',

@@ -24,6 +24,8 @@ dependencies = [
     "python-docx>=1.1",
     "markdown-it-py>=3.0",
     "python-multipart>=0.0.20",
+    "pypdfium2>=5.8.0",
+    "pillow>=12.2.0",
 ]
 
 [dependency-groups]

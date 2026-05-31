@@ -49,7 +49,7 @@ class DocumentsTable
             ->filters([
                 SelectFilter::make('category')
                     ->label('Categoria')
-                    ->options(DocumentCategory::options()),
+                    ->options(DocumentCategory::sendableOptions()),
             ])
             ->recordActions([
                 EditAction::make(),

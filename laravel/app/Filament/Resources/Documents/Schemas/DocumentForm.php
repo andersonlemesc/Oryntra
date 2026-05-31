@@ -25,10 +25,10 @@ class DocumentForm
                     ->schema([
                         Select::make('category')
                             ->label('Categoria')
-                            ->options(DocumentCategory::options())
+                            ->options(DocumentCategory::sendableOptions())
                             ->required()
                             ->default(DocumentCategory::General->value)
-                            ->helperText('"Conhecimento IA" nao e enviado ao cliente; serve apenas de referencia para a IA.'),
+                            ->helperText('Midias sao enviadas ao cliente pela IA. Para documentos que a IA apenas consulta, use a Base de Conhecimento.'),
                         TextInput::make('title')
                             ->label('Titulo')
                             ->required()

@@ -302,6 +302,18 @@ return [
             'timeout' => 200,
             'backoff' => 5,
         ],
+
+        'rag-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['rag'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 1,
+            'memory' => 512,
+            'tries' => 3,
+            'timeout' => 1200,
+            'backoff' => 60,
+        ],
     ],
 
     'environments' => [
@@ -314,6 +326,7 @@ return [
             'agent-supervisor' => ['maxProcesses' => 6],
             'documents-supervisor' => ['maxProcesses' => 2],
             'playground-supervisor' => ['maxProcesses' => 4],
+            'rag-supervisor' => ['maxProcesses' => 2],
         ],
 
         'local' => [
@@ -325,6 +338,7 @@ return [
             'agent-supervisor' => ['maxProcesses' => 1],
             'documents-supervisor' => ['maxProcesses' => 1],
             'playground-supervisor' => ['maxProcesses' => 1],
+            'rag-supervisor' => ['maxProcesses' => 1],
         ],
     ],
 

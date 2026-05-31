@@ -10,17 +10,20 @@ use App\Enums\AgentMode;
 use App\Enums\AgentSpecialistStatus;
 use App\Enums\ExternalToolKind;
 use App\Models\Agent;
+use App\Models\AgentDocument;
 use App\Models\AgentLlmKey;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
 use App\Models\ContactMemory;
 use App\Models\ExternalTool;
+use App\Models\Workspace;
 use App\Services\MCP\McpHttpClient;
 use App\Services\MCP\McpSchemaTranslator;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
 
@@ -59,6 +62,210 @@ class AgentRuntimeClient
         }
 
         return $this->validatedResponse($response);
+    }
+
+    /**
+     * Ingest a knowledge document: Python downloads the file, extracts text
+     * (lib with vision-LLM fallback), chunks it and embeds it with the
+     * workspace BYOK embedding credential. Python is stateless — it returns the
+     * chunks and vectors for Laravel to persist into pgvector.
+     *
+     * @return array{
+     *     chunks: array<int, array{index:int,content:string,tokens:int|null,metadata:array<string,mixed>}>,
+     *     vectors: array<int, array<int, float>>,
+     *     embedding_provider: string,
+     *     embedding_model: string,
+     *     embedding_dim: int,
+     *     usage: array<string, mixed>
+     * }
+     *
+     * @throws AgentRuntimeException
+     */
+    public function ingestKnowledge(AgentDocument $document): array
+    {
+        $baseUrl = rtrim((string) config('services.agent_runtime.base_url'), '/');
+        $token = (string) config('services.agent_runtime.internal_token');
+
+        if ($token === '') {
+            throw new AgentRuntimeException('Agent runtime internal token is not configured.');
+        }
+
+        $workspace = $document->workspace;
+
+        if (! $workspace instanceof Workspace) {
+            throw new AgentRuntimeException('Knowledge document is not bound to a workspace.');
+        }
+
+        $embedderCred = $this->mediaCredentialFromKey(
+            $workspace->embeddingLlmKey,
+            $workspace->id,
+            is_string($workspace->getAttribute('embedding_model')) ? $workspace->getAttribute('embedding_model') : null,
+        );
+
+        if ($embedderCred === null) {
+            throw new AgentRuntimeException('Workspace has no active embedding model configured.');
+        }
+
+        $payload = [
+            'workspace_id' => $document->workspace_id,
+            'document_id' => $document->id,
+            'file_url' => $this->internalDownloadUrl($document),
+            'mime' => $document->mime_type,
+            'extractor_cred' => $this->mediaCredentialFromKey(
+                $document->extractorLlmKey,
+                $document->workspace_id,
+                is_string($document->extractor_model) ? $document->extractor_model : null,
+            ),
+            'embedder_cred' => $embedderCred,
+        ];
+
+        $response = Http::asJson()
+            ->acceptJson()
+            ->timeout((int) config('services.agent_runtime.ingest_timeout', 600))
+            ->withHeaders(['X-Internal-Token' => $token])
+            ->post("{$baseUrl}/internal/rag/ingest", $payload);
+
+        if ($response->failed()) {
+            throw new AgentRuntimeException(sprintf(
+                'Knowledge ingest failed for document %d: HTTP %d',
+                $document->id,
+                $response->status(),
+            ));
+        }
+
+        $body = $response->json();
+
+        if (! is_array($body)) {
+            throw new AgentRuntimeException('Knowledge ingest returned an invalid response.');
+        }
+
+        return $this->validatedIngestResponse($body);
+    }
+
+    /**
+     * Presigned URL the agent-python container can reach. For the S3/MinIO disk
+     * we sign with the Docker-internal endpoint (`s3_internal`); other disks use
+     * their own temporary URL.
+     */
+    private function internalDownloadUrl(AgentDocument $document): string
+    {
+        if ($document->disk() === 's3') {
+            return Storage::disk('s3_internal')->temporaryUrl($document->storage_path, now()->addMinutes(60));
+        }
+
+        return $document->temporaryUrl(60);
+    }
+
+    /**
+     * @param array<mixed, mixed> $response
+     * @return array{
+     *     chunks: array<int, array{index:int,content:string,tokens:int|null,metadata:array<string,mixed>}>,
+     *     vectors: array<int, array<int, float>>,
+     *     embedding_provider: string,
+     *     embedding_model: string,
+     *     embedding_dim: int,
+     *     usage: array<string, mixed>
+     * }
+     */
+    private function validatedIngestResponse(array $response): array
+    {
+        $chunks = $response['chunks'] ?? null;
+        $vectors = $response['vectors'] ?? null;
+        $provider = $response['embedding_provider'] ?? null;
+        $model = $response['embedding_model'] ?? null;
+        $dim = $response['embedding_dim'] ?? null;
+        $usage = $response['usage'] ?? [];
+
+        if (
+            ! is_array($chunks)
+            || ! is_array($vectors)
+            || count($chunks) !== count($vectors)
+            || ! is_string($provider)
+            || ! is_string($model)
+            || ! is_int($dim)
+            || ! is_array($usage)
+        ) {
+            throw new AgentRuntimeException('Knowledge ingest response failed contract validation.');
+        }
+
+        /** @var array<int, array{index:int,content:string,tokens:int|null,metadata:array<string,mixed>}> $chunks */
+        /** @var array<int, array<int, float>> $vectors */
+        /** @var array<string, mixed> $usage */
+
+        return [
+            'chunks' => array_values($chunks),
+            'vectors' => array_values($vectors),
+            'embedding_provider' => $provider,
+            'embedding_model' => $model,
+            'embedding_dim' => $dim,
+            'usage' => $usage,
+        ];
+    }
+
+    /**
+     * Embed a single query string with the workspace embedding credential.
+     * Used by knowledge-base retrieval: the query must be embedded with the
+     * same model that produced the stored chunks (embeddings live in Python).
+     *
+     * @return array{vector: array<int, float>, embedding_model: string, embedding_dim: int}
+     *
+     * @throws AgentRuntimeException
+     */
+    public function embedQuery(Workspace $workspace, string $query): array
+    {
+        $baseUrl = rtrim((string) config('services.agent_runtime.base_url'), '/');
+        $token = (string) config('services.agent_runtime.internal_token');
+
+        if ($token === '') {
+            throw new AgentRuntimeException('Agent runtime internal token is not configured.');
+        }
+
+        $embedderCred = $this->mediaCredentialFromKey(
+            $workspace->embeddingLlmKey,
+            $workspace->id,
+            is_string($workspace->getAttribute('embedding_model')) ? $workspace->getAttribute('embedding_model') : null,
+        );
+
+        if ($embedderCred === null) {
+            throw new AgentRuntimeException('Workspace has no active embedding model configured.');
+        }
+
+        $response = Http::asJson()
+            ->acceptJson()
+            ->timeout((int) config('services.agent_runtime.timeout', 30))
+            ->withHeaders(['X-Internal-Token' => $token])
+            ->post("{$baseUrl}/internal/rag/embed-query", [
+                'query' => $query,
+                'embedder_cred' => $embedderCred,
+            ]);
+
+        if ($response->failed()) {
+            throw new AgentRuntimeException(sprintf(
+                'Query embedding failed for workspace %d: HTTP %d',
+                $workspace->id,
+                $response->status(),
+            ));
+        }
+
+        $body = $response->json();
+
+        if (! is_array($body)) {
+            throw new AgentRuntimeException('Query embedding returned an invalid response.');
+        }
+
+        $vector = $body['vector'] ?? null;
+        $model = $body['embedding_model'] ?? null;
+        $dim = $body['embedding_dim'] ?? null;
+
+        if (! is_array($vector) || $vector === [] || ! is_string($model) || ! is_int($dim)) {
+            throw new AgentRuntimeException('Query embedding response failed contract validation.');
+        }
+
+        return [
+            'vector' => array_values(array_map(static fn (mixed $value): float => (float) $value, $vector)),
+            'embedding_model' => $model,
+            'embedding_dim' => $dim,
+        ];
     }
 
     /**

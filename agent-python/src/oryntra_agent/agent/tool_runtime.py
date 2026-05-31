@@ -34,6 +34,7 @@ from oryntra_agent.agent.tools import (
     QueryDocumentsRequest,
     QueryProductsRequest,
     ResolveConversationRequest,
+    SearchKnowledgeBaseRequest,
     SendDocumentRequest,
     UpdateContactMemoryRequest,
     UpdateContactRequest,
@@ -45,6 +46,7 @@ from oryntra_agent.agent.tools import (
     query_documents,
     query_products,
     resolve_conversation,
+    search_knowledge_base,
     send_document,
     update_contact_memory,
 )
@@ -66,6 +68,7 @@ EXECUTABLE_TOOLS: frozenset[str] = frozenset(
         "resolve_conversation",
         "query_products",
         "query_documents",
+        "search_knowledge_base",
         "send_document",
         "gcal_list_events",
         "gcal_create_event",
@@ -201,6 +204,9 @@ def build_specialist_tools(
 
     if "query_documents" in allowed_tools:
         tools.append(_make_query_documents_tool(ctx))
+
+    if "search_knowledge_base" in allowed_tools:
+        tools.append(_make_search_knowledge_base_tool(ctx))
 
     if "send_document" in allowed_tools:
         tools.append(_make_send_document_tool(ctx))
@@ -656,6 +662,70 @@ def _make_query_documents_tool(ctx: ToolRuntimeContext) -> StructuredTool:
             "Use quando o cliente pede um material que nao esta vinculado a um produto."
         ),
         args_schema=QueryDocumentsArgs,
+        func=run,
+    )
+
+
+class SearchKnowledgeBaseArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(
+        description="Pergunta ou termo a buscar na base de conhecimento do workspace.",
+    )
+    top_k: int = Field(default=5, description="Quantidade maxima de trechos a retornar (1-20).")
+    tags: list[str] | None = Field(
+        default=None,
+        description="Filtrar a busca por tags dos documentos (opcional).",
+    )
+
+
+def _make_search_knowledge_base_tool(ctx: ToolRuntimeContext) -> StructuredTool:
+    def run(
+        query: str,
+        top_k: int = 5,
+        tags: list[str] | None = None,
+    ) -> str:
+        try:
+            response = search_knowledge_base(
+                SearchKnowledgeBaseRequest(
+                    workspace_id=ctx.workspace_id,
+                    agent_id=ctx.agent_id,
+                    agent_run_id=ctx.agent_run_id,
+                    specialist_id=ctx.specialist_id,
+                    query=query,
+                    top_k=max(1, min(20, top_k)),
+                    tags=tags,
+                )
+            )
+        except Exception as exc:
+            logger.exception("search_knowledge_base tool call failed")
+            return f"error: search_knowledge_base failed ({exc})."
+
+        if not response.hits:
+            return "Nenhum trecho relevante encontrado na base de conhecimento."
+
+        lines = ["Trechos relevantes da base de conhecimento:"]
+        for hit in response.hits[:top_k]:
+            score = hit.get("score")
+            content = str(hit.get("content", "")).strip()
+            doc_id = hit.get("agent_document_id")
+            prefix = f"[doc {doc_id}"
+            if isinstance(score, (int, float)):
+                prefix += f", score {score:.2f}"
+            prefix += "]"
+            lines.append(f"{prefix} {content}")
+
+        return "\n\n".join(lines)
+
+    return StructuredTool.from_function(
+        name="search_knowledge_base",
+        description=(
+            "Busca semantica na base de conhecimento do workspace (documentos vetorizados). "
+            "Retorna trechos relevantes para fundamentar a resposta ao cliente. NAO envia "
+            "arquivos — use apenas para consultar informacao. Prefira esta tool quando "
+            "precisar de detalhes que estao em documentos internos da empresa."
+        ),
+        args_schema=SearchKnowledgeBaseArgs,
         func=run,
     )
 

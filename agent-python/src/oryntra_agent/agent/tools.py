@@ -199,6 +199,25 @@ class QueryDocumentsResponse(BaseModel):
     total: int
 
 
+class SearchKnowledgeBaseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: int
+    agent_id: int
+    agent_run_id: int
+    specialist_id: int | None = None
+    query: str
+    top_k: int = 5
+    tags: list[str] | None = None
+
+
+class SearchKnowledgeBaseResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    hits: list[dict[str, Any]]
+    embedding_model: str | None = None
+
+
 class SendDocumentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -326,6 +345,12 @@ def query_products(payload: QueryProductsRequest) -> QueryProductsResponse:
 def query_documents(payload: QueryDocumentsRequest) -> QueryDocumentsResponse:
     return QueryDocumentsResponse.model_validate(
         _post("/api/internal/agent-tools/query-documents", payload)
+    )
+
+
+def search_knowledge_base(payload: SearchKnowledgeBaseRequest) -> SearchKnowledgeBaseResponse:
+    return SearchKnowledgeBaseResponse.model_validate(
+        _post("/api/internal/agent-tools/search-knowledge-base", payload)
     )
 
 

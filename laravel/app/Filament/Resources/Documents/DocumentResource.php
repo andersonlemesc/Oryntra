@@ -23,15 +23,15 @@ class DocumentResource extends Resource
 {
     protected static ?string $model = Document::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentText;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPhoto;
 
     protected static string|UnitEnum|null $navigationGroup = 'Agentes';
 
-    protected static ?string $navigationLabel = 'Documentos';
+    protected static ?string $navigationLabel = 'Midias';
 
-    protected static ?string $modelLabel = 'documento';
+    protected static ?string $modelLabel = 'midia';
 
-    protected static ?string $pluralModelLabel = 'documentos';
+    protected static ?string $pluralModelLabel = 'midias';
 
     protected static ?string $recordTitleAttribute = 'title';
 

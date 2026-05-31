@@ -19,6 +19,7 @@ enum NativeTool: string
     case ResolveConversation = 'resolve_conversation';
     case QueryProducts = 'query_products';
     case QueryDocuments = 'query_documents';
+    case SearchKnowledgeBase = 'search_knowledge_base';
     case SendDocument = 'send_document';
     case GcalListEvents = 'gcal_list_events';
     case GcalCreateEvent = 'gcal_create_event';
