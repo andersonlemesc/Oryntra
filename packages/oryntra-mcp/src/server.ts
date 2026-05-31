@@ -3,6 +3,18 @@ import { z } from 'zod';
 import { OryntraApiClient, OryntraApiError } from './api-client.js';
 import type { OryntraMcpConfig } from './config.js';
 import { AGENT_DESIGN, GETTING_STARTED, INTAKE, SERVER_INSTRUCTIONS, TOOLS_AND_SCOPES } from './guides.js';
+import {
+    contactToolsConfig,
+    debounceConfig,
+    documentToolsConfig,
+    googleCalendarConfig,
+    guardConfig,
+    handoffConfig,
+    memoryConfig,
+    productToolsConfig,
+    ragConfig,
+    resolutionConfig,
+} from './schemas.js';
 
 const perPage = z
     .number()
@@ -168,6 +180,9 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 supervisor_prompt: z.string().optional().describe('Routing prompt (supervisor mode only).'),
                 supervisor_llm_key_id: z.number().int().positive().optional(),
                 supervisor_llm_model: z.string().optional(),
+                debounce_config: debounceConfig,
+                guard_config: guardConfig,
+                rag_config: ragConfig,
             },
         },
         async (input) => handleTool(() => api.request('POST', '/agents', input)),
@@ -188,6 +203,11 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 locale: z.string().optional(),
                 timezone: z.string().optional(),
                 supervisor_prompt: z.string().nullable().optional(),
+                supervisor_llm_key_id: z.number().int().positive().nullable().optional(),
+                supervisor_llm_model: z.string().nullable().optional(),
+                debounce_config: debounceConfig,
+                guard_config: guardConfig,
+                rag_config: ragConfig,
             },
         },
         async ({ agent_id, ...body }) => handleTool(() => api.request('PATCH', `/agents/${agent_id}`, body)),
@@ -233,6 +253,13 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 priority: z.number().int().min(0).optional(),
                 confidence_threshold: z.number().min(0).max(1).optional(),
                 status: z.enum(['active', 'inactive']).optional(),
+                contact_tools_config: contactToolsConfig,
+                product_tools_config: productToolsConfig,
+                document_tools_config: documentToolsConfig,
+                memory_config: memoryConfig,
+                resolution_config: resolutionConfig,
+                handoff_config: handoffConfig,
+                google_calendar_config: googleCalendarConfig,
             },
         },
         async ({ agent_id, ...body }) => handleTool(() => api.request('POST', `/agents/${agent_id}/specialists`, body)),
@@ -256,6 +283,13 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 priority: z.number().int().min(0).optional(),
                 confidence_threshold: z.number().min(0).max(1).optional(),
                 status: z.enum(['active', 'inactive']).optional(),
+                contact_tools_config: contactToolsConfig,
+                product_tools_config: productToolsConfig,
+                document_tools_config: documentToolsConfig,
+                memory_config: memoryConfig,
+                resolution_config: resolutionConfig,
+                handoff_config: handoffConfig,
+                google_calendar_config: googleCalendarConfig,
             },
         },
         async ({ specialist_id, ...body }) => handleTool(() => api.request('PATCH', `/specialists/${specialist_id}`, body)),

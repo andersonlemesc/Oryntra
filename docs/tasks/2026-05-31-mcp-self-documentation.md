@@ -42,6 +42,18 @@ Native tool names (for allowlist examples): `query_products`, `search_knowledge_
 - `README.md` — install (npx + local), env vars, tool catalog by domain, workflows,
   LangGraph note, security (write-only secrets), abilities table.
 
+## Follow-up — config blocks exposed (typed)
+
+The REST API already accepted the agent/specialist config blocks (loose `array` rules);
+only the MCP wrapper omitted them. Added typed Zod schemas (`src/schemas.ts`) mirroring the
+panel forms and wired them into `create_agent`/`update_agent` (`debounce_config`,
+`guard_config`, `rag_config`) and `create_specialist`/`update_specialist`
+(`contact_tools_config`, `product_tools_config`, `document_tools_config`, `memory_config`,
+`resolution_config`, `handoff_config`, `google_calendar_config`). Id fields that need a
+panel lookup (`handoff_config.team_id`/`agent_id`, `google_calendar_config.connection_id`/
+`calendar_id`) are typed but flagged "Advanced". Guides/README updated to match. Verified
+round-trip via a stdio client against the live API.
+
 ## Verification
 
 - `npm run build` clean (transpile diagnostics gate).

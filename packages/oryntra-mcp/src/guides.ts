@@ -122,6 +122,15 @@ metadata (\`meta.current_page\`, \`meta.last_page\`, \`links.next\`).
 - **MCP server** = a Streamable-HTTP MCP endpoint whose tools become callable. Register
   with \`create_mcp_server\`, then \`list_mcp_server_tools\` does a live handshake to list
   what it exposes.
+
+## Config blocks (advanced)
+\`create_agent\`/\`update_agent\` accept \`debounce_config\`, \`guard_config\`, \`rag_config\`.
+\`create_specialist\`/\`update_specialist\` accept \`contact_tools_config\`,
+\`product_tools_config\`, \`document_tools_config\`, \`memory_config\`, \`resolution_config\`,
+\`handoff_config\`, \`google_calendar_config\`. All optional with sane defaults — only send
+what you mean to change. The id fields \`handoff_config.team_id\`/\`agent_id\` and
+\`google_calendar_config.connection_id\`/\`calendar_id\` come from the panel; leave them unset
+otherwise. See the intake guide.
 `;
 
 export const INTAKE = `# Before you build: interview the user
@@ -184,15 +193,23 @@ For every specialist ask:
 - Any policies/FAQ/docs to seed now? → \`add_knowledge_from_text\` (indexes in background).
   A specialist must also have \`search_knowledge_base\` in its allowlist to use it.
 
-## 7. Confirm, then build
-Summarize the plan (mode, specialists, models, tools, knowledge, status) and get a yes
-before creating anything.
+## 7. Advanced behaviour (optional config blocks)
+These are settable here too — offer them only if the user cares; sensible defaults exist.
+- Agent: \`debounce_config\` (batch rapid messages), \`guard_config\` (block sensitive
+  data / prompt injection, low-confidence handling), \`rag_config\` (top_k, min_score,
+  answer-only-with-context).
+- Specialist: \`contact_tools_config\`, \`product_tools_config\`, \`document_tools_config\`
+  (which doc categories it may send), \`memory_config\` (extract/inject contact memory,
+  tool-call budget), \`resolution_config\` (auto-close rules), \`handoff_config\` (human
+  handoff rules), \`google_calendar_config\`.
+- **Needs an id from the panel** (no lookup tool here): \`handoff_config.team_id\` /
+  \`handoff_config.agent_id\` (Chatwoot) and \`google_calendar_config.connection_id\` /
+  \`calendar_id\`. Leave these unset unless the user provides the id; everything else in
+  those blocks works without it.
 
-## Set via the panel, not this MCP
-These deeper toggles are configured in the Oryntra panel and are **not** settable through
-these tools — mention them if relevant, but don't promise to set them: message debounce,
-guardrails (sensitive-data / prompt-injection blocking), RAG answer-only mode, and the
-per-specialist handoff / memory / resolution / calendar config blocks.`;
+## 8. Confirm, then build
+Summarize the plan (mode, specialists, models, tools, knowledge, advanced config, status)
+and get a yes before creating anything.`;
 
 export const SERVER_INSTRUCTIONS = `Oryntra MCP manages one workspace (scoped to your API token): agents, specialists, BYOK
 LLM keys, product catalog, RAG knowledge base, and the HTTP/MCP tools agents can call.

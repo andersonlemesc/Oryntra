@@ -82,6 +82,13 @@ Call `whoami` first to confirm the connection and see which abilities your token
    `pending` → `indexed`).
 6. `update_agent { status: "active" }`.
 
+Advanced behaviour is configurable inline: agents take `debounce_config`, `guard_config`,
+`rag_config`; specialists take `contact_tools_config`, `product_tools_config`,
+`document_tools_config`, `memory_config`, `resolution_config`, `handoff_config`,
+`google_calendar_config`. All optional with sane defaults. The id fields inside
+`handoff_config` (Chatwoot team/agent) and `google_calendar_config` (connection/calendar)
+come from the panel — leave them unset otherwise.
+
 ## How agents run (LangGraph)
 
 Oryntra compiles each agent to a LangGraph `StateGraph` (`route → specialist → respond`).
