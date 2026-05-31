@@ -80,7 +80,7 @@ class StreamPlaygroundRunJob implements ShouldQueue
         $debugEvents = [];
 
         try {
-            foreach ($client->streamEvents($run) as $event) {
+            $client->streamEvents($run, function (array $event) use (&$finalData, &$debugEvents): void {
                 $name = $event['event'];
                 $data = $event['data'];
 
@@ -102,7 +102,7 @@ class StreamPlaygroundRunJob implements ShouldQueue
 
                     throw new RuntimeException((string) ($data['message'] ?? 'Agent runtime stream error.'));
                 }
-            }
+            });
 
             $this->flushTokens();
             $this->persistFinal($message, $run, $finalData, $debugEvents);

@@ -9,9 +9,7 @@ use App\Enums\AgentRunStatus;
 use App\Models\AgentRun;
 use App\Models\PlaygroundConversation;
 use App\Services\AgentRuntime\AgentRuntimeClient;
-use Generator;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 class PlaygroundRuntimeClient
@@ -45,11 +43,17 @@ class PlaygroundRuntimeClient
     }
 
     /**
-     * Open the Python SSE stream for a run and yield decoded events.
+     * Stream the Python SSE response, invoking $onEvent for each decoded event
+     * as it arrives.
      *
-     * @return Generator<int, array{event: string, data: array<string, mixed>}>
+     * Uses cURL with CURLOPT_WRITEFUNCTION instead of the Guzzle/Laravel HTTP
+     * client: the latter buffers the whole response even with stream=>true, so
+     * tokens only surfaced once the run finished. The write callback delivers
+     * chunks live, giving real token-by-token streaming.
+     *
+     * @param callable(array{event: string, data: array<string, mixed>}): void $onEvent
      */
-    public function streamEvents(AgentRun $run): Generator
+    public function streamEvents(AgentRun $run, callable $onEvent): void
     {
         $baseUrl = rtrim((string) config('services.agent_runtime.base_url'), '/');
         $token = (string) config('services.agent_runtime.internal_token');
@@ -58,37 +62,58 @@ class PlaygroundRuntimeClient
             throw new RuntimeException('Agent runtime internal token is not configured.');
         }
 
-        $response = Http::asJson()
-            ->withHeaders([
-                'X-Internal-Token' => $token,
-                'Accept' => 'text/event-stream',
-            ])
-            ->withOptions(['stream' => true])
-            ->timeout((int) config('services.agent_runtime.stream_timeout', 180))
-            ->post("{$baseUrl}/internal/playground/stream", $this->runtime->buildPayload($run))
-            ->throw();
-
-        $body = $response->toPsrResponse()->getBody();
+        $payload = json_encode($this->runtime->buildPayload($run));
         $buffer = '';
 
-        while (! $body->eof()) {
-            $chunk = $body->read(8192);
+        $handle = curl_init("{$baseUrl}/internal/playground/stream");
+        curl_setopt_array($handle, [
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Accept: text/event-stream',
+                "X-Internal-Token: {$token}",
+            ],
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_TIMEOUT => (int) config('services.agent_runtime.stream_timeout', 180),
+            CURLOPT_WRITEFUNCTION => function ($curl, string $data) use (&$buffer, $onEvent): int {
+                $buffer .= $data;
 
-            if ($chunk === '') {
-                continue;
-            }
+                while (($pos = strpos($buffer, "\n\n")) !== false) {
+                    $rawEvent = substr($buffer, 0, $pos);
+                    $buffer = substr($buffer, $pos + 2);
 
-            $buffer .= $chunk;
+                    $decoded = $this->parseSseEvent($rawEvent);
 
-            while (($pos = strpos($buffer, "\n\n")) !== false) {
-                $rawEvent = substr($buffer, 0, $pos);
-                $buffer = substr($buffer, $pos + 2);
-
-                $decoded = $this->parseSseEvent($rawEvent);
-
-                if ($decoded !== null) {
-                    yield $decoded;
+                    if ($decoded !== null) {
+                        $onEvent($decoded);
+                    }
                 }
+
+                return strlen($data);
+            },
+        ]);
+
+        try {
+            $ok = curl_exec($handle);
+            $curlError = curl_error($handle);
+            $httpCode = (int) curl_getinfo($handle, CURLINFO_HTTP_CODE);
+        } finally {
+            curl_close($handle);
+        }
+
+        if ($ok === false && $curlError !== '') {
+            throw new RuntimeException("Agent runtime stream failed: {$curlError}");
+        }
+
+        if ($httpCode >= 400) {
+            throw new RuntimeException("Agent runtime stream returned HTTP {$httpCode}.");
+        }
+
+        if (trim($buffer) !== '') {
+            $decoded = $this->parseSseEvent($buffer);
+
+            if ($decoded !== null) {
+                $onEvent($decoded);
             }
         }
     }

@@ -18,8 +18,10 @@ uses(TestCase::class, RefreshDatabase::class);
 function fakeStream(array $events): PlaygroundRuntimeClient
 {
     $client = Mockery::mock(PlaygroundRuntimeClient::class);
-    $client->shouldReceive('streamEvents')->andReturnUsing(function () use ($events): Generator {
-        yield from $events;
+    $client->shouldReceive('streamEvents')->andReturnUsing(function ($run, callable $onEvent) use ($events): void {
+        foreach ($events as $event) {
+            $onEvent($event);
+        }
     });
 
     return $client;
