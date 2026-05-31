@@ -12,6 +12,7 @@ use App\Models\Agent;
 use App\Models\Contact;
 use App\Models\PlaygroundConversation;
 use App\Models\PlaygroundMessage;
+use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Playground\PlaygroundRuntimeClient;
 use BackedEnum;
@@ -49,6 +50,16 @@ class AgentPlayground extends Page
     public static function getNavigationLabel(): string
     {
         return 'Playground';
+    }
+
+    public static function canAccess(): bool
+    {
+        $user = Auth::user();
+        $tenant = Filament::getTenant();
+
+        return $user instanceof User
+            && $tenant instanceof Workspace
+            && $user->canManageWorkspace($tenant);
     }
 
     public function mount(): void

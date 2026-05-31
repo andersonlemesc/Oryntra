@@ -6,17 +6,20 @@ use App\Actions\Products\ImportProductsFromCsv;
 use App\Filament\Resources\Categories\CategoryResource;
 use App\Filament\Resources\Categories\Pages\CreateCategory;
 use App\Filament\Resources\Products\Pages\CreateProduct;
+use App\Filament\Resources\Products\Pages\EditProduct;
 use App\Filament\Resources\Products\ProductResource;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Workspace;
+use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\assertDatabaseHas;
+use function Pest\Laravel\assertDatabaseMissing;
 
 use Tests\TestCase;
 
@@ -112,6 +115,28 @@ it('imports csv products and creates workspace categories by foreign key', funct
         'workspace_id' => $workspace->id,
         'category_id' => $category->id,
         'sku' => 'BIKE-001',
+    ]);
+});
+
+it('deletes products from the edit page', function () {
+    [$user, $workspace] = productCatalogUserAndWorkspace();
+    $category = Category::factory()->for($workspace)->create();
+    $product = Product::factory()->forCategory($category)->create([
+        'name' => 'Produto para excluir',
+    ]);
+
+    actingAs($user);
+    productCatalogBootFilamentTenant($workspace);
+
+    Livewire::test(EditProduct::class, [
+        'record' => $product->id,
+    ])
+        ->callAction(DeleteAction::class)
+        ->assertNotified()
+        ->assertRedirect();
+
+    assertDatabaseMissing(Product::class, [
+        'id' => $product->id,
     ]);
 });
 

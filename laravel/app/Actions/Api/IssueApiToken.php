@@ -27,6 +27,12 @@ class IssueApiToken
             ]);
         }
 
+        if ($this->containsWriteAbility($abilities) && ! $user->canManageWorkspace($workspace)) {
+            throw ValidationException::withMessages([
+                'abilities' => 'Seu perfil neste workspace permite apenas permissões de leitura.',
+            ]);
+        }
+
         $invalid = array_diff($abilities, ApiTokenAbilities::all());
 
         if ($invalid !== []) {
@@ -40,5 +46,14 @@ class IssueApiToken
         $newToken->accessToken->forceFill(['workspace_id' => $workspace->getKey()])->save();
 
         return $newToken;
+    }
+
+    /**
+     * @param array<int, string> $abilities
+     */
+    private function containsWriteAbility(array $abilities): bool
+    {
+        return collect($abilities)
+            ->contains(fn (string $ability): bool => str_ends_with($ability, ':write'));
     }
 }

@@ -64,7 +64,7 @@
                     <select
                         wire:model="agentId"
                         @disabled($conversationId !== null)
-                        class="rounded-lg border-gray-300 text-sm dark:border-white/10 dark:bg-gray-800"
+                        class="min-w-48 rounded-lg border-gray-300 px-3 py-2 text-sm leading-5 dark:border-white/10 dark:bg-gray-800"
                     >
                         @foreach ($agentOptions as $id => $name)
                             <option value="{{ $id }}">{{ $name }}</option>
@@ -77,7 +77,7 @@
                     <select
                         wire:model="contactId"
                         @disabled($conversationId !== null)
-                        class="rounded-lg border-gray-300 text-sm dark:border-white/10 dark:bg-gray-800"
+                        class="min-w-56 rounded-lg border-gray-300 px-3 py-2 text-sm leading-5 dark:border-white/10 dark:bg-gray-800"
                     >
                         <option value="">— nenhum —</option>
                         @foreach ($contactOptions as $id => $name)
@@ -152,7 +152,7 @@
                         x-on:keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); $wire.sendMessage(); }"
                         rows="3"
                         placeholder="Mensagem para o agente…  (Enter envia, Shift+Enter quebra linha)"
-                        class="min-h-[5rem] flex-1 resize-y rounded-xl border-gray-300 text-sm dark:border-white/10 dark:bg-gray-800"
+                        class="min-h-[5rem] flex-1 resize-y rounded-xl border-gray-300 px-4 py-3 text-sm leading-6 dark:border-white/10 dark:bg-gray-800"
                     ></textarea>
                     <x-filament::button type="submit" icon="heroicon-o-paper-airplane">
                         Enviar

@@ -73,7 +73,7 @@ class ApiTokensPage extends Page
             Action::make('create')
                 ->label('Gerar token')
                 ->icon('heroicon-o-key')
-                ->modalWidth(Width::Large)
+                ->modalWidth(Width::ThreeExtraLarge)
                 ->schema([
                     TextInput::make('name')
                         ->label('Nome')
@@ -89,7 +89,7 @@ class ApiTokensPage extends Page
                         ->label('Permissões')
                         ->options($this->abilityOptions())
                         ->descriptions($this->abilityDescriptions())
-                        ->columns(2)
+                        ->columns(3)
                         ->required(),
                 ])
                 ->action(fn (array $data) => $this->createToken($data)),

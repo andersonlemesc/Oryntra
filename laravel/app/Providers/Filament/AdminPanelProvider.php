@@ -8,7 +8,6 @@ use App\Filament\Pages\Profile\ApiTokensPage;
 use App\Filament\Pages\Profile\ProfilePage;
 use App\Filament\Pages\Profile\SecurityPage;
 use App\Filament\Pages\Tenancy\EditWorkspaceProfile;
-use App\Filament\Pages\Tenancy\RegisterWorkspace;
 use App\Filament\Widgets\AgentRunStatsOverview;
 use App\Filament\Widgets\RecentContactsTable;
 use App\Filament\Widgets\RecentFailedRunsTable;
@@ -27,13 +26,12 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
-use Filament\Widgets\AccountWidget;
-use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
@@ -46,10 +44,18 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->brandName('Oryntra')
+            ->brandLogo(fn (): HtmlString => new HtmlString(
+                '<span style="display: inline-flex; align-items: center; gap: 0.625rem;">'
+                . '<img src="' . e(asset('favicon_io/favicon-32x32.png')) . '" alt="" style="width: 1.5rem; height: 1.5rem;">'
+                . '<span>Oryntra</span>'
+                . '</span>'
+            ))
+            ->brandLogoHeight('1.5rem')
+            ->favicon(asset('favicon_io/favicon.ico'))
             ->tenant(Workspace::class)
-            ->tenantRegistration(RegisterWorkspace::class)
             ->tenantProfile(EditWorkspaceProfile::class)
             ->searchableTenantMenu()
+            ->globalSearch(false)
             ->sidebarCollapsibleOnDesktop()
             ->colors([
                 'primary' => Color::Indigo,
@@ -87,14 +93,12 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
-                AccountWidget::class,
                 AgentRunStatsOverview::class,
                 WaitingHumanRunsTable::class,
                 RunsThroughputChart::class,
                 RecentFailedRunsTable::class,
                 RecentLeadsStatsOverview::class,
                 RecentContactsTable::class,
-                FilamentInfoWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Products\Tables;
 
 use App\Models\Category;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
@@ -57,7 +60,14 @@ class ProductsTable
                     ->query(fn (Builder $query): Builder => $query->where('active', true))
                     ->toggle(),
             ])
-            ->headerActions([]);
+            ->recordActions([
+                EditAction::make(),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
+            ]);
     }
 
     /**

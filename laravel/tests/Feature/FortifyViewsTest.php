@@ -15,9 +15,12 @@ uses(TestCase::class);
 uses(RefreshDatabase::class);
 
 it('renders the Fortify login view', function () {
+    User::factory()->create();
+
     get('/login')
         ->assertOk()
         ->assertSee('Oryntra')
+        ->assertSee('logo.png')
         ->assertSee('Entrar');
 });
 

@@ -51,7 +51,7 @@
                 </x-filament::button>
             </div>
         @empty
-            <div class="p-6 text-center text-sm text-gray-500">
+            <div class="px-4 py-3 text-sm text-gray-500">
                 Nenhum token ainda. Gere um para conectar o servidor MCP da Oryntra.
             </div>
         @endforelse

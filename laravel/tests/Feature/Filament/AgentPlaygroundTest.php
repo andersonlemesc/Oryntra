@@ -98,3 +98,14 @@ it('only lists conversations owned by the current user', function (): void {
 
     expect($ids)->toContain($mine->id)->not->toContain($theirs->id);
 });
+
+it('is not accessible to read only workspace members', function (): void {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create();
+    $workspace->users()->attach($user, ['role' => 'member', 'chatwoot_role' => 'agent']);
+
+    actingAs($user);
+    Filament::setTenant($workspace);
+
+    expect(AgentPlayground::canAccess())->toBeFalse();
+});

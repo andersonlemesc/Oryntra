@@ -32,6 +32,35 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         return (bool) $this->is_super_admin;
     }
 
+    public function workspaceRole(int|Workspace $workspace): ?string
+    {
+        $workspaceId = $workspace instanceof Workspace ? $workspace->getKey() : $workspace;
+
+        $role = $this->workspaces()
+            ->whereKey($workspaceId)
+            ->value('workspace_members.role');
+
+        return is_string($role) ? $role : null;
+    }
+
+    public function canViewWorkspace(int|Workspace $workspace): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return in_array($this->workspaceRole($workspace), ['owner', 'admin', 'member', 'viewer'], true);
+    }
+
+    public function canManageWorkspace(int|Workspace $workspace): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return in_array($this->workspaceRole($workspace), ['owner', 'admin'], true);
+    }
+
     /**
      * @return BelongsToMany<Workspace, $this>
      */

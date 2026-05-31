@@ -8,6 +8,12 @@
 
         <title>{{ $title ?? config('app.name', 'Oryntra') }}</title>
 
+        <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('favicon_io/apple-touch-icon.png') }}">
+        <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('favicon_io/favicon-32x32.png') }}">
+        <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('favicon_io/favicon-16x16.png') }}">
+        <link rel="manifest" href="{{ asset('favicon_io/site.webmanifest') }}">
+        <link rel="shortcut icon" href="{{ asset('favicon_io/favicon.ico') }}">
+
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -15,12 +21,12 @@
         <style>
             :root {
                 color-scheme: dark;
-                --bg-0: #07080b;
+                --bg-0: #050609;
                 --bg-1: #0c0e13;
                 --bg-2: #11141a;
-                --panel: rgba(18, 22, 30, 0.72);
-                --panel-border: rgba(120, 130, 150, 0.14);
-                --panel-glow: rgba(110, 200, 255, 0.10);
+                --panel: #050609;
+                --panel-border: transparent;
+                --panel-glow: transparent;
                 --ink: #e7ecf3;
                 --ink-soft: #aab1bd;
                 --muted: #6c7484;
@@ -58,25 +64,11 @@
             }
 
             .bg-grid {
-                position: fixed;
-                inset: 0;
-                pointer-events: none;
-                background-image:
-                    radial-gradient(circle at 18% 18%, rgba(108, 199, 255, 0.16), transparent 38%),
-                    radial-gradient(circle at 86% 84%, rgba(155, 125, 255, 0.14), transparent 42%),
-                    radial-gradient(circle at 50% 50%, rgba(40, 60, 100, 0.10), transparent 70%);
-                z-index: 0;
+                display: none;
             }
 
             .bg-grid::after {
-                content: '';
-                position: absolute;
-                inset: 0;
-                background-image:
-                    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-                background-size: 56px 56px;
-                mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+                content: none;
             }
 
             main {
@@ -91,70 +83,23 @@
             .auth-panel {
                 width: min(100%, 460px);
                 background: var(--panel);
-                backdrop-filter: blur(18px) saturate(140%);
-                -webkit-backdrop-filter: blur(18px) saturate(140%);
-                border: 1px solid var(--panel-border);
+                border: 0;
                 border-radius: var(--radius);
                 padding: 36px 36px 32px;
                 position: relative;
-                box-shadow:
-                    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
-                    0 30px 90px -20px rgba(0, 0, 0, 0.6),
-                    0 0 60px -10px var(--panel-glow);
+                box-shadow: none;
             }
 
             .auth-panel::before {
-                content: '';
-                position: absolute;
-                inset: -1px;
-                border-radius: inherit;
-                padding: 1px;
-                background: linear-gradient(135deg, rgba(108, 199, 255, 0.4), rgba(155, 125, 255, 0.25) 40%, transparent 70%);
-                -webkit-mask:
-                    linear-gradient(#000 0 0) content-box,
-                    linear-gradient(#000 0 0);
-                -webkit-mask-composite: xor;
-                mask-composite: exclude;
-                pointer-events: none;
-                opacity: 0.6;
+                content: none;
             }
 
-            .brand-row {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                margin: 0 0 6px;
-            }
-
-            .brand-mark {
-                width: 34px;
-                height: 34px;
-                border-radius: 9px;
-                background: var(--accent-grad);
-                display: grid;
-                place-items: center;
-                font-family: 'JetBrains Mono', ui-monospace, monospace;
-                font-weight: 700;
-                font-size: 16px;
-                color: #0a0c12;
-                box-shadow: 0 0 24px -2px rgba(108, 199, 255, 0.45);
-            }
-
-            .brand {
-                margin: 0;
-                font-size: 22px;
-                font-weight: 600;
-                letter-spacing: -0.02em;
-                color: var(--ink);
-            }
-
-            .brand-tag {
-                margin: 0 0 4px;
-                font-family: 'JetBrains Mono', ui-monospace, monospace;
-                font-size: 10.5px;
-                text-transform: uppercase;
-                letter-spacing: 0.18em;
-                color: var(--accent);
+            .brand-logo {
+                display: block;
+                width: min(100%, 292px);
+                height: auto;
+                margin: 0 auto 14px;
+                filter: none;
             }
 
             .lede {
@@ -393,11 +338,7 @@
 
         <main>
             <section class="auth-panel">
-                <p class="brand-tag">Oryntra // AI Operations</p>
-                <div class="brand-row">
-                    <span class="brand-mark" aria-hidden="true">O</span>
-                    <h1 class="brand">{{ $heading ?? 'Oryntra' }}</h1>
-                </div>
+                <img class="brand-logo" src="{{ asset('logo.png') }}" alt="Oryntra">
                 <p class="lede">{{ $subtitle ?? 'Acesse o painel operacional.' }}</p>
 
                 @if (session('status'))

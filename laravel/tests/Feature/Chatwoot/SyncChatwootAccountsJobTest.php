@@ -71,6 +71,10 @@ it('upserts workspaces and users from platform API responses', function () {
         ->and(User::where('email', 'bob@empresa-a.com')->exists())->toBeTrue()
         ->and(User::where('email', 'carol@empresa-b.com')->exists())->toBeTrue();
 
+    expect(User::where('email', 'ada@empresa-a.com')->first()?->isSuperAdmin())->toBeFalse()
+        ->and(User::where('email', 'bob@empresa-a.com')->first()?->isSuperAdmin())->toBeFalse()
+        ->and(User::where('email', 'carol@empresa-b.com')->first()?->isSuperAdmin())->toBeFalse();
+
     $adaId = User::where('email', 'ada@empresa-a.com')->value('id');
     $bobId = User::where('email', 'bob@empresa-a.com')->value('id');
 
