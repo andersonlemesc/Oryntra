@@ -42,6 +42,7 @@ return [
         'internal_token' => env('AGENT_RUNTIME_INTERNAL_TOKEN', env('INTERNAL_API_TOKEN')),
         'timeout' => (int) env('AGENT_RUNTIME_TIMEOUT', 30),
         'stream_timeout' => (int) env('AGENT_RUNTIME_STREAM_TIMEOUT', 180),
+        'ingest_timeout' => (int) env('AGENT_RUNTIME_INGEST_TIMEOUT', 600),
     ],
 
     'chatwoot' => [

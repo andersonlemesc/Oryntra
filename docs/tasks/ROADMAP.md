@@ -47,7 +47,7 @@ Branch ativa: `develop` com fases 4–15 entregues. Pronta para testar em Chatwo
 
 | Fase | Plano | Motivo da pausa |
 |---|---|---|
-| 10 | `2026-05-20-rag-knowledge-base-phase-10.md` | Estratégia de extração PDF revisada: `spatie/pdf-to-text` + `poppler-utils` no container (mais leve em memória que `smalot/pdfparser`). Decisão registrada em `docs/integrations/chatwoot/captain-rag-reference.md`. Plano principal a ser refeito antes de iniciar. |
+| 10 | `2026-05-31-rag-knowledge-base-extraction.md` | ✅ Entregue (2026-05-31) — RAG greenfield com domínio próprio. Tabela `agent_documents` + `document_chunks` (pgvector unsized + filtro por `embedding_model`); resource Filament "Base de Conhecimento" separada da mídia enviável (resource antiga renomeada "Mídias"). Pipeline de extração→chunk→embedding **no Python** (regra 6): `pypdf` para PDF digital, fallback vision-LLM (`pypdfium2`+`pillow`) para escaneado, markdown/texto direto. Embeddings BYOK por workspace reusando `AgentLlmKey`; trocar o modelo reindexa tudo com modal de aviso de custo. Tool `search_knowledge_base` (Laravel orquestra embedding da query via Python, roda SQL pgvector workspace-scoped). Endpoints `/internal/rag/ingest` e `/internal/rag/embed-query`. |
 
 ### Candidatas (ordenadas por prioridade sugerida)
 

@@ -13,6 +13,7 @@ use App\Http\Controllers\Internal\QueryProductsController;
 use App\Http\Controllers\Internal\RequestHumanHandoffController;
 use App\Http\Controllers\Internal\RequestTeamHandoffController;
 use App\Http\Controllers\Internal\ResolveConversationController;
+use App\Http\Controllers\Internal\SearchKnowledgeBaseController;
 use App\Http\Controllers\Internal\SendDocumentController;
 use App\Http\Controllers\Internal\UpdateChatwootContactController;
 use App\Http\Controllers\Internal\UpdateContactMemoryController;
@@ -46,6 +47,9 @@ Route::middleware('internal.runtime')->group(function (): void {
 
     Route::post('internal/agent-tools/query-documents', QueryDocumentsController::class)
         ->name('internal.agent-tools.query-documents');
+
+    Route::post('internal/agent-tools/search-knowledge-base', SearchKnowledgeBaseController::class)
+        ->name('internal.agent-tools.search-knowledge-base');
 
     Route::post('internal/agent-tools/send-document', SendDocumentController::class)
         ->name('internal.agent-tools.send-document');

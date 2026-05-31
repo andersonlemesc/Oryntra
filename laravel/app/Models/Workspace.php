@@ -9,10 +9,11 @@ use Filament\Models\Contracts\HasName;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'slug', 'chatwoot_account_id', 'timezone', 'locale'])]
+#[Fillable(['name', 'slug', 'chatwoot_account_id', 'timezone', 'locale', 'embedding_llm_key_id', 'embedding_model', 'embedding_dim'])]
 class Workspace extends Model implements HasName
 {
     /** @use HasFactory<WorkspaceFactory> */
@@ -66,6 +67,24 @@ class Workspace extends Model implements HasName
     public function agentLlmKeys(): HasMany
     {
         return $this->hasMany(AgentLlmKey::class);
+    }
+
+    /**
+     * @return HasMany<AgentDocument, $this>
+     */
+    public function agentDocuments(): HasMany
+    {
+        return $this->hasMany(AgentDocument::class);
+    }
+
+    /**
+     * Workspace-wide embedding key used to vectorize the knowledge base.
+     *
+     * @return BelongsTo<AgentLlmKey, $this>
+     */
+    public function embeddingLlmKey(): BelongsTo
+    {
+        return $this->belongsTo(AgentLlmKey::class, 'embedding_llm_key_id');
     }
 
     /**
