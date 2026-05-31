@@ -10,6 +10,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int                             $id
+ * @property int                             $agent_llm_key_id
+ * @property string                          $model_id
+ * @property string|null                     $label
+ * @property \Illuminate\Support\Carbon|null $synced_at
+ */
 #[Fillable([
     'agent_llm_key_id',
     'model_id',

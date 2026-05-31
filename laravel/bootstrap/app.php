@@ -3,9 +3,12 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\BlockRegisterAfterBootstrap;
+use App\Http\Middleware\ResolveApiWorkspace;
 use App\Http\Middleware\ResolveChatwootWebhookConnection;
 use App\Http\Middleware\VerifyInternalRuntimeToken;
 use Illuminate\Foundation\Application;
+use Laravel\Sanctum\Http\Middleware\CheckAbilities;
+use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
@@ -21,6 +24,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'chatwoot.webhook' => ResolveChatwootWebhookConnection::class,
             'internal.runtime' => VerifyInternalRuntimeToken::class,
+            'api.workspace' => ResolveApiWorkspace::class,
+            'abilities' => CheckAbilities::class,
+            'ability' => CheckForAnyAbility::class,
         ]);
 
         $middleware->web(append: [

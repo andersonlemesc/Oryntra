@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Agents\Pages;
 
-use App\Enums\AgentMode;
-use App\Enums\AgentSpecialistStatus;
+use App\Actions\Agents\CreateAgentWithDefaults;
 use App\Filament\Resources\Agents\AgentResource;
 use App\Filament\Support\LlmModelField;
 use App\Models\Agent;
-use App\Models\AgentSpecialist;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateAgent extends CreateRecord
@@ -32,29 +30,8 @@ class CreateAgent extends CreateRecord
      */
     protected function afterCreate(): void
     {
-        $agent = $this->record;
-
-        if (! $agent instanceof Agent || $agent->mode !== AgentMode::Single) {
-            return;
+        if ($this->record instanceof Agent) {
+            CreateAgentWithDefaults::ensureSingleModeSpecialist($this->record);
         }
-
-        if ($agent->specialists()->exists()) {
-            return;
-        }
-
-        AgentSpecialist::create([
-            'workspace_id' => $agent->workspace_id,
-            'agent_id' => $agent->id,
-            'name' => $agent->name,
-            'status' => AgentSpecialistStatus::Active,
-            'role_prompt' => 'Você é um assistente de atendimento. Responda de forma clara e objetiva.',
-            'llm_key_id' => null,
-            'llm_model' => null,
-            'llm_temperature' => 0.2,
-            'tools_allowlist' => [],
-            'intent_keywords' => [],
-            'priority' => 100,
-            'confidence_threshold' => 0.0,
-        ]);
     }
 }

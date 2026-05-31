@@ -4,21 +4,25 @@ declare(strict_types=1);
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Profile\ApiTokensPage;
+use App\Filament\Pages\Profile\ProfilePage;
+use App\Filament\Pages\Profile\SecurityPage;
 use App\Filament\Pages\Tenancy\EditWorkspaceProfile;
 use App\Filament\Pages\Tenancy\RegisterWorkspace;
-use App\Http\Middleware\RedirectToRegisterIfNoUsers;
 use App\Filament\Widgets\AgentRunStatsOverview;
 use App\Filament\Widgets\RecentContactsTable;
 use App\Filament\Widgets\RecentFailedRunsTable;
 use App\Filament\Widgets\RecentLeadsStatsOverview;
 use App\Filament\Widgets\RunsThroughputChart;
 use App\Filament\Widgets\WaitingHumanRunsTable;
+use App\Http\Middleware\RedirectToRegisterIfNoUsers;
 use App\Models\Workspace;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\MenuItem;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -60,6 +64,26 @@ class AdminPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
                 Dashboard::class,
+                ProfilePage::class,
+                SecurityPage::class,
+                ApiTokensPage::class,
+            ])
+            ->userMenuItems([
+                MenuItem::make()
+                    ->label('Meu perfil')
+                    ->icon('heroicon-o-user-circle')
+                    ->visible(fn (): bool => filament()->getTenant() !== null)
+                    ->url(fn (): string => filament()->getTenant() ? ProfilePage::getUrl() : '#'),
+                MenuItem::make()
+                    ->label('Segurança')
+                    ->icon('heroicon-o-shield-check')
+                    ->visible(fn (): bool => filament()->getTenant() !== null)
+                    ->url(fn (): string => filament()->getTenant() ? SecurityPage::getUrl() : '#'),
+                MenuItem::make()
+                    ->label('Tokens da API')
+                    ->icon('heroicon-o-key')
+                    ->visible(fn (): bool => filament()->getTenant() !== null)
+                    ->url(fn (): string => filament()->getTenant() ? ApiTokensPage::getUrl() : '#'),
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([

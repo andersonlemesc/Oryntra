@@ -14,6 +14,18 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int                       $id
+ * @property int                       $workspace_id
+ * @property string                    $name
+ * @property AgentLlmProvider          $provider
+ * @property string|null               $base_url
+ * @property string|null               $api_key
+ * @property AgentLlmKeyStatus         $status
+ * @property \Illuminate\Support\Carbon|null $last_used_at
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ */
 #[Fillable([
     'workspace_id',
     'name',
