@@ -38,6 +38,10 @@ class ProductController extends ApiController
             $query->where('active', $request->boolean('active'));
         }
 
+        if ($request->filled('agent_id')) {
+            $query->forAgent($request->integer('agent_id'));
+        }
+
         $query->priceRange(
             $request->has('min_price') ? (float) $request->input('min_price') : null,
             $request->has('max_price') ? (float) $request->input('max_price') : null,
@@ -50,12 +54,20 @@ class ProductController extends ApiController
 
     public function store(StoreProductRequest $request): ProductResource
     {
+        $validated = $request->validated();
+        $agentIds = $validated['agent_ids'] ?? null;
+        unset($validated['agent_ids']);
+
         $product = Product::query()->create([
-            ...$request->validated(),
+            ...$validated,
             'workspace_id' => $this->workspaceId(),
         ]);
 
-        return new ProductResource($product->load('category'));
+        if ($agentIds !== null) {
+            $product->agents()->sync($agentIds);
+        }
+
+        return new ProductResource($product->load('category', 'agents'));
     }
 
     public function show(int $product): ProductResource
@@ -68,9 +80,18 @@ class ProductController extends ApiController
     public function update(UpdateProductRequest $request, int $product): ProductResource
     {
         $model = $this->findInWorkspace(Product::class, $product);
-        $model->update($request->validated());
 
-        return new ProductResource($model->load('category'));
+        $validated = $request->validated();
+        $agentIds = $validated['agent_ids'] ?? null;
+        unset($validated['agent_ids']);
+
+        $model->update($validated);
+
+        if ($agentIds !== null) {
+            $model->agents()->sync($agentIds);
+        }
+
+        return new ProductResource($model->load('category', 'agents'));
     }
 
     public function destroy(int $product): Response

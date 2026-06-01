@@ -94,6 +94,29 @@ it('scopes deletes to the token workspace', function () {
     expect(ExternalTool::query()->whereKey($foreign->id)->exists())->toBeTrue();
 });
 
+it('scopes products to agents via agent_ids and the agent_id filter', function () {
+    [$workspace, $headers] = workspaceToken(['product:write', 'product:read', 'agent:write']);
+
+    $agentId = postJson('/api/v1/agents', ['name' => 'Loja', 'mode' => 'single'], $headers)
+        ->assertCreated()->json('data.id');
+
+    postJson('/api/v1/products', ['name' => 'Exclusivo', 'price' => 10, 'agent_ids' => [$agentId]], $headers)->assertCreated();
+    postJson('/api/v1/products', ['name' => 'Global', 'price' => 20], $headers)->assertCreated();
+
+    $scoped = getJson("/api/v1/products?agent_id={$agentId}", $headers)->assertOk()->json('data');
+    $names = array_map(fn (array $p): string => $p['name'], $scoped);
+
+    expect($names)->toContain('Exclusivo')->toContain('Global');
+
+    $otherAgent = postJson('/api/v1/agents', ['name' => 'Outra', 'mode' => 'single'], $headers)->json('data.id');
+    $otherNames = array_map(
+        fn (array $p): string => $p['name'],
+        getJson("/api/v1/products?agent_id={$otherAgent}", $headers)->json('data'),
+    );
+
+    expect($otherNames)->not->toContain('Exclusivo')->toContain('Global');
+});
+
 it('creates a specialist and serializes its default status', function () {
     [, $headers] = workspaceToken(['agent:write', 'specialist:write']);
 

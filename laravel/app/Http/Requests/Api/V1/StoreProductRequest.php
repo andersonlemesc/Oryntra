@@ -32,6 +32,8 @@ class StoreProductRequest extends ApiFormRequest
             'price' => ['nullable', 'numeric', 'min:0'],
             'metadata' => ['nullable', 'array'],
             'active' => ['nullable', 'boolean'],
+            'agent_ids' => ['nullable', 'array'],
+            'agent_ids.*' => [Rule::exists('agents', 'id')->where('workspace_id', $this->workspaceId())],
         ];
     }
 }

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -64,12 +65,38 @@ class Product extends Model
     }
 
     /**
+     * Agents this product is scoped to. No links = global (visible to every agent).
+     *
+     * @return BelongsToMany<Agent, $this>
+     */
+    public function agents(): BelongsToMany
+    {
+        return $this->belongsToMany(Agent::class)->withTimestamps();
+    }
+
+    /**
      * @param  Builder<Product> $query
      * @return Builder<Product>
      */
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('active', true);
+    }
+
+    /**
+     * Limit to products visible to the given agent: those explicitly linked to it,
+     * plus global products (linked to no agent at all).
+     *
+     * @param  Builder<Product> $query
+     * @return Builder<Product>
+     */
+    public function scopeForAgent(Builder $query, int $agentId): Builder
+    {
+        return $query->where(function (Builder $q) use ($agentId): void {
+            $q->whereHas('agents', function (Builder $agentQuery) use ($agentId): void {
+                $agentQuery->whereKey($agentId);
+            })->orWhereDoesntHave('agents');
+        });
     }
 
     /**

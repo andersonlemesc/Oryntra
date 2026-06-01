@@ -195,9 +195,15 @@ For every specialist ask:
   - Call an external API or another MCP server? → the connector \`slug\` /
     registered MCP tool (create it first; see the tools-and-scopes guide).
 
-## 6. Knowledge
+## 6. Knowledge & catalog scope (avoid cross-agent mixing)
 - Any policies/FAQ/docs to seed now? → \`add_knowledge_from_text\` (indexes in background).
   A specialist must also have \`search_knowledge_base\` in its allowlist to use it.
+- **Scope data to this agent.** Products and knowledge docs are workspace-wide by default —
+  if the workspace has more than one agent, pass \`agent_ids: [thisAgentId]\` on
+  \`create_product\`/\`update_product\` and \`add_knowledge_from_text\` so each agent only sees
+  its own catalog/knowledge. An item with no \`agent_ids\` is **global** (every agent sees
+  it) — use that only for truly shared data. Filter checks with \`list_products?agent_id=\`
+  and \`list_knowledge?agent_id=\`.
 
 ## 7. Advanced behaviour (optional config blocks)
 These are settable here too — offer them only if the user cares; sensible defaults exist.

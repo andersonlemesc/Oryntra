@@ -41,8 +41,8 @@ class SearchKnowledgeBase
         $tags = $this->normalizeTags($tags);
 
         $hits = DB::connection()->getDriverName() === 'pgsql'
-            ? $this->searchPgvector($workspaceId, $embedding['vector'], $model, $topK, $minScore, $tags)
-            : $this->searchInPhp($workspaceId, $embedding['vector'], $model, $topK, $minScore, $tags);
+            ? $this->searchPgvector($workspaceId, $agentId, $embedding['vector'], $model, $topK, $minScore, $tags)
+            : $this->searchInPhp($workspaceId, $agentId, $embedding['vector'], $model, $topK, $minScore, $tags);
 
         return ['hits' => $hits, 'embedding_model' => $model];
     }
@@ -52,7 +52,7 @@ class SearchKnowledgeBase
      * @param  array<int, string>                                                                               $tags
      * @return array<int, array{agent_document_id:int,content:string,score:float,metadata:array<string,mixed>}>
      */
-    private function searchPgvector(int $workspaceId, array $vector, string $model, int $topK, float $minScore, array $tags): array
+    private function searchPgvector(int $workspaceId, int $agentId, array $vector, string $model, int $topK, float $minScore, array $tags): array
     {
         $literal = '[' . implode(',', $vector) . ']';
 
@@ -60,9 +60,12 @@ class SearchKnowledgeBase
             . '1 - (dc.embedding <=> ?::vector) AS score '
             . 'FROM document_chunks dc '
             . 'JOIN agent_documents ad ON ad.id = dc.agent_document_id '
-            . 'WHERE dc.workspace_id = ? AND dc.embedding_model = ?';
+            . 'WHERE dc.workspace_id = ? AND dc.embedding_model = ? '
+            // Scope to this agent: docs linked to it, plus global docs (no link at all).
+            . 'AND (EXISTS (SELECT 1 FROM agent_knowledge_document akd WHERE akd.agent_document_id = ad.id AND akd.agent_id = ?) '
+            . 'OR NOT EXISTS (SELECT 1 FROM agent_knowledge_document akd2 WHERE akd2.agent_document_id = ad.id))';
 
-        $bindings = [$literal, $workspaceId, $model];
+        $bindings = [$literal, $workspaceId, $model, $agentId];
 
         if ($tags !== []) {
             $sql .= ' AND jsonb_exists_any(ad.tags, ARRAY(SELECT jsonb_array_elements_text(?::jsonb)))';
@@ -103,7 +106,7 @@ class SearchKnowledgeBase
      * @param  array<int, string>                                                                               $tags
      * @return array<int, array{agent_document_id:int,content:string,score:float,metadata:array<string,mixed>}>
      */
-    private function searchInPhp(int $workspaceId, array $vector, string $model, int $topK, float $minScore, array $tags): array
+    private function searchInPhp(int $workspaceId, int $agentId, array $vector, string $model, int $topK, float $minScore, array $tags): array
     {
         $chunks = DocumentChunk::query()
             ->with('agentDocument:id,tags')
@@ -111,9 +114,24 @@ class SearchKnowledgeBase
             ->where('embedding_model', $model)
             ->get();
 
+        // Scope to this agent: docs linked to it, plus global docs (no link at all).
+        $linkedToAgent = DB::table('agent_knowledge_document')
+            ->where('agent_id', $agentId)
+            ->pluck('agent_document_id')
+            ->all();
+        $linkedToAgent = array_flip($linkedToAgent);
+        $hasAnyLink = array_flip(DB::table('agent_knowledge_document')->pluck('agent_document_id')->all());
+
         $scored = [];
 
         foreach ($chunks as $chunk) {
+            $documentId = $chunk->agent_document_id;
+            $visible = isset($linkedToAgent[$documentId]) || ! isset($hasAnyLink[$documentId]);
+
+            if (! $visible) {
+                continue;
+            }
+
             if ($tags !== [] && ! $this->chunkMatchesTags($chunk, $tags)) {
                 continue;
             }

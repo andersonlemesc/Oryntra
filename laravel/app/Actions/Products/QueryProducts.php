@@ -41,6 +41,7 @@ class QueryProducts
             maxPrice: $maxPrice,
             activeOnly: true,
             limit: $limit,
+            agentId: $agentId,
         );
     }
 

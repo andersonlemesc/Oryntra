@@ -9,6 +9,7 @@ use App\Models\AgentRun;
 use App\Models\Document;
 use App\Models\ProductDocument;
 use App\Services\Chatwoot\ChatwootAgentBotClient;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -37,11 +38,16 @@ class SendDocument
             ]);
         }
 
+        $agentId = AgentRun::query()
+            ->where('id', $payload['agent_run_id'])
+            ->where('workspace_id', $workspaceId)
+            ->value('agent_id');
+
         $s3Disk = Storage::disk('s3');
         $docs = [];
 
         foreach ($documentIds as $documentId) {
-            $doc = $this->resolveDocument($workspaceId, $documentId, $documentType);
+            $doc = $this->resolveDocument($workspaceId, $documentId, $documentType, $agentId);
 
             if ($doc === null) {
                 throw ValidationException::withMessages([
@@ -151,7 +157,7 @@ class SendDocument
         }
     }
 
-    private function resolveDocument(int $workspaceId, int $documentId, string $documentType): Document|ProductDocument|null
+    private function resolveDocument(int $workspaceId, int $documentId, string $documentType, ?int $agentId = null): Document|ProductDocument|null
     {
         if ($documentType === 'product') {
             return ProductDocument::query()
@@ -162,6 +168,7 @@ class SendDocument
 
         return Document::query()
             ->where('workspace_id', $workspaceId)
+            ->when($agentId !== null, fn (Builder $q): Builder => $q->forAgent((int) $agentId))
             ->where('id', $documentId)
             ->first();
     }

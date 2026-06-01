@@ -27,10 +27,15 @@ class ProductSearchService
         ?float $maxPrice = null,
         bool $activeOnly = true,
         int $limit = 20,
+        ?int $agentId = null,
     ): array {
         $q = Product::query()
             ->with('category', 'documents')
             ->where('workspace_id', $workspaceId);
+
+        if ($agentId !== null) {
+            $q->forAgent($agentId);
+        }
 
         if ($activeOnly) {
             $q->where('active', true);

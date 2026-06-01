@@ -31,7 +31,8 @@ class QueryDocuments
 
         $q = Document::query()
             ->sendable()
-            ->where('workspace_id', $workspaceId);
+            ->where('workspace_id', $workspaceId)
+            ->forAgent($agentId);
 
         if ($allowedCategories !== null) {
             $q->whereIn('category', $allowedCategories);

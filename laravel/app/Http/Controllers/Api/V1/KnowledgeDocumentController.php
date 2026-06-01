@@ -21,6 +21,7 @@ class KnowledgeDocumentController extends ApiController
     {
         $documents = AgentDocument::query()
             ->where('workspace_id', $this->workspaceId())
+            ->when($request->filled('agent_id'), fn ($q) => $q->forAgent($request->integer('agent_id')))
             ->orderByDesc('id')
             ->paginate($this->perPage($request->integer('per_page') ?: null));
 
@@ -43,6 +44,8 @@ class KnowledgeDocumentController extends ApiController
             'content' => ['required', 'string'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:64'],
+            'agent_ids' => ['nullable', 'array'],
+            'agent_ids.*' => [\Illuminate\Validation\Rule::exists('agents', 'id')->where('workspace_id', $this->workspaceId())],
         ]);
 
         $document = $action->fromText(
@@ -51,6 +54,10 @@ class KnowledgeDocumentController extends ApiController
             name: $validated['name'],
             tags: $validated['tags'] ?? null,
         );
+
+        if (! empty($validated['agent_ids'])) {
+            $document->agents()->sync($validated['agent_ids']);
+        }
 
         return new KnowledgeDocumentResource($document);
     }
@@ -65,6 +72,8 @@ class KnowledgeDocumentController extends ApiController
             'name' => ['nullable', 'string', 'max:255'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:64'],
+            'agent_ids' => ['nullable', 'array'],
+            'agent_ids.*' => [\Illuminate\Validation\Rule::exists('agents', 'id')->where('workspace_id', $this->workspaceId())],
         ]);
 
         $upload = $this->resolveConfirmedUpload($validated['upload_id'], UploadPurpose::Knowledge, $this->workspaceId());
@@ -77,6 +86,10 @@ class KnowledgeDocumentController extends ApiController
             sizeBytes: $upload['size'],
             tags: $validated['tags'] ?? null,
         );
+
+        if (! empty($validated['agent_ids'])) {
+            $document->agents()->sync($validated['agent_ids']);
+        }
 
         return new KnowledgeDocumentResource($document);
     }

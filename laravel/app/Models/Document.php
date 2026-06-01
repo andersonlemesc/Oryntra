@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -107,12 +108,38 @@ class Document extends Model
     }
 
     /**
+     * Agents this document is scoped to. No links = global.
+     *
+     * @return BelongsToMany<Agent, $this>
+     */
+    public function agents(): BelongsToMany
+    {
+        return $this->belongsToMany(Agent::class, 'agent_standalone_document')->withTimestamps();
+    }
+
+    /**
      * @param  Builder<Document> $query
      * @return Builder<Document>
      */
     public function scopeByCategory(Builder $query, string $category): Builder
     {
         return $query->where('category', $category);
+    }
+
+    /**
+     * Limit to documents visible to the given agent: linked to it, or global
+     * (linked to no agent at all).
+     *
+     * @param  Builder<Document> $query
+     * @return Builder<Document>
+     */
+    public function scopeForAgent(Builder $query, int $agentId): Builder
+    {
+        return $query->where(function (Builder $q) use ($agentId): void {
+            $q->whereHas('agents', function (Builder $agentQuery) use ($agentId): void {
+                $agentQuery->whereKey($agentId);
+            })->orWhereDoesntHave('agents');
+        });
     }
 
     /**

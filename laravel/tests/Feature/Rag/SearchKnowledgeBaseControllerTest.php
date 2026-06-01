@@ -139,6 +139,35 @@ it('drops chunks below min_score', function () {
         ->and($hits[0]['content'])->toBe('aligned');
 });
 
+it('scopes knowledge search to the agent (own + global, never another agents docs)', function () {
+    Config::set('services.agent_runtime.internal_token', 'ci-token');
+    fakeEmbedQuery([1.0, 0.0, 0.0]);
+
+    $graph = knowledgeGraph();
+    $otherAgent = Agent::factory()->for($graph['workspace'])->create();
+
+    $own = seedChunk($graph['workspace'], [1.0, 0.0, 0.0], 'own doc');
+    $other = seedChunk($graph['workspace'], [1.0, 0.0, 0.0], 'other agent doc');
+    seedChunk($graph['workspace'], [1.0, 0.0, 0.0], 'global doc');
+
+    $own->agentDocument->agents()->sync([$graph['agent']->id]);
+    $other->agentDocument->agents()->sync([$otherAgent->id]);
+
+    $response = postJson('/api/internal/agent-tools/search-knowledge-base', [
+        'workspace_id' => $graph['workspace']->id,
+        'agent_id' => $graph['agent']->id,
+        'agent_run_id' => $graph['run']->id,
+        'query' => 'anything',
+        'top_k' => 10,
+    ], ['X-Internal-Token' => 'ci-token'])->assertOk();
+
+    $contents = array_map(fn (array $hit): string => $hit['content'], $response->json('hits'));
+
+    expect($contents)->toContain('own doc')
+        ->toContain('global doc')
+        ->not->toContain('other agent doc');
+});
+
 it('rejects when the specialist allowlist excludes the tool', function () {
     Config::set('services.agent_runtime.internal_token', 'ci-token');
     fakeEmbedQuery([1.0, 0.0, 0.0]);

@@ -342,6 +342,7 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 active: z.boolean().optional(),
                 min_price: z.number().optional(),
                 max_price: z.number().optional(),
+                agent_id: z.number().int().positive().optional().describe('Only products visible to this agent (its own + global).'),
                 per_page: perPage,
             },
         },
@@ -361,6 +362,10 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 price: z.number().min(0).optional(),
                 active: z.boolean().optional(),
                 metadata: z.record(z.string(), z.unknown()).optional().describe('Arbitrary key/value metadata.'),
+                agent_ids: z
+                    .array(z.number().int().positive())
+                    .optional()
+                    .describe('Scope this product to these agents (from list_agents). Empty/omitted = global (every agent sees it).'),
             },
         },
         async (input) => handleTool(() => api.request('POST', '/products', input)),
@@ -379,6 +384,10 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 description: z.string().nullable().optional(),
                 price: z.number().min(0).nullable().optional(),
                 active: z.boolean().optional(),
+                agent_ids: z
+                    .array(z.number().int().positive())
+                    .optional()
+                    .describe('Replace the agents this product is scoped to. [] = make it global.'),
             },
         },
         async ({ product_id, ...body }) => handleTool(() => api.request('PATCH', `/products/${product_id}`, body)),
@@ -402,7 +411,10 @@ export function createServer(config: OryntraMcpConfig): McpServer {
             title: 'List Knowledge Documents',
             description:
                 'List knowledge base documents and their index_status (pending/indexing/indexed/failed). Required scope: knowledge:read.',
-            inputSchema: { per_page: perPage },
+            inputSchema: {
+                agent_id: z.number().int().positive().optional().describe('Only documents visible to this agent (its own + global).'),
+                per_page: perPage,
+            },
         },
         async (input) => handleTool(() => api.request('GET', api.withQuery('/knowledge-documents', input))),
     );
@@ -417,6 +429,10 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 name: z.string().min(1).describe('Document title.'),
                 content: z.string().min(1).describe('Markdown or plain text content to index.'),
                 tags: z.array(z.string()).optional(),
+                agent_ids: z
+                    .array(z.number().int().positive())
+                    .optional()
+                    .describe('Scope this document to these agents (from list_agents). Empty/omitted = global.'),
             },
         },
         async (input) => handleTool(() => api.request('POST', '/knowledge-documents/from-text', input)),

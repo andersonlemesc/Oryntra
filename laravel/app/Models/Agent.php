@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -84,6 +85,36 @@ class Agent extends Model
     public function specialists(): HasMany
     {
         return $this->hasMany(AgentSpecialist::class);
+    }
+
+    /**
+     * Catalog products scoped to this agent (empty = the product is global).
+     *
+     * @return BelongsToMany<Product, $this>
+     */
+    public function products(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class)->withTimestamps();
+    }
+
+    /**
+     * Knowledge-base (RAG) documents scoped to this agent.
+     *
+     * @return BelongsToMany<AgentDocument, $this>
+     */
+    public function knowledgeDocuments(): BelongsToMany
+    {
+        return $this->belongsToMany(AgentDocument::class, 'agent_knowledge_document')->withTimestamps();
+    }
+
+    /**
+     * Standalone documents scoped to this agent.
+     *
+     * @return BelongsToMany<Document, $this>
+     */
+    public function standaloneDocuments(): BelongsToMany
+    {
+        return $this->belongsToMany(Document::class, 'agent_standalone_document')->withTimestamps();
     }
 
     /**

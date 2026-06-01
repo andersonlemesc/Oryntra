@@ -25,6 +25,7 @@ class KnowledgeDocumentResource extends JsonResource
             'mime_type' => $this->mime_type,
             'size_bytes' => $this->size_bytes,
             'tags' => $this->tags,
+            'agent_ids' => $this->whenLoaded('agents', fn () => $this->agents->pluck('id')->all()),
             'index_status' => $this->index_status->value,
             'index_error' => $this->index_error,
             'chunks_count' => $this->chunks_count,
