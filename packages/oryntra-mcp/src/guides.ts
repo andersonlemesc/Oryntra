@@ -28,7 +28,8 @@ user for a token with that scope.
 4. Configure the specialist(s): \`role_prompt\`, \`llm_key_id\`, \`llm_model\`,
    \`tools_allowlist\`. See the agent-design guide.
 5. Optionally seed the knowledge base (\`add_knowledge_from_text\`) and register tools
-   (\`create_connector\`, \`create_mcp_server\`).
+   (\`create_connector\`, \`create_mcp_server\`). In a multi-agent workspace, scope products
+   and knowledge to this agent with \`agent_ids\` so catalogs don't mix (see agent-design).
 6. \`update_agent { status: "active" }\` when ready.
 
 ## Knowledge base is asynchronous
@@ -84,10 +85,22 @@ and fewer wrong calls. A sales specialist typically gets \`query_products\` +
 \`update_contact_memory\`.
 
 ## Retrieval (RAG)
-\`search_knowledge_base\` retrieves from the workspace knowledge base. The embedding model
-is pinned per workspace, so just keep documents indexed (\`add_knowledge_from_text\` →
+\`search_knowledge_base\` retrieves from the knowledge base **scoped to this agent**: docs
+linked to it via \`agent_ids\` plus global docs (linked to none). The embedding model is
+pinned per workspace, so just keep documents indexed (\`add_knowledge_from_text\` →
 \`indexed\`). Add a specialist's \`search_knowledge_base\` to its allowlist and tell it in
 \`role_prompt\` to ground answers in retrieved context.
+
+## Per-agent data scope
+\`query_products\` and \`search_knowledge_base\` only see data scoped to the running agent
+(its \`agent_ids\` links) plus global items. In a multi-agent workspace, link each product
+and knowledge doc to its agent so a Beauty agent never quotes a Burger agent's catalog.
+
+## Scheduling
+If a specialist has \`gcal_*\` tools, the slots \`gcal_find_free_slots\` offers come from the
+agent's \`business_hours\` (per-weekday open/close minus lunch, overnight-aware) intersected
+with the real Google Calendar free/busy. Set \`business_hours\` on the agent so slots and
+stated hours are correct.
 
 ## Good prompts
 - \`role_prompt\`: state the persona, the allowed actions, and when to hand off or stop.
@@ -239,6 +252,12 @@ calling create_agent. See oryntra://guide/intake. Then: create/choose an llm_key
 list_llm_models → create_agent (single|supervisor) → configure the specialist
 (role_prompt, llm_key_id, llm_model, tools_allowlist) → activate. The knowledge base
 indexes asynchronously (pending → indexed). Secrets are write-only.
+
+Two things that bite in multi-agent workspaces: (1) Products and knowledge are
+workspace-wide unless you scope them — pass agent_ids on create_product/update_product and
+add_knowledge_from_text so each agent only sees its own catalog/knowledge (no agent_ids =
+global). (2) For scheduling agents, set business_hours on the agent — it drives the slots
+gcal_find_free_slots offers and the hours stated to customers.
 
 Agents run on a LangGraph StateGraph (route → specialist → respond). Read these resources
 for detail:

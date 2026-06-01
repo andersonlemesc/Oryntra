@@ -205,6 +205,13 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 locale: z.string().optional(),
                 timezone: z.string().optional(),
                 business_hours: businessHours,
+                fallback_specialist_id: z
+                    .number()
+                    .int()
+                    .positive()
+                    .nullable()
+                    .optional()
+                    .describe('Specialist (of this agent) the supervisor routes to when nothing matches. Set after the specialists exist.'),
                 supervisor_prompt: z.string().nullable().optional(),
                 supervisor_llm_key_id: z.number().int().positive().nullable().optional(),
                 supervisor_llm_model: z.string().nullable().optional(),
