@@ -19,6 +19,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -84,6 +85,14 @@ class AgentForm
                                             ->required(),
                                     ]),
 
+                            ]),
+
+                        Tab::make('Horario')
+                            ->icon('heroicon-o-clock')
+                            ->schema([
+                                Section::make('Horario de funcionamento')
+                                    ->description('Usado para gerar horarios de agendamento (gcal_find_free_slots) e informado aos clientes. Interpretado no timezone do agente. Deixe tudo desligado para nao restringir.')
+                                    ->schema(self::businessHoursSchema()),
                             ]),
 
                         Tab::make('Modelo')
@@ -355,6 +364,51 @@ class AgentForm
                 ->orderBy('name')
                 ->get(),
         );
+    }
+
+    /**
+     * One row per weekday: enabled toggle + open/close (and optional lunch break).
+     *
+     * @return array<int, Grid>
+     */
+    private static function businessHoursSchema(): array
+    {
+        $days = [
+            'mon' => 'Segunda',
+            'tue' => 'Terca',
+            'wed' => 'Quarta',
+            'thu' => 'Quinta',
+            'fri' => 'Sexta',
+            'sat' => 'Sabado',
+            'sun' => 'Domingo',
+        ];
+
+        return collect($days)
+            ->map(fn (string $label, string $key): Grid => Grid::make(5)
+                ->schema([
+                    Toggle::make("business_hours.days.{$key}.enabled")
+                        ->label($label)
+                        ->live()
+                        ->inline(false),
+                    TextInput::make("business_hours.days.{$key}.open")
+                        ->label('Abre')
+                        ->placeholder('09:00')
+                        ->visible(fn (Get $get): bool => (bool) $get("business_hours.days.{$key}.enabled")),
+                    TextInput::make("business_hours.days.{$key}.close")
+                        ->label('Fecha')
+                        ->placeholder('19:00')
+                        ->visible(fn (Get $get): bool => (bool) $get("business_hours.days.{$key}.enabled")),
+                    TextInput::make("business_hours.days.{$key}.break_start")
+                        ->label('Almoco inicio')
+                        ->placeholder('12:00')
+                        ->visible(fn (Get $get): bool => (bool) $get("business_hours.days.{$key}.enabled")),
+                    TextInput::make("business_hours.days.{$key}.break_end")
+                        ->label('Almoco fim')
+                        ->placeholder('13:00')
+                        ->visible(fn (Get $get): bool => (bool) $get("business_hours.days.{$key}.enabled")),
+                ]))
+            ->values()
+            ->all();
     }
 
     /**

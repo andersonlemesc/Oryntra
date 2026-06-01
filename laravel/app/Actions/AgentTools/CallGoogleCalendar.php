@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\AgentTools;
 
+use App\Models\Agent;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
 use App\Models\GoogleCalendarAuditLog;
@@ -12,6 +13,8 @@ use App\Services\AgentTools\NativeTool;
 use App\Services\GoogleCalendar\Exceptions\GoogleCalendarException;
 use App\Services\GoogleCalendar\GoogleCalendarClient;
 use App\Services\GoogleCalendar\GoogleCalendarConfig;
+use App\Support\BusinessHours;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -26,6 +29,10 @@ class CallGoogleCalendar
         NativeTool::GcalFindFreeSlots->value,
     ];
 
+    private ?BusinessHours $businessHours = null;
+
+    private string $agentTimezone = 'UTC';
+
     /**
      * @param  array{workspace_id:int,agent_id:int,agent_run_id:int,specialist_id:int,tool_name:string,args?:array<string,mixed>} $payload
      * @return array{success:bool,result:string,error:?string,http_status:?int}
@@ -38,6 +45,11 @@ class CallGoogleCalendar
         $run = $this->loadRun($payload);
         $specialist = $this->loadSpecialist($payload);
         $this->assertToolAllowed($specialist, $toolName);
+
+        $agent = Agent::query()->find($run->agent_id);
+        $this->agentTimezone = is_string($agent?->timezone) && $agent->timezone !== '' ? $agent->timezone : 'UTC';
+        $businessHours = BusinessHours::fromArray(is_array($agent?->business_hours) ? $agent->business_hours : null);
+        $this->businessHours = $businessHours->isConfigured() ? $businessHours : null;
 
         $config = is_array($specialist->google_calendar_config) ? $specialist->google_calendar_config : [];
 
@@ -285,11 +297,24 @@ class CallGoogleCalendar
         $busy = $client->freeBusy($calendarsToCheck, $rangeStart, $rangeEnd, $timeZone);
 
         $mergedBusy = $this->mergeBusyWindows($busy);
-        $slots = $this->buildFreeSlots($mergedBusy, $rangeStart, $rangeEnd, $durationMinutes);
+
+        // With business hours configured, emit discrete duration-sized slots per day
+        // (minus the lunch break) within working hours. Otherwise fall back to raw gaps.
+        if ($this->businessHours !== null) {
+            $slots = $this->businessHours->slots(
+                CarbonImmutable::parse($rangeStart)->setTimezone($this->agentTimezone),
+                CarbonImmutable::parse($rangeEnd)->setTimezone($this->agentTimezone),
+                $durationMinutes,
+                $mergedBusy,
+                $this->agentTimezone,
+            );
+        } else {
+            $slots = $this->buildFreeSlots($mergedBusy, $rangeStart, $rangeEnd, $durationMinutes);
+        }
 
         return [
             'duration_minutes' => $durationMinutes,
-            'time_zone' => $timeZone,
+            'time_zone' => $this->businessHours !== null ? $this->agentTimezone : $timeZone,
             'free_slots' => $slots,
             'busy_per_calendar' => $busy,
         ];

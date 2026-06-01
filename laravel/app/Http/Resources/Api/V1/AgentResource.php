@@ -27,6 +27,7 @@ class AgentResource extends JsonResource
             'response_mode' => $this->response_mode->value,
             'locale' => $this->locale,
             'timezone' => $this->timezone,
+            'business_hours' => $this->business_hours,
             'supervisor_prompt' => $this->supervisor_prompt,
             'supervisor_llm_key_id' => $this->supervisor_llm_key_id,
             'supervisor_llm_model' => $this->supervisor_llm_model,

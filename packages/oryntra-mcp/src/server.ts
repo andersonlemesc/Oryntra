@@ -4,6 +4,7 @@ import { OryntraApiClient, OryntraApiError } from './api-client.js';
 import type { OryntraMcpConfig } from './config.js';
 import { AGENT_DESIGN, GETTING_STARTED, INTAKE, SERVER_INSTRUCTIONS, TOOLS_AND_SCOPES } from './guides.js';
 import {
+    businessHours,
     contactToolsConfig,
     debounceConfig,
     documentToolsConfig,
@@ -177,6 +178,7 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                     .describe('How replies are delivered. Defaults to automatic.'),
                 locale: z.string().optional().describe('BCP-47 locale, e.g. "pt-BR". Defaults to "en".'),
                 timezone: z.string().optional().describe('IANA timezone, e.g. "America/Sao_Paulo". Defaults to "UTC".'),
+                business_hours: businessHours,
                 supervisor_prompt: z.string().optional().describe('Routing prompt (supervisor mode only).'),
                 supervisor_llm_key_id: z.number().int().positive().optional(),
                 supervisor_llm_model: z.string().optional(),
@@ -202,6 +204,7 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 response_mode: z.enum(['automatic', 'suggestion_only', 'human_approval']).optional(),
                 locale: z.string().optional(),
                 timezone: z.string().optional(),
+                business_hours: businessHours,
                 supervisor_prompt: z.string().nullable().optional(),
                 supervisor_llm_key_id: z.number().int().positive().nullable().optional(),
                 supervisor_llm_model: z.string().nullable().optional(),

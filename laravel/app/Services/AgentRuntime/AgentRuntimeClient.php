@@ -10,6 +10,7 @@ use App\Enums\AgentMode;
 use App\Enums\AgentSpecialistStatus;
 use App\Enums\ExternalToolKind;
 use App\Models\Agent;
+use App\Support\BusinessHours;
 use App\Models\AgentDocument;
 use App\Models\AgentLlmKey;
 use App\Models\AgentRun;
@@ -363,7 +364,7 @@ class AgentRuntimeClient
             'fallback_specialist_id' => $agent->fallback_specialist_id,
             'thread_id' => $run->thread_id ?: $run->buildThreadId(),
             'supervisor' => [
-                'prompt' => $agent->supervisor_prompt,
+                'prompt' => $this->withBusinessHours($agent->supervisor_prompt, $agent),
                 'llm_key_id' => $agent->supervisor_llm_key_id,
                 'llm_provider' => $supervisorCredential['provider'],
                 'llm_base_url' => $supervisorCredential['base_url'],
@@ -371,14 +372,14 @@ class AgentRuntimeClient
                 'llm_api_key' => $supervisorCredential['api_key'],
             ],
             'specialists' => $agent->specialists
-                ->map(function (AgentSpecialist $specialist) use ($run, $connectors, $mcpServers): array {
+                ->map(function (AgentSpecialist $specialist) use ($run, $connectors, $mcpServers, $agent): array {
                     $specialistCredential = $this->specialistCredential($specialist, $run->workspace_id);
 
                     return [
                         'id' => $specialist->id,
                         'name' => $specialist->name,
                         'description' => $specialist->description,
-                        'role_prompt' => $specialist->role_prompt,
+                        'role_prompt' => $this->withBusinessHours($specialist->role_prompt, $agent),
                         'llm_key_id' => $specialist->llm_key_id,
                         'llm_provider' => $specialistCredential['provider'],
                         'llm_base_url' => $specialistCredential['base_url'],
@@ -665,6 +666,25 @@ class AgentRuntimeClient
         }
 
         return false;
+    }
+
+    /**
+     * Append the agent's business-hours summary to a prompt so every specialist
+     * states the correct opening hours. No-op when hours are not configured.
+     */
+    private function withBusinessHours(?string $prompt, Agent $agent): ?string
+    {
+        $hours = BusinessHours::fromArray(is_array($agent->business_hours) ? $agent->business_hours : null);
+
+        if (! $hours->isConfigured()) {
+            return $prompt;
+        }
+
+        $timezone = is_string($agent->timezone) && $agent->timezone !== '' ? $agent->timezone : 'UTC';
+        $line = "Horário de funcionamento ({$timezone}): {$hours->toHuman()}. "
+            . 'Use estes horários ao informar disponibilidade e nunca agende fora deles.';
+
+        return $prompt === null || $prompt === '' ? $line : $prompt . "\n\n" . $line;
     }
 
     /**

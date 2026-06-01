@@ -10,6 +10,38 @@ import { z } from 'zod';
 
 const handoffPriority = z.enum(['low', 'normal', 'high', 'urgent']);
 
+const time = z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .describe('Time as HH:MM (24h).');
+
+const businessDay = z
+    .object({
+        enabled: z.boolean().optional().describe('Whether the business is open this day.'),
+        open: time.optional().describe('Opening time, e.g. "09:00".'),
+        close: time.optional().describe('Closing time, e.g. "19:00".'),
+        break_start: time.nullable().optional().describe('Lunch break start, e.g. "12:00".'),
+        break_end: time.nullable().optional().describe('Lunch break end, e.g. "13:00".'),
+    })
+    .describe('Open/close (and optional lunch break) for one weekday.');
+
+export const businessHours = z
+    .object({
+        days: z
+            .object({
+                mon: businessDay.optional(),
+                tue: businessDay.optional(),
+                wed: businessDay.optional(),
+                thu: businessDay.optional(),
+                fri: businessDay.optional(),
+                sat: businessDay.optional(),
+                sun: businessDay.optional(),
+            })
+            .describe('Per-weekday hours. A missing or disabled day is closed.'),
+    })
+    .optional()
+    .describe('Operating hours used to generate appointment slots and stated to customers. Interpreted in the agent timezone.');
+
 // ───────────────────────── Agent-level ─────────────────────────
 
 export const debounceConfig = z

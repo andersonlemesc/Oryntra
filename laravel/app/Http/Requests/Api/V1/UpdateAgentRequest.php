@@ -46,6 +46,7 @@ class UpdateAgentRequest extends ApiFormRequest
             'debounce_config' => ['nullable', 'array'],
             'guard_config' => ['nullable', 'array'],
             'rag_config' => ['nullable', 'array'],
+            'business_hours' => ['nullable', 'array'],
         ];
     }
 }

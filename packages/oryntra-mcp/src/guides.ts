@@ -163,6 +163,9 @@ from the knowledge base.
   - \`suggestion_only\` — drafts a suggestion for a human to send.
   - \`human_approval\` — waits for a human to approve before sending.
 - \`status\` — create as \`inactive\` (draft) and activate later, or \`active\` now?
+- \`business_hours\` — if the agent schedules appointments, set per-weekday open/close
+  (and optional lunch break). It drives the slots \`gcal_find_free_slots\` offers and is
+  stated to customers. Supports overnight (e.g. open 18:00, close 02:00).
 
 ## 3. Brain (LLM)
 - Which provider key (\`list_llm_keys\`; create one if none) and which model
