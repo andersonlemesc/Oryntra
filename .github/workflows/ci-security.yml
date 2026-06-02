@@ -21,7 +21,7 @@ jobs:
           php-version: '8.4'
           tools: composer:v2
       - working-directory: laravel
-        run: composer audit --no-interaction
+        run: composer audit --locked --no-interaction
 
   pip-audit:
     runs-on: ubuntu-latest
