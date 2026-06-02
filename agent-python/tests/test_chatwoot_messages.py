@@ -37,7 +37,7 @@ def valid_payload() -> dict[str, object]:
         "contact": {},
         "inbox": {},
         "guard_config": {},
-        "media_config": {},
+        "media_policy": {},
         "runtime_config": {},
     }
 
