@@ -159,6 +159,7 @@ def test_tool_loop_dispatches_tool_then_returns_text(monkeypatch) -> None:
 
         class FakeResponse:
             status = "ok"
+            unchanged = False
 
         return FakeResponse()
 
@@ -211,6 +212,7 @@ def test_tool_loop_dispatches_contact_address_update(monkeypatch) -> None:
 
         class FakeResponse:
             status = "ok"
+            unchanged = False
 
         return FakeResponse()
 

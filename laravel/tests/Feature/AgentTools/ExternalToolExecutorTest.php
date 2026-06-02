@@ -234,3 +234,18 @@ it('truncates the response to max_length', function () {
     expect(mb_strlen($result['result']))->toBe(50)
         ->and($result['result'])->toEndWith('...');
 });
+
+it('blocks a connector targeting a link-local / cloud metadata address', function () {
+    Http::fake(['*' => Http::response(['leaked' => 'creds'], 200)]);
+
+    $tool = makeConnector(['base_url' => 'http://169.254.169.254', 'path' => '/latest/meta-data']);
+    $run = runForTool($tool);
+
+    $result = executor()->execute($tool, [], $run->id, null);
+
+    expect($result['success'])->toBeFalse()
+        ->and($result['error'])->toBe('Destination host is not allowed.');
+
+    Http::assertNothingSent();
+    expect(ExternalToolCallLog::query()->where('agent_run_id', $run->id)->where('success', false)->count())->toBe(1);
+});

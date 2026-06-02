@@ -63,6 +63,25 @@ it('creates valid factory records with default active status and public uuid', f
         ->and($connection->status)->toBe(ChatwootConnectionStatus::Active);
 });
 
+it('allows multiple connections (agent bots) for the same account in a workspace', function () {
+    $workspace = Workspace::factory()->create();
+
+    $first = ChatwootConnection::factory()->for($workspace)->create([
+        'name' => 'Vendas',
+        'base_url' => 'https://chat.example.com',
+        'account_id' => 42,
+    ]);
+    $second = ChatwootConnection::factory()->for($workspace)->create([
+        'name' => 'Suporte',
+        'base_url' => 'https://chat.example.com',
+        'account_id' => 42,
+    ]);
+
+    expect($first->exists)->toBeTrue()
+        ->and($second->exists)->toBeTrue()
+        ->and($second->id)->not->toBe($first->id);
+});
+
 it('returns Chatwoot authentication headers', function () {
     $connection = ChatwootConnection::factory()->create([
         'api_access_token' => 'chatwoot-token',

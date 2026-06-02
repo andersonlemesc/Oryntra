@@ -43,13 +43,25 @@ class ChatwootConnectionForm
                             ->disabled()
                             ->dehydrated(false)
                             ->visible(fn (string $operation): bool => $operation === 'edit'),
-                        TextInput::make('webhook_secret_status')
+                        TextInput::make('api_access_token')
+                            ->label('Access Token do Agent Bot')
+                            ->helperText('Token do robô usado para enviar mensagens. Se você regenerar o bot no Chatwoot, cole o novo token aqui.')
+                            ->password()
+                            ->revealable()
+                            ->dehydrated(fn (?string $state): bool => filled($state))
+                            ->placeholder(fn (?ChatwootConnection $record): string => filled($record?->api_access_token)
+                                ? '•••••••••••••••• (salvo — deixe em branco para manter)'
+                                : 'Cole o Access Token do Agent Bot do Chatwoot')
+                            ->visible(fn (string $operation): bool => $operation === 'edit'),
+                        TextInput::make('webhook_secret')
                             ->label('Webhook secret')
-                            ->default(fn (?ChatwootConnection $record): string => filled($record?->webhook_secret)
-                                ? 'Configurado'
-                                : 'Não configurado')
-                            ->disabled()
-                            ->dehydrated(false)
+                            ->helperText('Obrigatório para receber webhooks. No Chatwoot acesse Configurações → Robôs (Bots) → edite o bot e copie o "HMAC/Webhook secret". Sem ele os webhooks são rejeitados.')
+                            ->password()
+                            ->revealable()
+                            ->dehydrated(fn (?string $state): bool => filled($state))
+                            ->placeholder(fn (?ChatwootConnection $record): string => filled($record?->webhook_secret)
+                                ? '•••••••••••••••• (salvo — deixe em branco para manter)'
+                                : 'Cole o webhook secret do bot no Chatwoot')
                             ->visible(fn (string $operation): bool => $operation === 'edit'),
                         TextInput::make('provisioning_error')
                             ->label('Erro de provisionamento')
@@ -77,7 +89,7 @@ class ChatwootConnectionForm
                             ->revealable()
                             ->dehydrated(fn (?string $state): bool => filled($state))
                             ->placeholder(fn (?ChatwootConnection $record): string => $record?->hasAdminApiToken()
-                                ? 'Token salvo (deixe em branco para manter)'
+                                ? '•••••••••••••••• (salvo — deixe em branco para manter)'
                                 : 'Cole o User Access Token de um Administrator no Chatwoot')
                             ->columnSpanFull(),
                     ]),

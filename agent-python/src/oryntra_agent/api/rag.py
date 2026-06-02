@@ -15,6 +15,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from oryntra_agent.agent.net import UnsafeUrlError, safe_get
 from oryntra_agent.auth import verify_internal_token
 from oryntra_agent.rag.chunk import chunk_text
 from oryntra_agent.rag.embed import (
@@ -97,22 +98,27 @@ class IngestResponse(BaseModel):
 
 async def _download(url: str) -> bytes:
     try:
-        async with httpx.AsyncClient(timeout=DOWNLOAD_TIMEOUT_SECONDS) as client:
-            response = await client.get(url, follow_redirects=True)
-            response.raise_for_status()
+        return await safe_get(
+            url,
+            timeout_seconds=DOWNLOAD_TIMEOUT_SECONDS,
+            max_bytes=MAX_DOWNLOAD_BYTES,
+        )
+    except UnsafeUrlError as exc:
+        message = str(exc)
+        if "maximum size" in message:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="document exceeds the maximum ingest size",
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"refused to download document: {message}",
+        ) from exc
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"failed to download document: {type(exc).__name__}",
         ) from exc
-
-    if len(response.content) > MAX_DOWNLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="document exceeds the maximum ingest size",
-        )
-
-    return response.content
 
 
 @router.post("/embed-query", response_model=EmbedQueryResponse)

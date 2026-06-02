@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from oryntra_agent.agent.net import UnsafeUrlError, safe_get
 from oryntra_agent.api.schemas import (
     ChatwootMessage,
     ChatwootRuntimeRequest,
@@ -575,16 +576,14 @@ async def _download(att: MediaAttachment, internal_base: str | None) -> bytes | 
         return None
     url = rewrite_localhost_url(att.data_url, internal_base)
     try:
-        async with httpx.AsyncClient(timeout=DOWNLOAD_TIMEOUT_SECONDS) as client:
-            response = await client.get(url, follow_redirects=True)
-            response.raise_for_status()
-            if len(response.content) > MAX_DOWNLOAD_BYTES:
-                logger.warning(
-                    "media.too_large",
-                    extra={"size": len(response.content), "max": MAX_DOWNLOAD_BYTES},
-                )
-                return None
-            return response.content
+        return await safe_get(
+            url,
+            timeout_seconds=DOWNLOAD_TIMEOUT_SECONDS,
+            max_bytes=MAX_DOWNLOAD_BYTES,
+        )
+    except UnsafeUrlError as exc:
+        logger.warning("media.download_blocked", extra={"reason": str(exc), "url_head": url[:120]})
+        return None
     except httpx.HTTPError:
         logger.exception("media.download_failed", extra={"url_head": url[:120]})
         return None

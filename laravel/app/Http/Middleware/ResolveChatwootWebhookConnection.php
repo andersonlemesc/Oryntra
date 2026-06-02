@@ -42,8 +42,10 @@ class ResolveChatwootWebhookConnection
         $secret = (string) $connection->webhook_secret;
         $signature = (string) $request->header('X-Chatwoot-Signature');
 
+        // No HMAC secret means we cannot verify the sender. Reject until the
+        // operator copies the webhook secret from Chatwoot into the connection.
         if ($secret === '') {
-            return filled($connection->agent_bot_id) && filled($connection->api_access_token);
+            return false;
         }
 
         if ($signature === '') {
