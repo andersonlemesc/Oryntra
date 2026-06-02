@@ -8,6 +8,7 @@ use App\Enums\ExternalToolAuthType;
 use App\Enums\ExternalToolParamLocation;
 use App\Models\ExternalTool;
 use App\Models\ExternalToolCallLog;
+use App\Support\Net\SsrfGuard;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Throwable;
@@ -19,9 +20,11 @@ use Throwable;
  * records an audit row in ``external_tool_call_logs``.
  *
  * Security posture (trust-admin): the LLM never controls the URL/host — it only
- * fills declared params; ``base_url`` and auth are fixed by the admin. The only
- * network guard is a scheme allowlist (http/https). Private IPs are intentionally
- * allowed so admins can reach internal APIs.
+ * fills declared params; ``base_url`` and auth are fixed by the admin. Network
+ * guards: scheme allowlist (http/https), an SSRF egress denylist (blocks
+ * link-local/metadata, multicast and reserved targets while still allowing
+ * private/internal APIs) and redirects are disabled so a response cannot bounce
+ * the request to an unchecked host.
  */
 final class ExternalToolExecutor
 {
@@ -31,6 +34,7 @@ final class ExternalToolExecutor
 
     public function __construct(
         private readonly ExternalToolSchemaBuilder $schemaBuilder,
+        private readonly SsrfGuard $ssrfGuard,
     ) {}
 
     /**
@@ -60,6 +64,11 @@ final class ExternalToolExecutor
             return $this->fail($tool, $args, $agentRunId, $specialistId, 'URL scheme must be http or https.', null);
         }
 
+        $host = (string) parse_url($url, PHP_URL_HOST);
+        if ($host === '' || $this->ssrfGuard->hostIsBlocked($host)) {
+            return $this->fail($tool, $args, $agentRunId, $specialistId, 'Destination host is not allowed.', null);
+        }
+
         $method = strtoupper((string) ($config['http_method'] ?? 'GET'));
         $timeout = is_numeric($config['timeout_seconds'] ?? null)
             ? max(1, (int) $config['timeout_seconds'])
@@ -69,7 +78,7 @@ final class ExternalToolExecutor
         $query = $partitioned[ExternalToolParamLocation::Query->value];
         $body = $partitioned[ExternalToolParamLocation::Body->value];
 
-        $request = $this->authenticate(Http::timeout($timeout)->withHeaders($headers), $tool);
+        $request = $this->authenticate(Http::timeout($timeout)->withoutRedirecting()->withHeaders($headers), $tool);
 
         if ($method === 'GET') {
             $request = $request->retry(2, 200, throw: false);
