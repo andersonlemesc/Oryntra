@@ -201,3 +201,27 @@ it('parses SSE-format callTool response and extracts text content', function () 
     expect($result->isError)->toBeFalse()
         ->and($result->text)->toBe('42');
 });
+
+it('blocks an MCP server targeting a link-local / cloud metadata address', function () {
+    Http::fake(['*' => Http::response(['jsonrpc' => '2.0', 'id' => 1, 'result' => ['content' => []]], 200)]);
+
+    $server = makeMcpServer('none', 'http://169.254.169.254/mcp');
+
+    $result = app(McpHttpClient::class)->callTool($server, null, 'get_order', []);
+
+    expect($result->isError)->toBeTrue()
+        ->and($result->error)->toBe('MCP server host is not allowed.');
+
+    Http::assertNothingSent();
+});
+
+it('throws when initialize targets a blocked address', function () {
+    Http::fake(['*' => Http::response(['jsonrpc' => '2.0', 'id' => 1, 'result' => []], 200)]);
+
+    $server = makeMcpServer('none', 'http://169.254.169.254/mcp');
+
+    expect(fn () => app(McpHttpClient::class)->initialize($server))
+        ->toThrow(RuntimeException::class);
+
+    Http::assertNothingSent();
+});

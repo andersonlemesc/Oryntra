@@ -6,9 +6,11 @@ namespace App\Services\MCP;
 
 use App\Enums\ExternalToolAuthType;
 use App\Models\ExternalTool;
+use App\Support\Net\SsrfGuard;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -19,12 +21,18 @@ use Throwable;
  * subsequent call. No SSE channel — request/response only.
  *
  * Security: admin fixes the URL and auth; the LLM only provides tool arguments.
+ * The destination host is checked against the SSRF egress denylist and redirects
+ * are disabled, matching the external HTTP connector executor.
  */
 final class McpHttpClient
 {
     private const PROTOCOL_VERSION = '2025-03-26';
 
     private const DEFAULT_TIMEOUT = 30;
+
+    public function __construct(
+        private readonly SsrfGuard $ssrfGuard,
+    ) {}
 
     /**
      * Perform the MCP `initialize` handshake and return a session token.
@@ -131,6 +139,8 @@ final class McpHttpClient
 
     private function request(ExternalTool $server, ?string $sessionId): PendingRequest
     {
+        $this->assertHostAllowed($server);
+
         $timeout = is_numeric($server->config['timeout_seconds'] ?? null)
             ? max(1, (int) $server->config['timeout_seconds'])
             : self::DEFAULT_TIMEOUT;
@@ -141,9 +151,22 @@ final class McpHttpClient
             $headers['Mcp-Session-Id'] = $sessionId;
         }
 
-        $pending = Http::timeout($timeout)->withHeaders($headers);
+        $pending = Http::timeout($timeout)->withoutRedirecting()->withHeaders($headers);
 
         return $this->authenticate($pending, $server);
+    }
+
+    /**
+     * Reject MCP endpoints that resolve to a blocked network target (link-local,
+     * cloud metadata, multicast, reserved). Private/internal hosts stay allowed.
+     */
+    private function assertHostAllowed(ExternalTool $server): void
+    {
+        $host = (string) parse_url($this->url($server), PHP_URL_HOST);
+
+        if ($host === '' || $this->ssrfGuard->hostIsBlocked($host)) {
+            throw new RuntimeException('MCP server host is not allowed.');
+        }
     }
 
     private function authenticate(PendingRequest $request, ExternalTool $server): PendingRequest
