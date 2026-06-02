@@ -106,6 +106,19 @@ jobs:
         working-directory: laravel
         run: ./vendor/bin/phpstan analyse --memory-limit=1G --no-progress
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: laravel/package-lock.json
+
+      - name: Build frontend assets
+        working-directory: laravel
+        run: |
+          npm ci
+          npm run build
+
       - name: Migrate
         working-directory: laravel
         run: php artisan migrate --force
