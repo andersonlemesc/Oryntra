@@ -89,6 +89,12 @@ jobs:
           QUEUE_CONNECTION=redis
           MAIL_MAILER=array
           INTERNAL_API_TOKEN=ci_test_token
+          AWS_ACCESS_KEY_ID=testing
+          AWS_SECRET_ACCESS_KEY=testing
+          AWS_DEFAULT_REGION=us-east-1
+          AWS_BUCKET=oryntra-test
+          AWS_ENDPOINT=http://localhost:9000
+          AWS_USE_PATH_STYLE_ENDPOINT=true
           EOF
           php artisan key:generate
 
