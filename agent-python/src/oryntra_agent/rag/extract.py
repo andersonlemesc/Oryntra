@@ -35,6 +35,11 @@ MIN_PDF_TEXT_CHARS = 100
 VISION_MAX_PAGES = 50
 RENDER_SCALE = 2.0
 
+# Caps to bound work / memory on untrusted uploads.
+PDF_TEXT_MAX_PAGES = 500
+# Reject decompression bombs: a small docx/zip can inflate to gigabytes of XML.
+DOCX_MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
+
 _VISION_PROMPT = (
     "Transcreva todo o conteúdo textual desta página de documento em Markdown. "
     "Preserve títulos, listas e tabelas. Não adicione comentários nem explicações; "
@@ -72,12 +77,24 @@ def _pdf_text(data: bytes) -> str:
     from pypdf import PdfReader
 
     reader = PdfReader(io.BytesIO(data))
-    parts = [page.extract_text() or "" for page in reader.pages]
+    parts = [page.extract_text() or "" for page in reader.pages[:PDF_TEXT_MAX_PAGES]]
     return "\n\n".join(parts).strip()
 
 
 def _docx_text(data: bytes) -> str:
+    import zipfile
+
     import docx
+
+    # docx is a zip; guard against decompression bombs before parsing.
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            total = sum(info.file_size for info in archive.infolist())
+    except zipfile.BadZipFile as exc:
+        raise UnsupportedMimeTypeError("invalid docx (not a zip archive)") from exc
+
+    if total > DOCX_MAX_UNCOMPRESSED_BYTES:
+        raise VisionUnavailableError("docx uncompressed size exceeds the allowed limit")
 
     document = docx.Document(io.BytesIO(data))
     return "\n\n".join(paragraph.text for paragraph in document.paragraphs).strip()
