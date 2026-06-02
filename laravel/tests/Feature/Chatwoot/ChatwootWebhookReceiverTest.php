@@ -85,7 +85,7 @@ it('accepts Chatwoot signatures with sha256 prefix', function () {
     Queue::assertPushed(ProcessChatwootWebhookEventJob::class, 1);
 });
 
-it('accepts unsigned webhooks for a provisioned Chatwoot agent bot connection', function () {
+it('rejects unsigned webhooks when no webhook secret is configured', function () {
     Queue::fake();
     $connection = ChatwootConnection::factory()->create([
         'account_id' => 123,
@@ -96,11 +96,10 @@ it('accepts unsigned webhooks for a provisioned Chatwoot agent bot connection', 
     $payload = chatwootWebhookPayload(messageId: 987, conversationId: 654, accountId: 123);
 
     postJson(chatwootWebhookUrl($connection), $payload)
-        ->assertAccepted()
-        ->assertJsonPath('status', 'queued');
+        ->assertUnauthorized();
 
-    expect(ChatwootWebhookEvent::count())->toBe(1);
-    Queue::assertPushed(ProcessChatwootWebhookEventJob::class, 1);
+    expect(ChatwootWebhookEvent::count())->toBe(0);
+    Queue::assertNothingPushed();
 });
 
 it('rejects webhook requests for a different Chatwoot account', function () {

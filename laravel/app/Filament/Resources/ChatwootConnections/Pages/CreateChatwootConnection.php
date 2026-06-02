@@ -42,15 +42,16 @@ class CreateChatwootConnection extends CreateRecord
 
         $baseUrl = rtrim((string) $platformConnection->base_url, '/');
 
-        $alreadyExists = ChatwootConnection::query()
+        // Multiple agent bots per account are allowed (one per inbox/use case);
+        // connections are differentiated by name (unique per workspace).
+        $nameTaken = ChatwootConnection::query()
             ->where('workspace_id', $tenant->id)
-            ->where('base_url', $baseUrl)
-            ->where('account_id', $tenant->chatwoot_account_id)
+            ->where('name', $data['name'] ?? null)
             ->exists();
 
-        if ($alreadyExists) {
+        if ($nameTaken) {
             throw ValidationException::withMessages([
-                'name' => 'Este workspace já possui uma conexão Chatwoot para esta conta.',
+                'name' => 'Este workspace já possui uma conexão Chatwoot com este nome.',
             ]);
         }
 
@@ -70,7 +71,7 @@ class CreateChatwootConnection extends CreateRecord
 
         Notification::make()
             ->title('Robô Chatwoot em provisionamento')
-            ->body('O Agent Bot será criado no Chatwoot em segundo plano. Após o provisionamento, edite a conexão e informe o Admin API Token para habilitar sincronização de times, labels e edição de contatos.')
+            ->body('O Agent Bot será criado no Chatwoot em segundo plano. Depois, vá em Configurações → Robôs (Bots) no Chatwoot, edite o bot e copie o webhook secret; abra a edição desta conexão e cole o segredo — sem ele os webhooks são rejeitados. Informe também o Admin API Token para sincronizar times, labels e editar contatos.')
             ->success()
             ->send();
     }
