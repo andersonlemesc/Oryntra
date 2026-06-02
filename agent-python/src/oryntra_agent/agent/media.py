@@ -250,15 +250,17 @@ async def preprocess_media(payload: ChatwootRuntimeRequest) -> PreprocessResult:
                         media_usage.append(usage)
                     if text:
                         extracted_for_message.append(text)
-                    trace_steps.append(_make_trace_step(
-                        step=step_counter,
-                        type="media_transcribe",
-                        att=att,
-                        kind=kind,
-                        text=text,
-                        usage=usage,
-                        latency_ms=elapsed_ms,
-                    ))
+                    trace_steps.append(
+                        _make_trace_step(
+                            step=step_counter,
+                            type="media_transcribe",
+                            att=att,
+                            kind=kind,
+                            text=text,
+                            usage=usage,
+                            latency_ms=elapsed_ms,
+                        )
+                    )
                 else:
                     _maybe_add_fallback(fallback_snippets, seen_fallback_types, "audio", policy)
 
@@ -278,15 +280,17 @@ async def preprocess_media(payload: ChatwootRuntimeRequest) -> PreprocessResult:
                         media_usage.append(usage)
                     if text:
                         extracted_for_message.append(text)
-                    trace_steps.append(_make_trace_step(
-                        step=step_counter,
-                        type="media_vision",
-                        att=att,
-                        kind=kind,
-                        text=text,
-                        usage=usage,
-                        latency_ms=elapsed_ms,
-                    ))
+                    trace_steps.append(
+                        _make_trace_step(
+                            step=step_counter,
+                            type="media_vision",
+                            att=att,
+                            kind=kind,
+                            text=text,
+                            usage=usage,
+                            latency_ms=elapsed_ms,
+                        )
+                    )
                 else:
                     _maybe_add_fallback(fallback_snippets, seen_fallback_types, "image", policy)
 
@@ -316,7 +320,9 @@ async def preprocess_media(payload: ChatwootRuntimeRequest) -> PreprocessResult:
         return PreprocessResult(
             payload=new_payload,
             fallback_prefix=fallback_prefix,
-            short_circuit_response=_build_short_circuit_response(fallback_prefix, media_usage, trace_steps),
+            short_circuit_response=_build_short_circuit_response(
+                fallback_prefix, media_usage, trace_steps
+            ),
             media_usage=media_usage or None,
             trace_steps=trace_steps or None,
         )
@@ -437,8 +443,16 @@ async def _gemini_audio_with_usage(
         text = (text or "").strip()
         result = f"[Transcrição de áudio]: {text}" if text else "[Áudio: transcrição vazia]"
 
-        in_tok = getattr(response, "usage_metadata", {}).get("input_tokens", 0) if isinstance(getattr(response, "usage_metadata", None), dict) else 0
-        out_tok = getattr(response, "usage_metadata", {}).get("output_tokens", 0) if isinstance(getattr(response, "usage_metadata", None), dict) else 0
+        in_tok = (
+            getattr(response, "usage_metadata", {}).get("input_tokens", 0)
+            if isinstance(getattr(response, "usage_metadata", None), dict)
+            else 0
+        )
+        out_tok = (
+            getattr(response, "usage_metadata", {}).get("output_tokens", 0)
+            if isinstance(getattr(response, "usage_metadata", None), dict)
+            else 0
+        )
         usage = MediaUsage(
             input_tokens=int(in_tok) if in_tok else 0,
             output_tokens=int(out_tok) if out_tok else 0,
@@ -500,7 +514,9 @@ async def _process_image_with_usage(
         response = await chat_model.ainvoke([message])
         description = response.content if isinstance(response.content, str) else ""
         description = (description or "").strip()
-        result = f"[Descrição de imagem]: {description}" if description else "[Imagem: descrição vazia]"
+        result = (
+            f"[Descrição de imagem]: {description}" if description else "[Imagem: descrição vazia]"
+        )
 
         in_tok = 0
         out_tok = 0

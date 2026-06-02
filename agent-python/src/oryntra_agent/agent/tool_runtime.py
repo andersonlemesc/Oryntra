@@ -240,7 +240,9 @@ _PARAM_TYPE_MAP: dict[str, type] = {
 }
 
 
-def _build_param_schema_args_model(model_name: str, param_schema: dict[str, Any]) -> type[BaseModel]:
+def _build_param_schema_args_model(
+    model_name: str, param_schema: dict[str, Any]
+) -> type[BaseModel]:
     """Build a Pydantic args model from a ``param_schema`` dict (extra keys forbidden)."""
     properties = param_schema.get("properties") if isinstance(param_schema, dict) else None
     fields: dict[str, Any] = {}
@@ -324,14 +326,17 @@ def build_mcp_tool(cfg: McpToolConfig, ctx: ToolRuntimeContext) -> StructuredToo
                 )
             )
         except Exception as exc:
-            logger.exception("mcp tool '%s' on server '%s' call failed", cfg.tool_name, cfg.server_slug)
+            logger.exception(
+                "mcp tool '%s' on server '%s' call failed", cfg.tool_name, cfg.server_slug
+            )
             return f"error: mcp tool '{cfg.tool_name}' on '{cfg.server_slug}' failed ({exc})."
 
         return response.result
 
     return StructuredTool.from_function(
         name=tool_id,
-        description=cfg.description or f"Chama a tool '{cfg.tool_name}' no servidor MCP '{cfg.server_slug}'.",
+        description=cfg.description
+        or f"Chama a tool '{cfg.tool_name}' no servidor MCP '{cfg.server_slug}'.",
         args_schema=args_model,
         func=run,
     )
@@ -793,7 +798,9 @@ class GcalCreateEventArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     summary: str = Field(description="Título do evento.")
-    start: str = Field(description="Início (ISO 8601 com timezone, ex.: 2026-06-01T10:00:00-03:00).")
+    start: str = Field(
+        description="Início (ISO 8601 com timezone, ex.: 2026-06-01T10:00:00-03:00)."
+    )
     end: str = Field(description="Fim (ISO 8601 com timezone).")
     description: str | None = Field(default=None, description="Descrição/notas do evento.")
     location: str | None = Field(default=None, description="Local físico ou link de reunião.")
@@ -817,7 +824,9 @@ class GcalUpdateEventArgs(BaseModel):
     location: str | None = Field(default=None, description="Novo local.")
     start: str | None = Field(default=None, description="Novo início (ISO 8601).")
     end: str | None = Field(default=None, description="Novo fim (ISO 8601).")
-    attendees: list[str] | None = Field(default=None, description="Nova lista de emails de convidados.")
+    attendees: list[str] | None = Field(
+        default=None, description="Nova lista de emails de convidados."
+    )
     time_zone: str | None = Field(default=None, description="Timezone IANA.")
     notify_attendees: bool | None = Field(
         default=None,

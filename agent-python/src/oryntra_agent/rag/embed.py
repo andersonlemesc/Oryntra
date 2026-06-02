@@ -43,9 +43,7 @@ def _build_embedder(provider: str, model: str, api_key: str, base_url: str | Non
             kwargs["client_options"] = {"api_endpoint": base_url}
         return GoogleGenerativeAIEmbeddings(model=model, google_api_key=api_key, **kwargs)
 
-    raise UnsupportedEmbeddingProviderError(
-        f"provider '{provider}' does not support embeddings"
-    )
+    raise UnsupportedEmbeddingProviderError(f"provider '{provider}' does not support embeddings")
 
 
 async def embed_texts(

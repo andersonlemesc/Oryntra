@@ -108,7 +108,9 @@ def test_ingest_returns_chunks_and_vectors(monkeypatch: pytest.MonkeyPatch) -> N
         return b"# Knowledge\n\n" + ("sentence about pricing. " * 40).encode()
 
     async def fake_embed(texts: list[str], **_kwargs: Any) -> EmbedResult:
-        return EmbedResult(vectors=[[0.1, 0.2, 0.3] for _ in texts], model="text-embedding-3-small", dim=3)
+        return EmbedResult(
+            vectors=[[0.1, 0.2, 0.3] for _ in texts], model="text-embedding-3-small", dim=3
+        )
 
     monkeypatch.setattr(rag_api, "_download", fake_download)
     monkeypatch.setattr(rag_api, "embed_texts", fake_embed)

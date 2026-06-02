@@ -2,12 +2,12 @@ import asyncio
 
 from fastapi import APIRouter, Depends
 
-from oryntra_agent.agent.media import preprocess_media
+from oryntra_agent.agent.media import MediaUsage, preprocess_media
 from oryntra_agent.agent.supervisor import (
-    LlmUsage,
     _accumulated_usage,
     run_chatwoot_runtime,
 )
+from oryntra_agent.agent.tool_runtime import LlmUsage
 from oryntra_agent.api.schemas import ChatwootRuntimeRequest, ChatwootRuntimeResponse, TraceStep
 from oryntra_agent.auth import verify_internal_token
 
@@ -50,7 +50,7 @@ async def handle_chatwoot_messages(
     return _merge_media_usage(response, result.media_usage)
 
 
-def _inject_media_usage(media_usage: list | None) -> None:
+def _inject_media_usage(media_usage: list[MediaUsage] | None) -> None:
     if not media_usage:
         return
     try:
@@ -69,7 +69,7 @@ def _inject_media_usage(media_usage: list | None) -> None:
 
 def _merge_media_usage(
     response: ChatwootRuntimeResponse,
-    media_usage: list | None,
+    media_usage: list[MediaUsage] | None,
 ) -> ChatwootRuntimeResponse:
     if not media_usage:
         return response

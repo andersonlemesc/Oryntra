@@ -85,7 +85,7 @@ async def extract_memories(payload: MemoryExtractionRequest) -> MemoryExtraction
 
     from langchain_core.messages import HumanMessage, SystemMessage
 
-    from oryntra_agent.agent.supervisor import LlmCredential
+    from oryntra_agent.api.schemas import LlmCredential
 
     credential = LlmCredential(
         provider=payload.credential.provider,

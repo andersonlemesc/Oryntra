@@ -26,7 +26,10 @@ def test_search_knowledge_base_calls_only_laravel(monkeypatch: pytest.MonkeyPatc
 
     def fake_post(path: str, payload: Any) -> dict[str, Any]:
         calls.append((path, payload.model_dump(mode="json")))
-        return {"hits": [{"agent_document_id": 7, "content": "pricing info", "score": 0.91}], "embedding_model": "m"}
+        return {
+            "hits": [{"agent_document_id": 7, "content": "pricing info", "score": 0.91}],
+            "embedding_model": "m",
+        }
 
     monkeypatch.setattr(tools, "_post", fake_post)
 

@@ -32,7 +32,9 @@ def reset_token_sink(token: Token[Callable[[str], None] | None]) -> None:
     _token_sink.reset(token)
 
 
-def set_event_sink(sink: Callable[[dict[str, Any]], None]) -> Token[Callable[[dict[str, Any]], None] | None]:
+def set_event_sink(
+    sink: Callable[[dict[str, Any]], None],
+) -> Token[Callable[[dict[str, Any]], None] | None]:
     return _event_sink.set(sink)
 
 

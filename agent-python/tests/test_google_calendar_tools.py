@@ -31,7 +31,9 @@ def _ctx() -> ToolRuntimeContext:
 class TestArgsSchemas:
     def test_list_events_rejects_extra_fields(self) -> None:
         with pytest.raises(ValidationError):
-            GcalListEventsArgs(time_min="2026-06-01T00:00:00Z", time_max="2026-06-02T00:00:00Z", evil="x")  # type: ignore[call-arg]
+            GcalListEventsArgs(
+                time_min="2026-06-01T00:00:00Z", time_max="2026-06-02T00:00:00Z", evil="x"
+            )  # type: ignore[call-arg]
 
     def test_create_event_requires_summary_start_end(self) -> None:
         with pytest.raises(ValidationError):
@@ -80,14 +82,17 @@ class TestArgsSchemas:
 
 class TestBuilders:
     def test_gcal_tools_constant_has_all_five(self) -> None:
-        assert GCAL_TOOLS == frozenset(
-            {
-                "gcal_list_events",
-                "gcal_create_event",
-                "gcal_update_event",
-                "gcal_delete_event",
-                "gcal_find_free_slots",
-            }
+        assert (
+            frozenset(
+                {
+                    "gcal_list_events",
+                    "gcal_create_event",
+                    "gcal_update_event",
+                    "gcal_delete_event",
+                    "gcal_find_free_slots",
+                }
+            )
+            == GCAL_TOOLS
         )
 
     def test_build_specialist_tools_includes_only_allowed_gcal_tools(self) -> None:

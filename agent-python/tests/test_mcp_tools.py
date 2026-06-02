@@ -94,7 +94,13 @@ def test_specialist_config_parses_mcp_servers() -> None:
 
 def test_specialist_config_mcp_servers_defaults_to_empty() -> None:
     specialist = SpecialistConfig.model_validate(
-        {"id": 1, "name": "S", "role_prompt": "...", "llm_temperature": 0.5, "confidence_threshold": 0.6}
+        {
+            "id": 1,
+            "name": "S",
+            "role_prompt": "...",
+            "llm_temperature": 0.5,
+            "confidence_threshold": 0.6,
+        }
     )
     assert specialist.mcp_servers == []
 
@@ -125,7 +131,7 @@ def test_build_mcp_tool_required_param_raises_on_missing() -> None:
     cfg = make_mcp_tool_cfg()
     tool = build_mcp_tool(cfg, make_ctx())
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         tool.args_schema()  # missing required order_id
 
 
@@ -150,7 +156,9 @@ def test_build_mcp_tool_returns_error_string_on_exception() -> None:
     cfg = make_mcp_tool_cfg()
     ctx = make_ctx()
 
-    with patch("oryntra_agent.agent.tool_runtime.call_mcp_tool", side_effect=RuntimeError("timeout")):
+    with patch(
+        "oryntra_agent.agent.tool_runtime.call_mcp_tool", side_effect=RuntimeError("timeout")
+    ):
         tool = build_mcp_tool(cfg, ctx)
         result = tool.invoke({"order_id": "1"})
 
@@ -182,9 +190,13 @@ def test_build_specialist_tools_includes_mcp_tools() -> None:
 
 
 def test_build_specialist_tools_multiple_servers_and_tools() -> None:
-    server1 = make_mcp_server_cfg(tools=[make_mcp_tool_cfg("s1", "tool_a"), make_mcp_tool_cfg("s1", "tool_b")])
+    server1 = make_mcp_server_cfg(
+        tools=[make_mcp_tool_cfg("s1", "tool_a"), make_mcp_tool_cfg("s1", "tool_b")]
+    )
     server2 = make_mcp_server_cfg(tools=[make_mcp_tool_cfg("s2", "tool_c")])
-    server2 = McpServerRuntimeConfig(server_slug="s2", session_id=None, tools=[make_mcp_tool_cfg("s2", "tool_c")])
+    server2 = McpServerRuntimeConfig(
+        server_slug="s2", session_id=None, tools=[make_mcp_tool_cfg("s2", "tool_c")]
+    )
 
     tools = build_specialist_tools([], make_ctx(), mcp_servers=[server1, server2])
 
@@ -205,12 +217,16 @@ def test_build_specialist_tools_mcp_and_http_connectors_together() -> None:
     http_cfg = ExternalToolConfig(
         slug="query_orders",
         description="HTTP API",
-        param_schema={"properties": {"order_id": {"type": "string", "location": "query", "required": False}}},
+        param_schema={
+            "properties": {"order_id": {"type": "string", "location": "query", "required": False}}
+        },
     )
     mcp_server = make_mcp_server_cfg()
 
     with patch("oryntra_agent.agent.tool_runtime.call_external_tool"):
-        tools = build_specialist_tools([], make_ctx(), external_tools=[http_cfg], mcp_servers=[mcp_server])
+        tools = build_specialist_tools(
+            [], make_ctx(), external_tools=[http_cfg], mcp_servers=[mcp_server]
+        )
 
     names = [t.name for t in tools]
     assert "query_orders" in names
