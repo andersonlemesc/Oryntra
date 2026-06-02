@@ -35,7 +35,7 @@ class BusinessHours
     ];
 
     /**
-     * @param  array<string, array{enabled: bool, open: string, close: string, break_start: string|null, break_end: string|null}> $days
+     * @param array<string, array{enabled: bool, open: string, close: string, break_start: string|null, break_end: string|null}> $days
      */
     private function __construct(private readonly array $days) {}
 

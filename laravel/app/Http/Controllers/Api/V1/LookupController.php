@@ -99,7 +99,7 @@ class LookupController extends ApiController
         } catch (Throwable $exception) {
             return response()->json([
                 'data' => [],
-                'error' => 'Could not list calendars right now: '.$exception->getMessage(),
+                'error' => 'Could not list calendars right now: ' . $exception->getMessage(),
             ]);
         }
 

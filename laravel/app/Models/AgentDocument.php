@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\AgentDocumentStatus;
 use Database\Factories\AgentDocumentFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -110,13 +111,13 @@ class AgentDocument extends Model
     /**
      * Limit to documents visible to the given agent: linked to it, or global.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<AgentDocument> $query
-     * @return \Illuminate\Database\Eloquent\Builder<AgentDocument>
+     * @param  Builder<AgentDocument> $query
+     * @return Builder<AgentDocument>
      */
-    public function scopeForAgent(\Illuminate\Database\Eloquent\Builder $query, int $agentId): \Illuminate\Database\Eloquent\Builder
+    public function scopeForAgent(Builder $query, int $agentId): Builder
     {
-        return $query->where(function (\Illuminate\Database\Eloquent\Builder $q) use ($agentId): void {
-            $q->whereHas('agents', function (\Illuminate\Database\Eloquent\Builder $agentQuery) use ($agentId): void {
+        return $query->where(function (Builder $q) use ($agentId): void {
+            $q->whereHas('agents', function (Builder $agentQuery) use ($agentId): void {
                 $agentQuery->whereKey($agentId);
             })->orWhereDoesntHave('agents');
         });

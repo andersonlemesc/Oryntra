@@ -26,7 +26,7 @@ function lookupToken(array $abilities): array
     $workspace->users()->attach($user, ['role' => 'owner']);
     $token = app(IssueApiToken::class)->execute($user, $workspace, 'lookup', $abilities);
 
-    return [$workspace, ['Authorization' => 'Bearer '.$token->plainTextToken, 'Accept' => 'application/json']];
+    return [$workspace, ['Authorization' => 'Bearer ' . $token->plainTextToken, 'Accept' => 'application/json']];
 }
 
 it('lists workspace-scoped chatwoot teams', function () {

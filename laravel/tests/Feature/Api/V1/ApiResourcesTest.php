@@ -29,7 +29,7 @@ function workspaceToken(array $abilities): array
     $workspace->users()->attach($user, ['role' => 'owner']);
     $token = app(IssueApiToken::class)->execute($user, $workspace, 'test', $abilities);
 
-    return [$workspace, ['Authorization' => 'Bearer '.$token->plainTextToken, 'Accept' => 'application/json']];
+    return [$workspace, ['Authorization' => 'Bearer ' . $token->plainTextToken, 'Accept' => 'application/json']];
 }
 
 it('creates a category with an auto-generated slug', function () {

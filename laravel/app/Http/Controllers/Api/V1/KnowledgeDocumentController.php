@@ -12,6 +12,7 @@ use App\Models\AgentDocument;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Validation\Rule;
 
 class KnowledgeDocumentController extends ApiController
 {
@@ -45,7 +46,7 @@ class KnowledgeDocumentController extends ApiController
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:64'],
             'agent_ids' => ['nullable', 'array'],
-            'agent_ids.*' => [\Illuminate\Validation\Rule::exists('agents', 'id')->where('workspace_id', $this->workspaceId())],
+            'agent_ids.*' => [Rule::exists('agents', 'id')->where('workspace_id', $this->workspaceId())],
         ]);
 
         $document = $action->fromText(
@@ -73,7 +74,7 @@ class KnowledgeDocumentController extends ApiController
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:64'],
             'agent_ids' => ['nullable', 'array'],
-            'agent_ids.*' => [\Illuminate\Validation\Rule::exists('agents', 'id')->where('workspace_id', $this->workspaceId())],
+            'agent_ids.*' => [Rule::exists('agents', 'id')->where('workspace_id', $this->workspaceId())],
         ]);
 
         $upload = $this->resolveConfirmedUpload($validated['upload_id'], UploadPurpose::Knowledge, $this->workspaceId());

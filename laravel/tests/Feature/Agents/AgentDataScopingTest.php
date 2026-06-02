@@ -8,7 +8,6 @@ use App\Models\Product;
 use App\Models\Workspace;
 use App\Services\Products\ProductSearchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-
 use Tests\TestCase;
 
 uses(TestCase::class);

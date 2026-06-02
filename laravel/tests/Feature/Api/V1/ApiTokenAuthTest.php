@@ -35,7 +35,7 @@ function issueToken(array $abilities, ?Workspace $workspace = null): array
  */
 function bearer(string $token): array
 {
-    return ['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json'];
+    return ['Authorization' => 'Bearer ' . $token, 'Accept' => 'application/json'];
 }
 
 it('rejects requests without a token', function () {
