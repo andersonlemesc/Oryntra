@@ -205,68 +205,24 @@ return [
     |
     */
 
+    /*
+    | Supervisor topology is split by need, not by queue: idle RAM scales with
+    | the number of supervisors (each holds a master + min worker, ~88MB per PHP
+    | process), so only the hot, latency-sensitive queues of the message path get
+    | a dedicated supervisor. Everything else shares one background pool. Queues
+    | stay separate for routing/metrics — only the worker pools are consolidated.
+    |
+    | Dedicated (message hot path, fast):
+    |   - agent              : the runs (dispatch + response delivery)
+    |   - chatwoot-webhooks  : ingestion front door, bursty
+    | Consolidated (everything else):
+    |   - background : chatwoot-send + chatwoot-sync + documents + rag + emails
+    |                  + playground + default. Uses the longest timeout (1200s,
+    |                  for documents/rag) and highest memory (512MB) of the group,
+    |                  so heavy jobs are not killed mid-run. Kept OFF the agent
+    |                  pool so a slow document/rag job never blocks a chat reply.
+    */
     'defaults' => [
-        'default-supervisor' => [
-            'connection' => 'redis',
-            'queue' => ['default'],
-            'balance' => 'auto',
-            'autoScalingStrategy' => 'time',
-            'maxProcesses' => 2,
-            'maxTime' => 0,
-            'maxJobs' => 0,
-            'memory' => 128,
-            'tries' => 3,
-            'timeout' => 60,
-            'nice' => 0,
-        ],
-
-        'emails-supervisor' => [
-            'connection' => 'redis',
-            'queue' => ['emails'],
-            'balance' => 'auto',
-            'autoScalingStrategy' => 'time',
-            'maxProcesses' => 2,
-            'memory' => 128,
-            'tries' => 3,
-            'timeout' => 60,
-            'backoff' => 30,
-        ],
-
-        'chatwoot-sync-supervisor' => [
-            'connection' => 'redis',
-            'queue' => ['chatwoot-sync'],
-            'balance' => 'auto',
-            'autoScalingStrategy' => 'time',
-            'maxProcesses' => 1,
-            'memory' => 256,
-            'tries' => 1,
-            'timeout' => 600,
-        ],
-
-        'chatwoot-webhooks-supervisor' => [
-            'connection' => 'redis',
-            'queue' => ['chatwoot-webhooks'],
-            'balance' => 'auto',
-            'autoScalingStrategy' => 'time',
-            'maxProcesses' => 4,
-            'memory' => 128,
-            'tries' => 3,
-            'timeout' => 30,
-            'backoff' => 5,
-        ],
-
-        'chatwoot-send-supervisor' => [
-            'connection' => 'redis',
-            'queue' => ['chatwoot-send'],
-            'balance' => 'auto',
-            'autoScalingStrategy' => 'time',
-            'maxProcesses' => 2,
-            'memory' => 128,
-            'tries' => 5,
-            'timeout' => 60,
-            'backoff' => [10, 30, 90, 300],
-        ],
-
         'agent-supervisor' => [
             'connection' => 'redis',
             'queue' => ['agent'],
@@ -279,66 +235,51 @@ return [
             'backoff' => 15,
         ],
 
-        'documents-supervisor' => [
+        'chatwoot-webhooks-supervisor' => [
             'connection' => 'redis',
-            'queue' => ['documents'],
-            'balance' => 'auto',
-            'autoScalingStrategy' => 'time',
-            'maxProcesses' => 1,
-            'memory' => 512,
-            'tries' => 2,
-            'timeout' => 1200,
-            'backoff' => 60,
-        ],
-
-        'playground-supervisor' => [
-            'connection' => 'redis',
-            'queue' => ['playground'],
+            'queue' => ['chatwoot-webhooks'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 2,
-            'memory' => 256,
-            'tries' => 1,
-            'timeout' => 200,
+            'memory' => 128,
+            'tries' => 3,
+            'timeout' => 30,
             'backoff' => 5,
         ],
 
-        'rag-supervisor' => [
+        // balance:false (not auto) is deliberate: `auto` keeps a minimum of one
+        // worker PER QUEUE, which would force ~7 idle workers here (one per
+        // merged queue) and defeat the consolidation. With `false` the pool runs
+        // exactly maxProcesses workers that pull from the queue list in priority
+        // order — so the whole cold tier costs maxProcesses workers, not seven.
+        'background-supervisor' => [
             'connection' => 'redis',
-            'queue' => ['rag'],
-            'balance' => 'auto',
-            'autoScalingStrategy' => 'time',
-            'maxProcesses' => 1,
+            'queue' => ['chatwoot-send', 'chatwoot-sync', 'documents', 'rag', 'emails', 'playground', 'default'],
+            'balance' => false,
+            'maxProcesses' => 2,
+            'maxTime' => 0,
+            'maxJobs' => 0,
             'memory' => 512,
             'tries' => 3,
             'timeout' => 1200,
-            'backoff' => 60,
+            'backoff' => 30,
+            'nice' => 0,
         ],
     ],
 
     'environments' => [
         'production' => [
-            'default-supervisor' => ['maxProcesses' => 10],
-            'emails-supervisor' => ['maxProcesses' => 4],
-            'chatwoot-sync-supervisor' => ['maxProcesses' => 1],
-            'chatwoot-webhooks-supervisor' => ['maxProcesses' => 8],
-            'chatwoot-send-supervisor' => ['maxProcesses' => 4],
-            'agent-supervisor' => ['maxProcesses' => 6],
-            'documents-supervisor' => ['maxProcesses' => 2],
-            'playground-supervisor' => ['maxProcesses' => 4],
-            'rag-supervisor' => ['maxProcesses' => 2],
+            'agent-supervisor' => ['maxProcesses' => (int) env('HORIZON_AGENT_MAX', 3)],
+            'chatwoot-webhooks-supervisor' => ['maxProcesses' => (int) env('HORIZON_CHATWOOT_WEBHOOKS_MAX', 2)],
+            'background-supervisor' => ['maxProcesses' => (int) env('HORIZON_BACKGROUND_MAX', 2)],
         ],
 
         'local' => [
-            'default-supervisor' => ['maxProcesses' => 2],
-            'emails-supervisor' => ['maxProcesses' => 1],
-            'chatwoot-sync-supervisor' => ['maxProcesses' => 1],
-            'chatwoot-webhooks-supervisor' => ['maxProcesses' => 2],
-            'chatwoot-send-supervisor' => ['maxProcesses' => 1],
-            'agent-supervisor' => ['maxProcesses' => 1],
-            'documents-supervisor' => ['maxProcesses' => 1],
-            'playground-supervisor' => ['maxProcesses' => 1],
-            'rag-supervisor' => ['maxProcesses' => 1],
+            // Env-driven so load tests can raise the local ceiling without
+            // switching APP_ENV to production.
+            'agent-supervisor' => ['maxProcesses' => (int) env('HORIZON_AGENT_MAX', 1)],
+            'chatwoot-webhooks-supervisor' => ['maxProcesses' => (int) env('HORIZON_CHATWOOT_WEBHOOKS_MAX', 1)],
+            'background-supervisor' => ['maxProcesses' => 1],
         ],
     ],
 
