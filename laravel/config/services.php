@@ -41,8 +41,11 @@ return [
         'base_url' => env('AGENT_RUNTIME_URL', env('AGENT_PYTHON_URL', 'http://agent-python:8000')),
         'internal_token' => env('AGENT_RUNTIME_INTERNAL_TOKEN', env('INTERNAL_API_TOKEN')),
         'timeout' => (int) env('AGENT_RUNTIME_TIMEOUT', 30),
+        'accept_timeout' => (int) env('AGENT_RUNTIME_ACCEPT_TIMEOUT', 10),
         'stream_timeout' => (int) env('AGENT_RUNTIME_STREAM_TIMEOUT', 180),
         'ingest_timeout' => (int) env('AGENT_RUNTIME_INGEST_TIMEOUT', 600),
+        'run_timeout' => (int) env('AGENT_RUN_TIMEOUT', 180),
+        'max_concurrency_per_account' => (int) env('AGENT_MAX_CONCURRENCY_PER_ACCOUNT', 3),
     ],
 
     'chatwoot' => [

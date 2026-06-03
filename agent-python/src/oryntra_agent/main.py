@@ -10,6 +10,12 @@ from oryntra_agent.api.memory_extraction import router as memory_extraction_rout
 from oryntra_agent.api.playground import router as playground_router
 from oryntra_agent.api.rag import router as rag_router
 from oryntra_agent.manage import setup_checkpointer
+from oryntra_agent.settings import settings
+
+logging.basicConfig(
+    level=settings.log_level.upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 
 logger = logging.getLogger(__name__)
 

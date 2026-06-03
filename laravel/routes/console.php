@@ -15,6 +15,12 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Schedule::command('agent:reap-stuck-runs')
+    ->everyMinute()
+    ->name('agent:reap-stuck-runs')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 Schedule::job(new SyncChatwootAccountsJob)
     ->daily()
     ->name('chatwoot:sync-accounts-daily')

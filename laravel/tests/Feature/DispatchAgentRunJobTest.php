@@ -7,7 +7,6 @@ use App\Jobs\Agent\DispatchAgentRunJob;
 use App\Models\Agent;
 use App\Models\AgentRun;
 use App\Models\ChatwootConnection;
-use App\Models\ChatwootWebhookEvent;
 use App\Models\Workspace;
 use App\Services\AgentRuntime\AgentRuntimeClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -21,57 +20,22 @@ use Tests\TestCase;
 uses(TestCase::class);
 uses(RefreshDatabase::class);
 
-it('marks agent_run completed with supervisor runtime output and transitions linked events to processed', function () {
+beforeEach(function () {
     Config::set('services.agent_runtime.base_url', 'http://agent-python:8000');
     Config::set('services.agent_runtime.internal_token', 'ci-token');
+    Config::set('services.agent_runtime.max_concurrency_per_account', 0);
+});
 
+it('dispatches the run to the runtime and marks it running without blocking', function () {
     Http::fake([
-        'http://agent-python:8000/internal/chatwoot/messages' => Http::response([
-            'status' => 'completed',
-            'response' => [
-                'type' => 'text',
-                'content' => '[mock] Suporte recebeu 2 mensagem(ns).',
-                'document_id' => null,
-                'handoff_reason' => null,
-                'confidence' => 1.0,
-            ],
-            'specialist_id' => 5,
-            'trace' => [
-                [
-                    'step' => 1,
-                    'type' => 'runtime_mock',
-                    'input' => ['message_count' => 2],
-                    'output' => ['response_type' => 'text'],
-                    'tokens' => ['input' => 0, 'output' => 0],
-                    'latency_ms' => 0,
-                    'ts' => now()->toISOString(),
-                ],
-                [
-                    'step' => 2,
-                    'type' => 'supervisor_route',
-                    'specialist_id' => 5,
-                    'input' => ['specialists' => ['Suporte']],
-                    'output' => ['specialist_id' => 5, 'confidence' => 1.0],
-                    'tokens' => ['input' => 0, 'output' => 0],
-                    'latency_ms' => 0,
-                    'ts' => now()->toISOString(),
-                ],
-            ],
-            'usage' => [
-                'supervisor' => ['input_tokens' => 0, 'output_tokens' => 0],
-                'specialist' => ['input_tokens' => 0, 'output_tokens' => 0],
-                'total_cost_cents' => 0,
-            ],
-        ]),
-        'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages' => Http::response(['id' => 123]),
+        'http://agent-python:8000/internal/chatwoot/messages/dispatch' => Http::response([
+            'accepted' => true,
+            'agent_run_id' => 1,
+        ], 202),
     ]);
 
     $workspace = Workspace::factory()->create();
-    $connection = ChatwootConnection::factory()->for($workspace)->create([
-        'base_url' => 'http://chatwoot.test',
-        'account_id' => 5,
-        'api_access_token' => 'agent-bot-token',
-    ]);
+    $connection = ChatwootConnection::factory()->for($workspace)->create();
     $agent = Agent::factory()->active()->for($workspace)->create();
 
     $run = AgentRun::factory()->create([
@@ -84,100 +48,25 @@ it('marks agent_run completed with supervisor runtime output and transitions lin
         'status' => AgentRunStatus::Debouncing,
         'debounce_started_at' => now()->subSeconds(10),
         'debounce_until' => now()->subSecond(),
-        'input' => ['messages' => [['content' => 'oi'], ['content' => 'olha']]],
-    ]);
-
-    $event = ChatwootWebhookEvent::factory()->create([
-        'workspace_id' => $workspace->id,
-        'chatwoot_connection_id' => $connection->id,
-        'conversation_id' => 99,
-        'resolved_agent_id' => $agent->id,
-        'agent_run_id' => $run->id,
-        'status' => 'debouncing',
-        'processed_at' => null,
+        'input' => ['messages' => [['content' => 'oi']]],
     ]);
 
     (new DispatchAgentRunJob($run->id))->handle(app(AgentRuntimeClient::class));
 
     $freshRun = $run->fresh();
-    $freshEvent = $event->fresh();
 
-    expect($freshRun?->status)->toBe(AgentRunStatus::Completed)
-        ->and($freshRun?->output['response']['content'] ?? null)->toBe('[mock] Suporte recebeu 2 mensagem(ns).')
-        ->and($freshRun?->output['specialist_id'] ?? null)->toBe(5)
-        ->and($freshRun?->output['trace'][0]['type'] ?? null)->toBe('runtime_mock')
-        ->and($freshRun?->output['trace'][1]['specialist_id'] ?? null)->toBe(5)
-        ->and($freshRun?->output['usage']['total_cost_cents'] ?? null)->toBe(0)
-        ->and($freshRun?->output['response_delivery']['status'] ?? null)->toBe('completed')
+    expect($freshRun?->status)->toBe(AgentRunStatus::Running)
         ->and($freshRun?->started_at)->not->toBeNull()
-        ->and($freshRun?->finished_at)->not->toBeNull()
-        ->and($freshEvent?->status)->toBe('processed')
-        ->and($freshEvent?->processed_at)->not->toBeNull();
+        ->and($freshRun?->finished_at)->toBeNull();
 
-    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages'
-        && $request['content'] === '[mock] Suporte recebeu 2 mensagem(ns).'
-        && $request['message_type'] === 'outgoing'
-        && $request['private'] === false);
-});
-
-it('does not send a completed runtime response twice when response delivery already completed', function () {
-    Config::set('services.agent_runtime.base_url', 'http://agent-python:8000');
-    Config::set('services.agent_runtime.internal_token', 'ci-token');
-
-    Http::fake([
-        'http://agent-python:8000/internal/chatwoot/messages' => Http::response([
-            'status' => 'completed',
-            'response' => [
-                'type' => 'text',
-                'content' => 'Resposta nova do runtime.',
-                'document_id' => null,
-                'handoff_reason' => null,
-                'confidence' => 1.0,
-            ],
-            'specialist_id' => null,
-            'trace' => [],
-            'usage' => [
-                'supervisor' => ['input_tokens' => 0, 'output_tokens' => 0],
-                'specialist' => ['input_tokens' => 0, 'output_tokens' => 0],
-                'total_cost_cents' => 0,
-            ],
-        ]),
-    ]);
-
-    $run = AgentRun::factory()->create([
-        'status' => AgentRunStatus::Queued,
-        'output' => [
-            'response_delivery' => [
-                'status' => 'completed',
-                'sent_at' => now()->subMinute()->toISOString(),
-                'conversation_id' => 99,
-                'response_type' => 'text',
-            ],
-        ],
-    ]);
-
-    (new DispatchAgentRunJob($run->id))->handle(app(AgentRuntimeClient::class));
-
-    expect($run->fresh()?->status)->toBe(AgentRunStatus::Completed)
-        ->and($run->fresh()?->output['response_delivery']['status'] ?? null)->toBe('completed');
-
-    Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/conversations/'));
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://agent-python:8000/internal/chatwoot/messages/dispatch'
+        && $request['agent_run_id'] === $run->id);
 });
 
 it('reschedules itself if debounce_until is still in the future', function () {
     Bus::fake();
 
-    $workspace = Workspace::factory()->create();
-    $connection = ChatwootConnection::factory()->for($workspace)->create();
-    $agent = Agent::factory()->active()->for($workspace)->create();
-
     $run = AgentRun::factory()->create([
-        'workspace_id' => $workspace->id,
-        'agent_id' => $agent->id,
-        'chatwoot_connection_id' => $connection->id,
-        'conversation_id' => 11,
-        'chatwoot_account_id' => 5,
-        'thread_id' => "workspace:{$workspace->id}:account:5:conversation:11",
         'status' => AgentRunStatus::Debouncing,
         'debounce_until' => now()->addSeconds(30),
     ]);
@@ -189,6 +78,7 @@ it('reschedules itself if debounce_until is still in the future', function () {
         ->and($freshRun?->started_at)->toBeNull();
 
     Bus::assertDispatched(DispatchAgentRunJob::class);
+    Http::assertNothingSent();
 });
 
 it('no-ops if agent_run already in terminal state', function () {
@@ -196,134 +86,56 @@ it('no-ops if agent_run already in terminal state', function () {
 
     (new DispatchAgentRunJob($run->id))->handle(app(AgentRuntimeClient::class));
 
+    expect($run->fresh()?->status)->toBe(AgentRunStatus::Completed);
+    Http::assertNothingSent();
+});
+
+it('throws when the runtime rejects the dispatch and keeps the run in flight for retry', function () {
+    Http::fake([
+        'http://agent-python:8000/internal/chatwoot/messages/dispatch' => Http::response(['message' => 'boom'], 500),
+    ]);
+
+    $run = AgentRun::factory()->create([
+        'status' => AgentRunStatus::Debouncing,
+        'debounce_until' => now()->subSecond(),
+    ]);
+
+    expect(fn () => (new DispatchAgentRunJob($run->id))->handle(app(AgentRuntimeClient::class)))
+        ->toThrow(RequestException::class);
+
+    // Status stays in-flight (not Running) so a retry can re-dispatch cleanly.
+    expect($run->fresh()?->status)->toBe(AgentRunStatus::Debouncing);
+});
+
+it('releases without marking running when the runtime is at capacity (503)', function () {
+    Http::fake([
+        'http://agent-python:8000/internal/chatwoot/messages/dispatch' => Http::response(['detail' => 'runtime at capacity'], 503),
+    ]);
+
+    $run = AgentRun::factory()->create([
+        'status' => AgentRunStatus::Debouncing,
+        'debounce_until' => now()->subSecond(),
+    ]);
+
+    (new DispatchAgentRunJob($run->id))->handle(app(AgentRuntimeClient::class));
+
+    // Stayed in-flight (released back to the queue), not Running.
+    expect($run->fresh()?->status)->toBe(AgentRunStatus::Debouncing)
+        ->and($run->fresh()?->started_at)->toBeNull();
+
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/messages/dispatch'));
+});
+
+it('marks the run failed once dispatch retries are exhausted', function () {
+    $run = AgentRun::factory()->create([
+        'status' => AgentRunStatus::Running,
+        'started_at' => now(),
+    ]);
+
+    (new DispatchAgentRunJob($run->id))->failed(new RuntimeException('agent-python down'));
+
     $fresh = $run->fresh();
-    expect($fresh?->status)->toBe(AgentRunStatus::Completed)
-        ->and($fresh?->output['content'] ?? null)->toBe('mock response');
+    expect($fresh?->status)->toBe(AgentRunStatus::Failed)
+        ->and($fresh?->error_message)->toBe('agent-python down')
+        ->and($fresh?->finished_at)->not->toBeNull();
 });
-
-it('marks agent_run waiting_human when runtime requests human handoff', function () {
-    Config::set('services.agent_runtime.base_url', 'http://agent-python:8000');
-    Config::set('services.agent_runtime.internal_token', 'ci-token');
-
-    Http::fake([
-        'http://agent-python:8000/internal/chatwoot/messages' => Http::response([
-            'status' => 'waiting_human',
-            'response' => [
-                'type' => 'escalate',
-                'content' => null,
-                'document_id' => null,
-                'handoff_reason' => 'confidence_below_threshold',
-                'confidence' => 0.2,
-            ],
-            'specialist_id' => null,
-            'trace' => [],
-            'usage' => [
-                'supervisor' => ['input_tokens' => 0, 'output_tokens' => 0],
-                'specialist' => ['input_tokens' => 0, 'output_tokens' => 0],
-                'total_cost_cents' => 0,
-            ],
-        ]),
-    ]);
-
-    $run = AgentRun::factory()->create([
-        'status' => AgentRunStatus::Debouncing,
-        'debounce_until' => now()->subSecond(),
-    ]);
-
-    (new DispatchAgentRunJob($run->id))->handle(app(AgentRuntimeClient::class));
-
-    $freshRun = $run->fresh();
-
-    expect($freshRun?->status)->toBe(AgentRunStatus::WaitingHuman)
-        ->and($freshRun?->output['response']['type'] ?? null)->toBe('escalate')
-        ->and($freshRun?->output['response']['confidence'] ?? null)->toBe(0.2)
-        ->and($freshRun?->output['response']['handoff_reason'] ?? null)->toBe('confidence_below_threshold');
-});
-
-it('preserves the resolution payload written by the resolve_conversation action when merging the runtime response', function () {
-    Config::set('services.agent_runtime.base_url', 'http://agent-python:8000');
-    Config::set('services.agent_runtime.internal_token', 'ci-token');
-
-    Http::fake([
-        'http://agent-python:8000/internal/chatwoot/messages' => Http::response([
-            'status' => 'completed',
-            'response' => [
-                'type' => 'text',
-                'content' => 'Otimo, ate breve!',
-                'document_id' => null,
-                'handoff_reason' => null,
-                'confidence' => 1.0,
-            ],
-            'specialist_id' => 6,
-            'trace' => [],
-            'usage' => [
-                'supervisor' => ['input_tokens' => 0, 'output_tokens' => 0],
-                'specialist' => ['input_tokens' => 0, 'output_tokens' => 0],
-                'total_cost_cents' => 0,
-            ],
-        ]),
-        'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages' => Http::response(['id' => 1]),
-    ]);
-
-    $workspace = Workspace::factory()->create();
-    $agent = Agent::factory()->active()->for($workspace)->create();
-    $connection = ChatwootConnection::factory()->for($workspace)->create([
-        'base_url' => 'http://chatwoot.test',
-        'account_id' => 5,
-        'api_access_token' => 'agent-bot-token',
-    ]);
-    $run = AgentRun::factory()->create([
-        'workspace_id' => $workspace->id,
-        'agent_id' => $agent->id,
-        'chatwoot_connection_id' => $connection->id,
-        'chatwoot_account_id' => 5,
-        'conversation_id' => 99,
-        'thread_id' => "workspace:{$workspace->id}:account:5:conversation:99",
-        'status' => AgentRunStatus::Debouncing,
-        'debounce_until' => now()->subSecond(),
-        'output' => [
-            'resolution' => [
-                'reason' => 'Cliente confirmou.',
-                'resolution_summary' => 'Resolvido por email.',
-                'customer_message' => 'Anderson, ja encaminhei o catalogo.',
-                'label_name' => 'resolved-by-ia',
-                'side_effects' => ['status' => 'queued'],
-            ],
-        ],
-    ]);
-
-    Bus::fake();
-
-    (new DispatchAgentRunJob($run->id))->handle(app(AgentRuntimeClient::class));
-
-    $output = $run->fresh()?->output;
-
-    expect(is_array($output))->toBeTrue()
-        ->and($output['resolution']['reason'] ?? null)->toBe('Cliente confirmou.')
-        ->and($output['resolution']['resolution_summary'] ?? null)->toBe('Resolvido por email.')
-        ->and($output['resolution']['customer_message'] ?? null)->toBe('Anderson, ja encaminhei o catalogo.')
-        ->and($output['resolution']['label_name'] ?? null)->toBe('resolved-by-ia');
-});
-
-it('marks agent_run failed when runtime call fails', function () {
-    Config::set('services.agent_runtime.base_url', 'http://agent-python:8000');
-    Config::set('services.agent_runtime.internal_token', 'ci-token');
-
-    Http::fake([
-        'http://agent-python:8000/internal/chatwoot/messages' => Http::response(['message' => 'boom'], 500),
-    ]);
-
-    $run = AgentRun::factory()->create([
-        'status' => AgentRunStatus::Debouncing,
-        'debounce_until' => now()->subSecond(),
-    ]);
-
-    try {
-        (new DispatchAgentRunJob($run->id))->handle(app(AgentRuntimeClient::class));
-    } catch (RequestException $e) {
-        expect($run->fresh()?->status)->toBe(AgentRunStatus::Failed)
-            ->and($run->fresh()?->error_message)->toContain('HTTP request returned status code 500');
-
-        throw $e;
-    }
-})->throws(RequestException::class);

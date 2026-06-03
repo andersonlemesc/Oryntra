@@ -66,6 +66,42 @@ class AgentRuntimeClient
     }
 
     /**
+     * Fire-and-forget dispatch of an agent run. Python accepts the payload
+     * (HTTP 202), runs the graph in the background and posts the result back to
+     * Laravel via the internal callback endpoint. The PHP worker is freed
+     * immediately instead of blocking for the whole LLM round-trip.
+     *
+     * Returns false when the runtime is at capacity (HTTP 503): the caller
+     * should release the job back onto the queue rather than mark the run
+     * running. Other transport/status failures still throw.
+     *
+     * @throws RequestException
+     */
+    public function start(AgentRun $run): bool
+    {
+        $baseUrl = rtrim((string) config('services.agent_runtime.base_url'), '/');
+        $token = (string) config('services.agent_runtime.internal_token');
+
+        if ($token === '') {
+            throw new RuntimeException('Agent runtime internal token is not configured.');
+        }
+
+        $response = Http::asJson()
+            ->acceptJson()
+            ->timeout((int) config('services.agent_runtime.accept_timeout', 10))
+            ->withHeaders(['X-Internal-Token' => $token])
+            ->post("{$baseUrl}/internal/chatwoot/messages/dispatch", $this->buildPayload($run));
+
+        if ($response->status() === 503) {
+            return false;
+        }
+
+        $response->throw();
+
+        return true;
+    }
+
+    /**
      * Ingest a knowledge document: Python downloads the file, extracts text
      * (lib with vision-LLM fallback), chunks it and embeds it with the
      * workspace BYOK embedding credential. Python is stateless — it returns the
@@ -358,6 +394,7 @@ class AgentRuntimeClient
         $mcpServers = $this->workspaceMcpServers($run->workspace_id);
 
         return [
+            'agent_run_id' => $run->id,
             'workspace_id' => $run->workspace_id,
             'agent_id' => $run->agent_id,
             'agent_mode' => $agent->mode instanceof AgentMode ? $agent->mode->value : AgentMode::Single->value,

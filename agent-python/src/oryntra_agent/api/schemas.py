@@ -215,6 +215,7 @@ class SpecialistConfig(BaseModel):
 class ChatwootRuntimeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    agent_run_id: int | None = None
     workspace_id: int
     agent_id: int
     agent_mode: Literal["single", "supervisor"] = "single"
