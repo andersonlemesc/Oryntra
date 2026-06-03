@@ -1,0 +1,61 @@
+# Production overlay — apply on top of the base compose:
+#
+#   cp .env.production.example .env   # then edit secrets
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d \
+#     nginx laravel-app laravel-horizon laravel-scheduler laravel-reverb \
+#     agent-python postgres pgbouncer redis minio
+#
+# Tuned for MODEST usage (mostly one account, few concurrent conversations).
+# Do NOT start mailpit in production (dev-only mail catcher) — use a real SMTP.
+#
+# Sizing baseline (idle): horizon ~560MB (3 supervisors) + python ~500MB
+# (2 workers) + postgres + redis ≈ 2-2.5GB. Fits a small 4 vCPU / 8GB box with
+# lots of headroom; 4GB also works at this scale.
+
+services:
+  agent-python:
+    # Multi-worker, no --reload. 2 workers x AGENT_MAX_CONCURRENCY = execution
+    # slots. For one small account this is already generous.
+    command: ["sh", "-c", "uvicorn oryntra_agent.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-2}"]
+    environment:
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+      AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-8}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Checkpointer stays on a direct Postgres connection (prepared statements);
+      # do NOT route POSTGRES_URL through pgbouncer in transaction mode.
+      LANGGRAPH_CHECKPOINTER: postgres
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+
+  laravel-app:
+    environment:
+      DB_HOST: ${LARAVEL_DB_HOST:-pgbouncer}
+      REDIS_HOST: redis
+
+  laravel-horizon:
+    environment:
+      DB_HOST: ${LARAVEL_DB_HOST:-pgbouncer}
+      REDIS_HOST: redis
+      HORIZON_AGENT_MAX: ${HORIZON_AGENT_MAX:-3}
+      HORIZON_CHATWOOT_WEBHOOKS_MAX: ${HORIZON_CHATWOOT_WEBHOOKS_MAX:-2}
+      HORIZON_BACKGROUND_MAX: ${HORIZON_BACKGROUND_MAX:-2}
+      AGENT_MAX_CONCURRENCY_PER_ACCOUNT: ${AGENT_MAX_CONCURRENCY_PER_ACCOUNT:-5}
+      AGENT_RUN_TIMEOUT: ${AGENT_RUN_TIMEOUT:-180}
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+
+  laravel-scheduler:
+    environment:
+      DB_HOST: ${LARAVEL_DB_HOST:-pgbouncer}
+      REDIS_HOST: redis
+
+  postgres:
+    # Don't publish Postgres to the host in production.
+    ports: []
+
+  redis:
+    ports: []
