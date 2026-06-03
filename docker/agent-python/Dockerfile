@@ -68,4 +68,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8000/health || exit 1
 
-CMD ["uvicorn", "oryntra_agent.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Production default: multi-worker. Each worker has its own concurrency
+# semaphore, so effective cap = UVICORN_WORKERS * AGENT_MAX_CONCURRENCY.
+# The dev compose overrides this with a single --reload process.
+CMD ["sh", "-c", "uvicorn oryntra_agent.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-2}"]
