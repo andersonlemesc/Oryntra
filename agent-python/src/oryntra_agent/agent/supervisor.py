@@ -177,6 +177,11 @@ class SupervisorState(TypedDict, total=False):
 
 
 def run_chatwoot_runtime(payload: ChatwootRuntimeRequest) -> ChatwootRuntimeResponse:
+    if settings.agent_fake_latency_ms > 0:
+        # Load-test hook: emulate the blocking external LLM call so a run holds
+        # its concurrency slot for a realistic duration. Runs inside to_thread.
+        time.sleep(settings.agent_fake_latency_ms / 1000)
+
     credentials = runtime_llm_credentials_from_payload(payload)
     credentials_token = _runtime_llm_credentials.set(credentials)
     supervisor_credential_token = _supervisor_llm_credential.set(credentials.supervisor)

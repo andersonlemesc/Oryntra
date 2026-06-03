@@ -1,0 +1,34 @@
+# Load-test overlay. Apply on top of the base compose:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.loadtest.yml up -d
+#
+# Pins the runtime tier to 4 vCPU / 8 GB and injects a fake 2.5s LLM latency on
+# the Python service so runs hold their concurrency slot realistically without
+# real BYOK keys. Then drive load with:
+#
+#   docker compose exec laravel-app php artisan agent:loadtest 200 --workspaces=5
+#   bash scripts/loadtest-watch.sh
+#
+# Expected: concurrent Running plateaus at
+#   min(HORIZON_AGENT_MAX, UVICORN_WORKERS * AGENT_MAX_CONCURRENCY)
+# and queue:agent grows above that.
+
+services:
+  laravel-horizon:
+    environment:
+      # Raises the local `agent` worker ceiling for the test (default local = 1).
+      HORIZON_AGENT_MAX: ${HORIZON_AGENT_MAX:-4}
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
+
+  agent-python:
+    environment:
+      AGENT_FAKE_LATENCY_MS: ${AGENT_FAKE_LATENCY_MS:-2500}
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
