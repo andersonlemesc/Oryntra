@@ -40,14 +40,9 @@
                     >
                         <x-filament::icon icon="heroicon-o-chat-bubble-left-right" class="h-4 w-4 shrink-0 text-gray-400" />
                         <span class="flex-1 truncate">{{ $conversation->title ?: 'Sem título' }}</span>
-                        <button
-                            type="button"
-                            wire:click.stop="deleteConversation({{ $conversation->id }})"
-                            wire:confirm="Apagar esta conversa?"
-                            class="hidden text-gray-400 hover:text-danger-500 group-hover:block"
-                        >
-                            <x-filament::icon icon="heroicon-o-trash" class="h-4 w-4" />
-                        </button>
+                        <span class="hidden group-hover:block" wire:click.stop>
+                            {{ ($this->deleteConversationAction)(['conversation' => $conversation->id]) }}
+                        </span>
                     </div>
                 @empty
                     <p class="px-2 py-4 text-center text-sm text-gray-400">Nenhuma conversa ainda.</p>

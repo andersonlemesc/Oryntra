@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Pages\Profile;
 
 use App\Models\User;
+use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -108,13 +109,28 @@ class SecurityPage extends Page implements HasForms
     public function enableTwoFactor(EnableTwoFactorAuthentication $enable): void
     {
         $user = $this->user();
-        $enable($user);
+
+        // force: true rotates the secret on every (re)start, so a pending,
+        // never-confirmed setup always yields a fresh QR code instead of
+        // re-showing the same stale one.
+        $enable($user, force: true);
+
+        $this->confirmationCode = '';
 
         Notification::make()
             ->title('2FA iniciado')
             ->body('Escaneie o QR code e confirme com um código para concluir.')
             ->success()
             ->send();
+    }
+
+    public function cancelTwoFactorSetup(DisableTwoFactorAuthentication $disable): void
+    {
+        $disable($this->user());
+
+        $this->confirmationCode = '';
+
+        Notification::make()->title('Configuração de 2FA cancelada')->success()->send();
     }
 
     public function confirmTwoFactor(ConfirmTwoFactorAuthentication $confirm): void
@@ -145,11 +161,20 @@ class SecurityPage extends Page implements HasForms
         Notification::make()->title('Códigos de recuperação regenerados')->success()->send();
     }
 
-    public function disableTwoFactor(DisableTwoFactorAuthentication $disable): void
+    public function disableTwoFactorAction(): Action
     {
-        $disable($this->user());
+        return Action::make('disableTwoFactor')
+            ->label('Desativar 2FA')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalHeading('Desativar 2FA')
+            ->modalDescription('Sua conta ficará menos protegida sem o segundo fator. Deseja continuar?')
+            ->modalSubmitActionLabel('Desativar')
+            ->action(function (): void {
+                app(DisableTwoFactorAuthentication::class)($this->user());
 
-        Notification::make()->title('2FA desativado')->success()->send();
+                Notification::make()->title('2FA desativado')->success()->send();
+            });
     }
 
     public function twoFactorEnabled(): bool

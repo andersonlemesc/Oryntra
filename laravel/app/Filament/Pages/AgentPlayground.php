@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Playground\PlaygroundRuntimeClient;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
@@ -166,20 +167,32 @@ class AgentPlayground extends Page
         $this->dispatch('playground-conversation-changed', conversationId: $conversation->id);
     }
 
-    public function deleteConversation(int $conversationId): void
+    public function deleteConversationAction(): Action
     {
-        $conversation = $this->ownedConversation($conversationId);
+        return Action::make('deleteConversation')
+            ->icon('heroicon-o-trash')
+            ->iconButton()
+            ->color('gray')
+            ->size('sm')
+            ->requiresConfirmation()
+            ->modalHeading('Apagar conversa')
+            ->modalDescription('Esta conversa do playground será removida permanentemente.')
+            ->modalSubmitActionLabel('Apagar')
+            ->action(function (array $arguments): void {
+                $conversationId = (int) ($arguments['conversation'] ?? 0);
+                $conversation = $this->ownedConversation($conversationId);
 
-        if ($conversation === null) {
-            return;
-        }
+                if ($conversation === null) {
+                    return;
+                }
 
-        $conversation->delete();
+                $conversation->delete();
 
-        if ($this->conversationId === $conversationId) {
-            $this->conversationId = null;
-            $this->dispatch('playground-conversation-changed', conversationId: null);
-        }
+                if ($this->conversationId === $conversationId) {
+                    $this->conversationId = null;
+                    $this->dispatch('playground-conversation-changed', conversationId: null);
+                }
+            });
     }
 
     public function sendMessage(PlaygroundRuntimeClient $runtime): void
