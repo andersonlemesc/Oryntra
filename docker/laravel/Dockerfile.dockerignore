@@ -1,0 +1,32 @@
+# Context = repo root (see docker/laravel/Dockerfile header).
+# Keep the build context small and never ship host-built deps or secrets.
+
+.git
+**/.env
+**/.env.*
+!**/.env.example
+
+# Host-built deps — reinstalled inside the image
+laravel/vendor
+laravel/node_modules
+laravel/public/build
+laravel/public/hot
+laravel/public/storage
+laravel/storage/logs/*
+laravel/storage/framework/cache/*
+laravel/storage/framework/sessions/*
+laravel/storage/framework/views/*
+laravel/storage/app/private/*
+laravel/storage/app/public/*
+laravel/storage/pail/*
+laravel/bootstrap/cache/*.php
+laravel/.phpunit.cache
+laravel/.phpunit.result.cache
+
+# Unrelated trees / tooling
+agent-python
+docs
+packages
+**/.idea
+**/.vscode
+**/coverage
