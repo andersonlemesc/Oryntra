@@ -33,6 +33,10 @@ services:
     environment:
       DB_HOST: ${LARAVEL_DB_HOST:-pgbouncer}
       REDIS_HOST: redis
+    # Pooler must be up before the PHP tier (DB_HOST points at pgbouncer here).
+    depends_on:
+      pgbouncer:
+        condition: service_started
 
   laravel-horizon:
     environment:
@@ -43,6 +47,9 @@ services:
       HORIZON_BACKGROUND_MAX: ${HORIZON_BACKGROUND_MAX:-2}
       AGENT_MAX_CONCURRENCY_PER_ACCOUNT: ${AGENT_MAX_CONCURRENCY_PER_ACCOUNT:-5}
       AGENT_RUN_TIMEOUT: ${AGENT_RUN_TIMEOUT:-180}
+    depends_on:
+      pgbouncer:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -52,10 +59,21 @@ services:
     environment:
       DB_HOST: ${LARAVEL_DB_HOST:-pgbouncer}
       REDIS_HOST: redis
+    depends_on:
+      pgbouncer:
+        condition: service_started
 
   postgres:
     # Don't publish Postgres to the host in production.
-    ports: []
+    ports: !override []
 
   redis:
-    ports: []
+    ports: !override []
+
+  minio:
+    # Storage is internal-only in production: Laravel reaches it at minio:9000
+    # over the Docker network and streams media bytes to Chatwoot directly (no
+    # public presigned URLs). Do NOT publish the S3 API (9000) or the admin
+    # console (9001) to the host. Put a TLS reverse proxy in front only if you
+    # later need public object URLs.
+    ports: !override []
