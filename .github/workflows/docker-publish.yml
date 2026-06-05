@@ -17,7 +17,9 @@ name: Build & Publish Images
 
 on:
   push:
-    branches: [main, develop]
+    # Release tags drive :X.Y.Z + :latest. develop publishes a single mutable
+    # :develop for pre-release testing. main does NOT publish — releases own :latest.
+    branches: [develop]
     tags: ['v*.*.*']
 
 permissions:
@@ -119,17 +121,13 @@ jobs:
           IMAGE: ${{ env.IMAGE_NS }}/${{ matrix.image }}
           GH_REF: ${{ github.ref }}
           GH_REF_NAME: ${{ github.ref_name }}
-          GH_SHA: ${{ github.sha }}
         run: |
-          SHA_SHORT="${GH_SHA:0:7}"
           TAGS=""
           if [[ "${GH_REF}" == refs/tags/v* ]]; then
             VERSION="${GH_REF_NAME#v}"
             TAGS="${IMAGE}:${VERSION},${IMAGE}:latest"
-          elif [[ "${GH_REF}" == refs/heads/main ]]; then
-            TAGS="${IMAGE}:latest,${IMAGE}:main-${SHA_SHORT}"
           elif [[ "${GH_REF}" == refs/heads/develop ]]; then
-            TAGS="${IMAGE}:develop,${IMAGE}:develop-${SHA_SHORT}"
+            TAGS="${IMAGE}:develop"
           fi
           echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
