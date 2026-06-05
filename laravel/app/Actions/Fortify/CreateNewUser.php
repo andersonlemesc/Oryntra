@@ -40,11 +40,19 @@ class CreateNewUser implements CreatesNewUsers
 
         $isFirstUser = User::query()->doesntExist();
 
-        return User::create([
+        $user = User::create([
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => Hash::make($input['password']),
             'is_super_admin' => $isFirstUser,
         ]);
+
+        // Self-registered users set their own password here, so the account is
+        // immediately usable. Marking it verified keeps email_verified_at a
+        // consistent "onboarded / can authenticate" signal — only sync-created
+        // users awaiting an invitation stay unverified.
+        $user->forceFill(['email_verified_at' => now()])->save();
+
+        return $user;
     }
 }

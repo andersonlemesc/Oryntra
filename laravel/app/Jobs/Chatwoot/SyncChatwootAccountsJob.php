@@ -54,8 +54,8 @@ class SyncChatwootAccountsJob implements ShouldQueue
             'invites_sent' => 0,
         ];
 
-        /** @var array<int, User> $newUsers */
-        $newUsers = [];
+        /** @var array<int, User> $newAdmins */
+        $newAdmins = [];
 
         try {
             $accounts = $client->listAccounts();
@@ -99,12 +99,20 @@ class SyncChatwootAccountsJob implements ShouldQueue
                     }
                     $summary['users_upserted']++;
 
-                    if ($wasNew) {
-                        $newUsers[$user->id] = $user;
-                    }
-
                     $chatwootRole = (string) ($accountUser['role'] ?? 'agent');
                     $role = $this->mapRole($chatwootRole);
+
+                    if ($wasNew) {
+                        // Only workspace admins are auto-invited on sync. Agents
+                        // (member/viewer) are created/linked but invited manually
+                        // by an admin from the Users page.
+                        if ($role === 'admin') {
+                            $newAdmins[$user->id] = $user;
+                        } else {
+                            $summary['agents_pending_invite'] = ($summary['agents_pending_invite'] ?? 0) + 1;
+                        }
+                    }
+
                     $workspace->users()->syncWithoutDetaching([
                         $user->id => [
                             'role' => $role,
@@ -120,16 +128,16 @@ class SyncChatwootAccountsJob implements ShouldQueue
                 }
             }
 
-            if (config('invitations.send_on_sync') && $newUsers !== []) {
+            if (config('invitations.send_on_sync') && $newAdmins !== []) {
                 $action = app(SendUserInvitation::class);
-                foreach ($newUsers as $newUser) {
+                foreach ($newAdmins as $newAdmin) {
                     try {
-                        $action->execute($newUser, source: 'chatwoot_sync');
+                        $action->execute($newAdmin, source: 'chatwoot_sync');
                         $summary['invites_sent']++;
                     } catch (Throwable $invitationError) {
                         Log::error('SyncChatwoot: invitation dispatch failed', [
-                            'user_id' => $newUser->id,
-                            'email' => $newUser->email,
+                            'user_id' => $newAdmin->id,
+                            'email' => $newAdmin->email,
                             'error' => $invitationError->getMessage(),
                         ]);
                     }

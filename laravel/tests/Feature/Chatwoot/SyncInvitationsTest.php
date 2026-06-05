@@ -22,7 +22,7 @@ beforeEach(function () {
     ]);
 });
 
-it('dispatches invitation only for newly created users on sync', function () {
+it('dispatches invitation only for newly created admin users on sync', function () {
     Notification::fake();
 
     // existing user — should NOT receive invitation
@@ -39,7 +39,7 @@ it('dispatches invitation only for newly created users on sync', function () {
         ], 200),
         'https://chatwoot.test/platform/api/v1/accounts/1/account_users' => Http::response([
             ['id' => 1, 'user_id' => 10, 'account_id' => 1, 'role' => 'administrator'],
-            ['id' => 2, 'user_id' => 11, 'account_id' => 1, 'role' => 'agent'],
+            ['id' => 2, 'user_id' => 11, 'account_id' => 1, 'role' => 'administrator'],
         ], 200),
         'https://chatwoot.test/platform/api/v1/users/10' => Http::response([
             'id' => 10, 'email' => 'existing@oryntra.test', 'name' => 'Existing',

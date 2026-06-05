@@ -65,7 +65,6 @@ class ProfilePage extends Page implements HasForms
                 : $this->emptyValue(),
             'chatwoot_user_id' => $this->formatNullableInt($this->pivotInt($membership, 'chatwoot_user_id')),
             'chatwoot_role' => $this->formatNullableString($this->pivotString($membership, 'chatwoot_role')),
-            'chatwoot_availability' => $this->formatAvailability($this->pivotString($membership, 'chatwoot_availability')),
             'chatwoot_confirmed' => $this->formatBoolean($membership?->getAttribute('chatwoot_confirmed')),
         ]);
     }
@@ -117,16 +116,12 @@ class ProfilePage extends Page implements HasForms
                             ->label('Role Chatwoot')
                             ->disabled()
                             ->dehydrated(false),
-                        TextInput::make('chatwoot_availability')
-                            ->label('Disponibilidade')
-                            ->disabled()
-                            ->dehydrated(false),
                         TextInput::make('chatwoot_confirmed')
                             ->label('Confirmado no Chatwoot')
                             ->disabled()
                             ->dehydrated(false),
                     ])
-                    ->columns(4),
+                    ->columns(3),
             ])
             ->statePath('data');
     }
@@ -175,16 +170,6 @@ class ProfilePage extends Page implements HasForms
             'member' => 'Membro',
             'viewer' => 'Visualizador',
             default => $this->emptyValue(),
-        };
-    }
-
-    private function formatAvailability(?string $availability): string
-    {
-        return match ($availability) {
-            'online' => 'Online',
-            'busy' => 'Ocupado',
-            'offline' => 'Offline',
-            default => $this->formatNullableString($availability),
         };
     }
 

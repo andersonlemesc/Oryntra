@@ -45,7 +45,8 @@ it('redirects super admin without workspaces to /setup/platform after register',
     ])->assertRedirect(route('setup.platform.show'));
 
     $user = User::query()->where('email', 'admin@example.com')->firstOrFail();
-    expect($user->is_super_admin)->toBeTrue();
+    expect($user->is_super_admin)->toBeTrue()
+        ->and($user->email_verified_at)->not->toBeNull();
 });
 
 it('redirects super admin to /admin after login when workspaces exist', function () {
