@@ -103,15 +103,29 @@ async def extract_memories(payload: MemoryExtractionRequest) -> MemoryExtraction
     allowed = ", ".join(payload.allowed_types)
 
     system_prompt = (
-        "Voce analisa transcricoes de atendimento e extrai fatos longo prazo "
-        "sobre o cliente que vao ajudar a IA em conversas futuras.\n"
-        f"Tipos permitidos: {allowed}.\n"
+        "Voce analisa transcricoes de atendimento e extrai memoria de longo prazo "
+        "sobre o cliente, util em QUALQUER conversa futura.\n\n"
+        "Classifique cada item no tipo CORRETO:\n"
+        "- preference (Preferencia): gosto ou habito estavel. "
+        "Ex: 'paga em dinheiro e pede troco', 'nao gosta de cebola'.\n"
+        "- fact (Fato): atributo objetivo e estavel do cliente. "
+        "Ex: 'endereco e Rua Rio Branco 169, bairro Sao Joao', 'nome da empresa e Acme'.\n"
+        "- constraint (Restricao): limitacao real e permanente do cliente. "
+        "Ex: 'alergico a gluten', 'so recebe entregas apos as 18h'.\n"
+        "- history (Historico): evento pontual/transacional daquele momento. "
+        "Ex: 'pediu 2 X-Salada', 'comprou 1 refrigerante 2L'.\n"
+        "- custom (Personalizado): relevante e duravel, mas nao encaixa acima.\n\n"
+        f"Tipos permitidos nesta extracao: {allowed}.\n\n"
         "Regras:\n"
-        "- Extraia apenas fatos novos, NAO duplique memorias existentes.\n"
-        "- Cada item deve ser uma frase curta, objetiva, em portugues.\n"
-        "- Use confidence 0-1 conforme certeza.\n"
-        "- Se nao houver fatos novos relevantes, retorne lista vazia.\n"
-        "- Nao invente. Apenas o que esta explicito na transcricao."
+        "- Classifique pelo tipo CORRETO. Se o tipo correto NAO esta nos permitidos, "
+        "DESCARTE o item (nao force noutro tipo so para registrar).\n"
+        "- NAO registre requisitos do proprio atendimento nem coisas validas so para a "
+        "conversa atual. Ex descartar: 'precisa fornecer o endereco para a entrega', "
+        "'interessado em cardapios'.\n"
+        "- NAO duplique memorias ja registradas, mesmo que ditas com outras palavras.\n"
+        "- Cada item: frase curta, objetiva, em portugues. Use confidence 0-1 conforme certeza.\n"
+        "- Nao invente. Apenas o que esta explicito na transcricao. "
+        "Sem fatos novos relevantes, retorne lista vazia."
     )
 
     human_prompt_parts = ["Transcricao:", *transcript_lines]

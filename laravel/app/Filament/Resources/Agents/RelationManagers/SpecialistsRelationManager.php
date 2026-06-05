@@ -513,13 +513,14 @@ class SpecialistsRelationManager extends RelationManager
                                         CheckboxList::make('memory_config.extraction_types')
                                             ->label('Tipos extraidos')
                                             ->options([
-                                                'preference' => 'Preferencias',
-                                                'fact' => 'Fatos',
-                                                'constraint' => 'Restricoes',
-                                                'history' => 'Historico',
+                                                'preference' => 'Preferencias (habitos estaveis: paga em dinheiro)',
+                                                'fact' => 'Fatos (atributos estaveis: endereco, nome)',
+                                                'constraint' => 'Restricoes (alergia, horario de entrega)',
+                                                'history' => 'Historico (pedidos/eventos pontuais)',
                                                 'custom' => 'Personalizados',
                                             ])
                                             ->default(['preference', 'fact', 'constraint'])
+                                            ->helperText('A IA classifica cada memoria no tipo correto e descarta o que nao estiver marcado. Historico = pedidos e eventos do momento — deixe desmarcado para nao poluir o perfil. Padrao recomendado: Preferencias, Fatos e Restricoes.')
                                             ->visible(fn (Get $get): bool => (bool) $get('memory_config.extraction_enabled'))
                                             ->columns(2),
                                     ]),
