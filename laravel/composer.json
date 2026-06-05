@@ -1,10 +1,10 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "oryntra/oryntra",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
-    "license": "MIT",
+    "description": "Oryntra — AI agent platform for Chatwoot. Laravel control plane + Python/LangGraph runtime.",
+    "keywords": ["oryntra", "chatwoot", "ai-agents", "langgraph", "laravel", "rag"],
+    "license": "Apache-2.0",
     "require": {
         "php": "^8.4",
         "bezhansalleh/filament-shield": "^4.2",
