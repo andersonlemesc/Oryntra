@@ -30,13 +30,15 @@
 version: "3.9"
 
 networks:
-  # Rede interna do stack (overlay, criada pelo deploy).
-  oryntra:
-    driver: overlay
-  # Rede do Traefik que já existe no swarm (criada fora deste stack).
+  # Rede do Traefik (TLS/roteamento), já existente no swarm.
   traefik:
     external: true
     name: ${TRAEFIK_NETWORK:-traefik}
+  # Rede onde vivem Postgres/Redis e onde os serviços se comunicam.
+  # Aponte para a sua rede externa via APP_NETWORK (default: app_network).
+  app_network:
+    external: true
+    name: ${APP_NETWORK:-app_network}
 
 secrets:
   # Senha do Postgres, criada fora do stack:
@@ -49,7 +51,7 @@ services:
   nginx:
     image: andersonlemes/oryntra-nginx:${ORYNTRA_VERSION:-latest}
     networks:
-      - oryntra
+      - app_network
       - traefik
     deploy:
       replicas: 1
@@ -105,7 +107,7 @@ services:
       REVERB_PORT: "443"
       REVERB_SCHEME: https
     networks:
-      - oryntra
+      - app_network
     secrets:
       - postgres_password
     deploy:
@@ -144,7 +146,7 @@ services:
       AGENT_MAX_CONCURRENCY_PER_ACCOUNT: ${AGENT_MAX_CONCURRENCY_PER_ACCOUNT:-5}
       AGENT_RUN_TIMEOUT: ${AGENT_RUN_TIMEOUT:-180}
     networks:
-      - oryntra
+      - app_network
     secrets:
       - postgres_password
     deploy:
@@ -172,7 +174,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       QUEUE_CONNECTION: redis
     networks:
-      - oryntra
+      - app_network
     secrets:
       - postgres_password
     deploy:
@@ -196,7 +198,7 @@ services:
       REVERB_APP_KEY: ${REVERB_APP_KEY}
       REVERB_APP_SECRET: ${REVERB_APP_SECRET}
     networks:
-      - oryntra
+      - app_network
       - traefik
     deploy:
       replicas: 1
@@ -240,7 +242,7 @@ services:
       AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-8}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
-      - oryntra
+      - app_network
     secrets:
       - postgres_password
     deploy:
