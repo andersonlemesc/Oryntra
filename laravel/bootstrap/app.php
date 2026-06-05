@@ -21,6 +21,19 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Behind a TLS-terminating reverse proxy: honor X-Forwarded-* so the app
+        // sees the real client IP and the https scheme (secure cookies, redirects).
+        $middleware->trustProxies(at: '*');
+
+        // But never trust an arbitrary X-Forwarded-Host: restrict to the app's own
+        // host (from APP_URL) so a forged Host cannot poison generated links
+        // (password resets, signed URLs). Empty APP_URL => no restriction.
+        $middleware->trustHosts(at: function (): array {
+            $host = parse_url((string) config('app.url'), PHP_URL_HOST);
+
+            return is_string($host) && $host !== '' ? [$host] : [];
+        });
+
         $middleware->alias([
             'chatwoot.webhook' => ResolveChatwootWebhookConnection::class,
             'internal.runtime' => VerifyInternalRuntimeToken::class,

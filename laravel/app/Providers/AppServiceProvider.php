@@ -9,6 +9,7 @@ use App\Support\WorkspaceContext;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\Sanctum;
 use Laravel\Telescope\TelescopeServiceProvider;
@@ -36,6 +37,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Generate https URLs in production regardless of the request scheme seen
+        // behind a TLS-terminating proxy — deterministic, no proxy-header trust
+        // needed (fixes mixed-content form actions / redirects).
+        if ($this->app->environment('production')) {
+            URL::forceScheme('https');
+        }
+
         Sanctum::usePersonalAccessTokenModel(ApiToken::class);
 
         RateLimiter::for('mcp', function (Request $request): Limit {
