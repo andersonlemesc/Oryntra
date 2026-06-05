@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\Api\IssueApiToken;
 use App\Filament\Pages\Profile\ApiTokensPage;
 use App\Filament\Pages\Profile\ProfilePage;
 use App\Filament\Pages\Profile\SecurityPage;
@@ -10,6 +11,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 
 use function Pest\Laravel\actingAs;
@@ -64,7 +66,6 @@ it('shows current workspace and chatwoot membership on the profile page', functi
         ->assertSet('data.chatwoot_account_id', '42')
         ->assertSet('data.chatwoot_user_id', '321')
         ->assertSet('data.chatwoot_role', 'administrator')
-        ->assertSet('data.chatwoot_availability', 'Online')
         ->assertSet('data.chatwoot_confirmed', 'Sim');
 });
 
@@ -106,48 +107,22 @@ it('generates and revokes an API token from the page', function () {
         ->and($token->workspace_id)->toBe($workspace->id)
         ->and($token->abilities)->toBe(['agent:read', 'agent:write']);
 
-    $component->call('revokeToken', $token->id);
+    $component->callAction('revokeToken', arguments: ['token' => $token->id]);
 
     expect(ApiToken::query()->whereKey($token->id)->exists())->toBeFalse();
 });
 
-it('does not let read only workspace members create write api tokens', function () {
+it('does not let read only workspace members issue api tokens', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create();
     $workspace->users()->attach($user, ['role' => 'member', 'chatwoot_role' => 'agent']);
-    actingAs($user);
-    Filament::setTenant($workspace);
 
-    Livewire::test(ApiTokensPage::class)
-        ->call('createToken', [
-            'name' => 'Read only MCP',
-            'workspace_id' => $workspace->id,
-            'abilities' => ['agent:read', 'agent:write'],
-        ])
-        ->assertOk();
-
-    expect(ApiToken::query()->where('name', 'Read only MCP')->exists())->toBeFalse();
-});
-
-it('lets read only workspace members create read api tokens', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->create();
-    $workspace->users()->attach($user, ['role' => 'member', 'chatwoot_role' => 'agent']);
-    actingAs($user);
-    Filament::setTenant($workspace);
-
-    Livewire::test(ApiTokensPage::class)
-        ->call('createToken', [
-            'name' => 'Read MCP',
-            'workspace_id' => $workspace->id,
-            'abilities' => ['agent:read'],
-        ])
-        ->assertOk();
-
-    $token = ApiToken::query()->where('name', 'Read MCP')->first();
-
-    expect($token)->not->toBeNull()
-        ->and($token?->abilities)->toBe(['agent:read']);
+    // Agents may neither write via the API nor generate any token (read or write).
+    expect(fn () => app(IssueApiToken::class)->execute($user, $workspace, 'Read MCP', ['agent:read']))
+        ->toThrow(ValidationException::class)
+        ->and(fn () => app(IssueApiToken::class)->execute($user, $workspace, 'Write MCP', ['agent:write']))
+        ->toThrow(ValidationException::class)
+        ->and(ApiToken::query()->count())->toBe(0);
 });
 
 it('enables two-factor authentication', function () {

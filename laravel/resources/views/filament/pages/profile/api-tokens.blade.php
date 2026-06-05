@@ -44,14 +44,7 @@
                         @endforeach
                     </div>
                 </div>
-                <x-filament::button
-                    color="danger"
-                    size="sm"
-                    wire:click="revokeToken({{ $token->id }})"
-                    wire:confirm="Revogar este token? Aplicações que o usam vão parar de funcionar."
-                >
-                    Revogar
-                </x-filament::button>
+                {{ ($this->revokeTokenAction)(['token' => $token->id]) }}
             </div>
         @empty
             <div class="px-4 py-3 text-sm text-gray-500">

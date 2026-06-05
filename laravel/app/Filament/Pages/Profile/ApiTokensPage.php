@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Support\ApiTokenAbilities;
 use Filament\Actions\Action;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -42,6 +43,21 @@ class ApiTokensPage extends Page
     public static function shouldRegisterNavigation(): bool
     {
         return false;
+    }
+
+    /**
+     * Only workspace managers (owner/admin, or super admin) may issue or view
+     * API tokens. Agents/viewers cannot write via the API, so the page is hidden
+     * and direct access to its URL is rejected.
+     */
+    public static function canAccess(): bool
+    {
+        $user = Auth::user();
+        $tenant = Filament::getTenant();
+
+        return $user instanceof User
+            && $tenant instanceof Workspace
+            && $user->canManageWorkspace($tenant);
     }
 
     /**
@@ -134,21 +150,31 @@ class ApiTokensPage extends Page
             ->send();
     }
 
-    public function revokeToken(int $tokenId): void
+    public function revokeTokenAction(): Action
     {
-        $user = Auth::user();
+        return Action::make('revokeToken')
+            ->label('Revogar')
+            ->color('danger')
+            ->size('sm')
+            ->requiresConfirmation()
+            ->modalHeading('Revogar token')
+            ->modalDescription('Aplicações que usam este token vão parar de funcionar imediatamente. Deseja continuar?')
+            ->modalSubmitActionLabel('Revogar')
+            ->action(function (array $arguments): void {
+                $user = Auth::user();
 
-        if (! $user instanceof User) {
-            return;
-        }
+                if (! $user instanceof User) {
+                    return;
+                }
 
-        ApiToken::query()
-            ->where('tokenable_type', $user->getMorphClass())
-            ->where('tokenable_id', $user->getKey())
-            ->whereKey($tokenId)
-            ->delete();
+                ApiToken::query()
+                    ->where('tokenable_type', $user->getMorphClass())
+                    ->where('tokenable_id', $user->getKey())
+                    ->whereKey($arguments['token'] ?? null)
+                    ->delete();
 
-        Notification::make()->title('Token revogado')->success()->send();
+                Notification::make()->title('Token revogado')->success()->send();
+            });
     }
 
     public function dismissPlainTextToken(): void

@@ -88,7 +88,7 @@ class AdminPanelProvider extends PanelProvider
                 MenuItem::make()
                     ->label('Tokens da API')
                     ->icon('heroicon-o-key')
-                    ->visible(fn (): bool => filament()->getTenant() !== null)
+                    ->visible(fn (): bool => ApiTokensPage::canAccess())
                     ->url(fn (): string => filament()->getTenant() ? ApiTokensPage::getUrl() : '#'),
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')

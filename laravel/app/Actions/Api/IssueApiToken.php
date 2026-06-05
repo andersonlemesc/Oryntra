@@ -21,15 +21,12 @@ class IssueApiToken
      */
     public function execute(User $user, Workspace $workspace, string $name, array $abilities): NewAccessToken
     {
-        if (! $user->canAccessTenant($workspace)) {
+        // Only workspace managers (owner/admin, or super admin) may issue API
+        // tokens at all. Agents/viewers neither write via the API nor need to
+        // generate tokens, so any issuance from them is rejected.
+        if (! $user->canManageWorkspace($workspace)) {
             throw ValidationException::withMessages([
-                'workspace_id' => 'Você não tem acesso a este workspace.',
-            ]);
-        }
-
-        if ($this->containsWriteAbility($abilities) && ! $user->canManageWorkspace($workspace)) {
-            throw ValidationException::withMessages([
-                'abilities' => 'Seu perfil neste workspace permite apenas permissões de leitura.',
+                'workspace_id' => 'Apenas administradores do workspace podem gerar tokens de API.',
             ]);
         }
 
@@ -46,14 +43,5 @@ class IssueApiToken
         $newToken->accessToken->forceFill(['workspace_id' => $workspace->getKey()])->save();
 
         return $newToken;
-    }
-
-    /**
-     * @param array<int, string> $abilities
-     */
-    private function containsWriteAbility(array $abilities): bool
-    {
-        return collect($abilities)
-            ->contains(fn (string $ability): bool => str_ends_with($ability, ':write'));
     }
 }
