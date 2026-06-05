@@ -1,0 +1,67 @@
+name: Deploy
+
+# Automated deploy to a self-hosted VPS over SSH.
+#
+# Triggers:
+#   - a published GitHub Release (cut from `main` by the Release workflow);
+#   - manual run (workflow_dispatch) for a chosen ref.
+#
+# Required secrets (configure under the `production` GitHub Environment):
+#   DEPLOY_SSH_HOST   - server hostname or IP
+#   DEPLOY_SSH_USER   - SSH user
+#   DEPLOY_SSH_KEY    - private key with access to the server
+#   DEPLOY_SSH_PORT   - SSH port (optional, defaults to 22)
+#   DEPLOY_PATH       - absolute path of the repo checkout on the server
+#
+# The server is expected to hold a clone of this repo with a production `.env`
+# (see .env.production.example) already in place and NOT tracked by Git.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (branch or tag) to deploy'
+        required: false
+        default: 'main'
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.DEPLOY_PATH }}"
+
+            REF="${{ github.event.release.tag_name || github.event.inputs.ref || 'main' }}"
+            echo "Deploying ref: ${REF}"
+
+            git fetch --all --tags --prune
+            git checkout "${REF}"
+            git pull --ff-only origin "${REF}" || true
+
+            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+            SERVICES="nginx laravel-app laravel-horizon laravel-scheduler laravel-reverb agent-python postgres pgbouncer redis minio"
+
+            $COMPOSE pull || true
+            $COMPOSE up -d --build $SERVICES
+
+            # Run migrations and refresh caches on the app container.
+            $COMPOSE exec -T laravel-app php artisan migrate --force
+            $COMPOSE exec -T laravel-app php artisan optimize
+
+            $COMPOSE ps
