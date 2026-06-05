@@ -233,7 +233,7 @@ services:
     container_name: oryntra-mailpit
     restart: unless-stopped
     ports:
-      - "8125:8025"   # UI (Chatwoot mailhog usa 8025 do host)
-      - "1125:1025"   # SMTP (Chatwoot mailhog usa 1025 do host)
+      - "8026:8025"   # UI (Chatwoot mailhog usa 8025 do host)
+      - "1026:1025"   # SMTP (Chatwoot mailhog usa 1025 do host)
     networks:
       - oryntra-net
