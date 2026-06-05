@@ -23,6 +23,13 @@ on:
 permissions:
   contents: read
 
+# One publish at a time per ref: a newer push to the same branch cancels the
+# in-flight run (avoids stacking redundant builds and Docker Hub rate limits).
+# Tags get their own group (distinct ref), so releases never cancel each other.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   IMAGE_NS: andersonlemes
 
