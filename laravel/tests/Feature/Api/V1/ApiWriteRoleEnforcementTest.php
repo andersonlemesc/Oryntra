@@ -17,6 +17,7 @@ uses(TestCase::class);
 uses(RefreshDatabase::class);
 
 /**
+ * @param  list<string>                            $abilities
  * @return array{0: User, 1: Workspace, 2: string}
  */
 function issueAdminToken(array $abilities): array

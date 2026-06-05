@@ -118,6 +118,9 @@ class WorkspaceUsers extends Page implements HasTable
             ]);
     }
 
+    /**
+     * @return Builder<User>
+     */
     private function membersQuery(): Builder
     {
         $tenant = Filament::getTenant();
@@ -236,6 +239,7 @@ class WorkspaceUsers extends Page implements HasTable
                 $skipped = 0;
 
                 foreach ($records as $record) {
+                    /** @var User $record */
                     // Usuários já ativos não precisam de convite.
                     if ($this->isActive($record)) {
                         $skipped++;

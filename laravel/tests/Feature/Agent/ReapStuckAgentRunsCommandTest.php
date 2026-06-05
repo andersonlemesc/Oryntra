@@ -35,7 +35,11 @@ it('reaps runs stuck in Running past the timeout', function () {
         'started_at' => now()->subSeconds(10),
     ]);
 
-    artisan('agent:reap-stuck-runs')->assertSuccessful();
+    // Keep this as a temporary so PendingCommand runs the command immediately on
+    // destruct (before the Bus assertions below); holding it in a variable would
+    // defer execution to end of test. phpstan can't narrow the PendingCommand|int
+    // union from the artisan() helper, so silence it here.
+    artisan('agent:reap-stuck-runs')->assertSuccessful(); // @phpstan-ignore method.nonObject
 
     Bus::assertDispatched(FinalizeAgentRunJob::class, fn (FinalizeAgentRunJob $job): bool => $job->agentRunId === $stuck->id
         && ($job->runtimeResult['status'] ?? null) === AgentRunStatus::Failed->value
@@ -47,7 +51,11 @@ it('reaps runs stuck in Running past the timeout', function () {
 it('does nothing when there are no stuck runs', function () {
     Bus::fake();
 
-    artisan('agent:reap-stuck-runs')->assertSuccessful();
+    // Keep this as a temporary so PendingCommand runs the command immediately on
+    // destruct (before the Bus assertions below); holding it in a variable would
+    // defer execution to end of test. phpstan can't narrow the PendingCommand|int
+    // union from the artisan() helper, so silence it here.
+    artisan('agent:reap-stuck-runs')->assertSuccessful(); // @phpstan-ignore method.nonObject
 
     Bus::assertNotDispatched(FinalizeAgentRunJob::class);
 });

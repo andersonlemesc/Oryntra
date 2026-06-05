@@ -72,7 +72,7 @@ it('keeps a single contact across connections on the same Chatwoot account', fun
 
     expect($second->id)->toBe($first->id)
         ->and(Contact::query()->count())->toBe(1)
-        ->and($first->fresh()->chatwoot_connection_id)->toBe($connectionA->id);
+        ->and($first->fresh()?->chatwoot_connection_id)->toBe($connectionA->id);
 });
 
 it('updates last_message_at to the newer timestamp on repeat resolves', function () {

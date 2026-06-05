@@ -49,7 +49,6 @@ function runTakeoverJob(int $eventId): void
 }
 
 /**
- * @param  array<string, mixed> $overrides
  * @return array<string, mixed>
  */
 function outgoingPayload(string $senderType, bool $private = false): array

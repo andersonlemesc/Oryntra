@@ -62,6 +62,7 @@ it('counts agents pending invite in the sync summary', function (): void {
 
     (new SyncChatwootAccountsJob)->handle();
 
+    /** @var array<string, mixed> $summary */
     $summary = ChatwootPlatformConnection::current()->last_sync_summary;
 
     expect($summary['invites_sent'])->toBe(1)
