@@ -57,7 +57,7 @@ async def post_agent_run_result(
                 exc,
             )
             if attempt < max_attempts:
-                await asyncio.sleep(min(2 ** attempt, 8))
+                await asyncio.sleep(min(2**attempt, 8))
 
     logger.error(
         "agent-run callback permanently failed for run %s: %s",
