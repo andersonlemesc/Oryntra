@@ -122,13 +122,18 @@ CI roda os três pipelines a cada push/PR: **Laravel** (Pint, Larastan, Pest), *
 ## Deploy
 
 Self-hosted via Docker Compose. Overlay de produção em
-[`docker-compose.prod.yml`](docker-compose.prod.yml):
+[`docker-compose.prod.yml`](docker-compose.prod.yml). Topologia:
+
+- **Postgres e Redis gerenciados** (externos) — env aponta para os hosts gerenciados.
+- **Traefik externo** termina TLS e roteia por `Host`; `nginx` e `reverb` (websocket no
+  path `/app`) recebem labels Traefik e nada é publicado direto no host.
+- **MinIO interno** — só na rede Docker.
 
 ```bash
-cp .env.production.example .env   # edite os segredos
+cp .env.production.example .env   # edite segredos, domínio e hosts gerenciados
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d \
   nginx laravel-app laravel-horizon laravel-scheduler laravel-reverb \
-  agent-python postgres pgbouncer redis minio
+  agent-python minio
 ```
 
 Deploy automatizado por SSH ao publicar um release: ver [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).

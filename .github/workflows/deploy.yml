@@ -55,7 +55,7 @@ jobs:
             git pull --ff-only origin "${REF}" || true
 
             COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
-            SERVICES="nginx laravel-app laravel-horizon laravel-scheduler laravel-reverb agent-python postgres pgbouncer redis minio"
+            SERVICES="nginx laravel-app laravel-horizon laravel-scheduler laravel-reverb agent-python minio"
 
             $COMPOSE pull || true
             $COMPOSE up -d --build $SERVICES

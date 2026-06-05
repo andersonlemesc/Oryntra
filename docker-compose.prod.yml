@@ -1,55 +1,68 @@
 # Production overlay — apply on top of the base compose:
 #
-#   cp .env.production.example .env   # then edit secrets
+#   cp .env.production.example .env   # then edit secrets + domain
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d \
 #     nginx laravel-app laravel-horizon laravel-scheduler laravel-reverb \
-#     agent-python postgres pgbouncer redis minio
+#     agent-python minio
 #
-# Tuned for MODEST usage (mostly one account, few concurrent conversations).
-# Do NOT start mailpit in production (dev-only mail catcher) — use a real SMTP.
+# Topology (MODEST usage, mostly one account):
+#   - Postgres and Redis are EXTERNAL managed services. Point the app at them via
+#     LARAVEL_DB_HOST / REDIS_HOST / POSTGRES_URL in .env. No DB/Redis/pgbouncer
+#     containers run here, so the deploy command lists services explicitly.
+#   - An EXISTING external Traefik (shared network) terminates TLS and routes by
+#     Host. nginx (web/panel/webhooks) and reverb (websocket, same host on /app)
+#     get Traefik labels; nothing is published to the host directly.
+#   - MinIO stays internal-only (Laravel streams media to Chatwoot; no public URLs).
+#   - Do NOT start mailpit in production (dev-only mail catcher) — use real SMTP.
 #
-# Sizing baseline (idle): horizon ~560MB (3 supervisors) + python ~500MB
-# (2 workers) + postgres + redis ≈ 2-2.5GB. Fits a small 4 vCPU / 8GB box with
-# lots of headroom; 4GB also works at this scale.
+# Required .env keys for routing:
+#   TRAEFIK_NETWORK        name of the existing external Traefik docker network
+#   TRAEFIK_ENTRYPOINT     Traefik https entrypoint (e.g. websecure)
+#   TRAEFIK_CERTRESOLVER   Traefik cert resolver (e.g. letsencrypt)
+#   APP_DOMAIN             public host, e.g. app.your-domain.com
+
+networks:
+  # Existing Traefik network, created and owned outside this stack.
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
 
 services:
-  agent-python:
-    # Multi-worker, no --reload. 2 workers x AGENT_MAX_CONCURRENCY = execution
-    # slots. For one small account this is already generous.
-    command: ["sh", "-c", "uvicorn oryntra_agent.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-2}"]
-    environment:
-      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
-      AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-8}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      # Checkpointer stays on a direct Postgres connection (prepared statements);
-      # do NOT route POSTGRES_URL through pgbouncer in transaction mode.
-      LANGGRAPH_CHECKPOINTER: postgres
-    deploy:
-      resources:
-        limits:
-          memory: 1500M
+  nginx:
+    # Traefik reaches nginx over the shared network; no host port publishing.
+    ports: !override []
+    networks:
+      - oryntra-net
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+      - "traefik.http.routers.oryntra-app.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.oryntra-app.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.oryntra-app.tls=true"
+      - "traefik.http.routers.oryntra-app.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.oryntra-app.loadbalancer.server.port=80"
 
   laravel-app:
     environment:
-      DB_HOST: ${LARAVEL_DB_HOST:-pgbouncer}
-      REDIS_HOST: redis
-    # Pooler must be up before the PHP tier (DB_HOST points at pgbouncer here).
-    depends_on:
-      pgbouncer:
-        condition: service_started
+      DB_HOST: ${LARAVEL_DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      REDIS_HOST: ${REDIS_HOST}
+    # Managed Postgres/Redis live outside the stack — drop the base deps so the
+    # explicit `up` list does not pull local DB/Redis containers.
+    depends_on: !reset null
 
   laravel-horizon:
     environment:
-      DB_HOST: ${LARAVEL_DB_HOST:-pgbouncer}
-      REDIS_HOST: redis
+      DB_HOST: ${LARAVEL_DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      REDIS_HOST: ${REDIS_HOST}
       HORIZON_AGENT_MAX: ${HORIZON_AGENT_MAX:-3}
       HORIZON_CHATWOOT_WEBHOOKS_MAX: ${HORIZON_CHATWOOT_WEBHOOKS_MAX:-2}
       HORIZON_BACKGROUND_MAX: ${HORIZON_BACKGROUND_MAX:-2}
       AGENT_MAX_CONCURRENCY_PER_ACCOUNT: ${AGENT_MAX_CONCURRENCY_PER_ACCOUNT:-5}
       AGENT_RUN_TIMEOUT: ${AGENT_RUN_TIMEOUT:-180}
-    depends_on:
-      pgbouncer:
-        condition: service_started
+    depends_on: !reset null
     deploy:
       resources:
         limits:
@@ -57,23 +70,42 @@ services:
 
   laravel-scheduler:
     environment:
-      DB_HOST: ${LARAVEL_DB_HOST:-pgbouncer}
-      REDIS_HOST: redis
-    depends_on:
-      pgbouncer:
-        condition: service_started
+      DB_HOST: ${LARAVEL_DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      REDIS_HOST: ${REDIS_HOST}
 
-  postgres:
-    # Don't publish Postgres to the host in production.
+  laravel-reverb:
+    # Websocket on the same host, routed by Traefik on the /app path prefix.
     ports: !override []
+    networks:
+      - oryntra-net
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+      - "traefik.http.routers.oryntra-reverb.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/app`)"
+      - "traefik.http.routers.oryntra-reverb.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.oryntra-reverb.tls=true"
+      - "traefik.http.routers.oryntra-reverb.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      # Higher priority than the catch-all app router so /app wins.
+      - "traefik.http.routers.oryntra-reverb.priority=100"
+      - "traefik.http.services.oryntra-reverb.loadbalancer.server.port=8081"
 
-  redis:
-    ports: !override []
+  agent-python:
+    # Multi-worker, no --reload. Connects directly to managed Postgres via
+    # POSTGRES_URL (.env). 2 workers x AGENT_MAX_CONCURRENCY execution slots.
+    command: ["sh", "-c", "uvicorn oryntra_agent.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-2}"]
+    environment:
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+      AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-8}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LANGGRAPH_CHECKPOINTER: postgres
+    depends_on: !reset null
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
 
   minio:
-    # Storage is internal-only in production: Laravel reaches it at minio:9000
-    # over the Docker network and streams media bytes to Chatwoot directly (no
-    # public presigned URLs). Do NOT publish the S3 API (9000) or the admin
-    # console (9001) to the host. Put a TLS reverse proxy in front only if you
-    # later need public object URLs.
+    # Internal-only object storage. No host ports, no Traefik route.
     ports: !override []
