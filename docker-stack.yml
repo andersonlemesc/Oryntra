@@ -122,6 +122,9 @@ services:
   laravel-horizon:
     image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
     command: ["php", "artisan", "horizon"]
+    # Imagem traz HEALTHCHECK de php-fpm:9000; este serviço não abre a 9000.
+    healthcheck:
+      disable: true
     environment:
       APP_KEY: ${APP_KEY}
       DB_CONNECTION: pgsql
@@ -161,6 +164,8 @@ services:
   laravel-scheduler:
     image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
     command: ["php", "artisan", "schedule:work"]
+    healthcheck:
+      disable: true
     environment:
       APP_KEY: ${APP_KEY}
       DB_CONNECTION: pgsql
@@ -189,6 +194,9 @@ services:
   laravel-reverb:
     image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
     command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
+    # Imagem traz HEALTHCHECK de php-fpm:9000; reverb escuta 8081, não 9000.
+    healthcheck:
+      disable: true
     environment:
       APP_KEY: ${APP_KEY}
       REDIS_HOST: ${REDIS_HOST}
