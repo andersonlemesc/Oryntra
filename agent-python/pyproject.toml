@@ -5,7 +5,7 @@ description = "Oryntra Python agent service — FastAPI + LangGraph runtime"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-authors = [{ name = "Anderson Lemes", email = "andersonlemes50@gmail.com" }]
+authors = [{ name = "Anderson Lemes", email = "andersonlemes@outlook.pt" }]
 
 dependencies = [
     "fastapi>=0.115",

@@ -13,7 +13,7 @@ Use um dos canais privados:
 
 - **GitHub Security Advisories** (preferido): aba *Security → Report a vulnerability* do
   repositório, que abre um relatório privado.
-- **E-mail:** andersonlemes50@gmail.com — assunto `[SECURITY] Oryntra`.
+- **E-mail:** andersonlemes@outlook.pt — assunto `[SECURITY] Oryntra`.
 
 Inclua, se possível:
 

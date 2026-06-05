@@ -29,7 +29,7 @@ Comportamentos inaceitáveis:
 ## Aplicação
 
 Casos de comportamento abusivo, de assédio ou inaceitável podem ser reportados em privado
-para **andersonlemes50@gmail.com**. Todas as reclamações serão analisadas e investigadas, e
+para **andersonlemes@outlook.pt**. Todas as reclamações serão analisadas e investigadas, e
 resultarão numa resposta apropriada às circunstâncias. A equipe se compromete a manter a
 confidencialidade de quem reporta.
 
