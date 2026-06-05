@@ -22,6 +22,12 @@ name: Deploy
 #   - Published images are public on Docker Hub (no registry login needed to pull).
 
 on:
+  # Tag push is the primary trigger. A release created by the Release workflow
+  # uses GITHUB_TOKEN, which (by design) does NOT fire `release: published` in
+  # other workflows — so we deploy off the tag push itself. The `release`
+  # trigger is kept for releases cut manually from the UI (user token).
+  push:
+    tags: ['v*.*.*']
   release:
     types: [published]
   workflow_dispatch:
@@ -56,7 +62,7 @@ jobs:
             set -euo pipefail
             cd "${{ secrets.DEPLOY_PATH }}"
 
-            REF="${{ github.event.release.tag_name || github.event.inputs.ref || 'main' }}"
+            REF="${{ github.event.release.tag_name || github.event.inputs.ref || github.ref_name }}"
             TAG_INPUT="${{ github.event.inputs.tag || '' }}"
 
             # Sync the stack file + migrations source on the server.
