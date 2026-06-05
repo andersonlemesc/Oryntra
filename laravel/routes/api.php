@@ -16,7 +16,6 @@ use App\Http\Controllers\Api\V1\SpecialistController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\ChatwootWebhookController;
 use App\Http\Controllers\Internal\AgentRunResultController;
-use App\Http\Controllers\Internal\AgentRunResumeController;
 use App\Http\Controllers\Internal\CallExternalToolController;
 use App\Http\Controllers\Internal\CallGoogleCalendarController;
 use App\Http\Controllers\Internal\CallMcpToolController;
@@ -75,9 +74,6 @@ Route::middleware('internal.runtime')->group(function (): void {
 
     Route::post('internal/agent-tools/call-mcp-tool', CallMcpToolController::class)
         ->name('internal.agent-tools.call-mcp-tool');
-
-    Route::post('internal/agent-runs/{agentRun}/resume', AgentRunResumeController::class)
-        ->name('internal.agent-runs.resume');
 
     Route::post('internal/agent-runs/{agentRun}/result', AgentRunResultController::class)
         ->name('internal.agent-runs.result');

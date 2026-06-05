@@ -26,7 +26,7 @@ class AgentRunResultRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['required', Rule::in(['completed', 'waiting_human', 'failed'])],
+            'status' => ['required', Rule::in(['completed', 'failed'])],
             'response' => ['nullable', 'array'],
             'specialist_id' => ['nullable', 'integer'],
             'trace' => ['nullable', 'array'],

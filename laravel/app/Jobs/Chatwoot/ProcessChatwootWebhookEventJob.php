@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Jobs\Chatwoot;
 
+use App\Actions\Chatwoot\ApplyConversationStateFromWebhook;
 use App\Actions\Chatwoot\ClassifyChatwootWebhookEvent;
 use App\Actions\Chatwoot\EnqueueAgentRunForEvent;
 use App\Actions\Chatwoot\ResolveAgentForChatwootEvent;
+use App\Enums\AgentResponseMode;
+use App\Models\ChatwootConversationState;
 use App\Models\ChatwootWebhookEvent;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -34,6 +37,7 @@ class ProcessChatwootWebhookEventJob implements ShouldQueue
 
     public function handle(
         ClassifyChatwootWebhookEvent $classifyWebhookEvent,
+        ApplyConversationStateFromWebhook $applyConversationState,
         ResolveAgentForChatwootEvent $resolveAgent,
         EnqueueAgentRunForEvent $enqueueAgentRun,
     ): void {
@@ -42,7 +46,7 @@ class ProcessChatwootWebhookEventJob implements ShouldQueue
             ? "chatwoot:conversation:{$event->chatwoot_connection_id}:{$event->conversation_id}"
             : "chatwoot:webhook-event:{$event->id}";
 
-        Cache::lock($lockKey, 120)->block(30, function () use ($event, $classifyWebhookEvent, $resolveAgent, $enqueueAgentRun): void {
+        Cache::lock($lockKey, 120)->block(30, function () use ($event, $classifyWebhookEvent, $applyConversationState, $resolveAgent, $enqueueAgentRun): void {
             try {
                 $event->forceFill([
                     'status' => 'processing',
@@ -50,6 +54,20 @@ class ProcessChatwootWebhookEventJob implements ShouldQueue
                 ])->save();
 
                 $classification = $classifyWebhookEvent->execute($event);
+
+                $stateTransition = $applyConversationState->execute($event, $classification['normalized']);
+                if ($stateTransition['handled']) {
+                    $event->forceFill([
+                        'status' => 'ignored',
+                        'ignored_reason' => $stateTransition['reason'],
+                        'processed_at' => now(),
+                        'failed_reason' => null,
+                        'failure_reason' => null,
+                    ])->save();
+
+                    return;
+                }
+
                 if (! $classification['should_process']) {
                     $event->forceFill([
                         'status' => 'ignored',
@@ -69,6 +87,26 @@ class ProcessChatwootWebhookEventJob implements ShouldQueue
                         'status' => 'ignored',
                         'ignored_reason' => $resolution['ignored_reason'],
                         'resolved_agent_id' => null,
+                        'processed_at' => now(),
+                        'failed_reason' => null,
+                        'failure_reason' => null,
+                    ])->save();
+
+                    return;
+                }
+
+                if (
+                    $resolution['agent']->response_mode === AgentResponseMode::Automatic
+                    && $event->conversation_id !== null
+                    && ChatwootConversationState::hasHumanTakeover(
+                        (int) $event->chatwoot_connection_id,
+                        (int) $event->conversation_id,
+                    )
+                ) {
+                    $event->forceFill([
+                        'status' => 'ignored',
+                        'ignored_reason' => 'human_takeover_active',
+                        'resolved_agent_id' => $resolution['agent']->id,
                         'processed_at' => now(),
                         'failed_reason' => null,
                         'failure_reason' => null,

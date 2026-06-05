@@ -12,7 +12,6 @@ enum AgentRunStatus: string
     case Completed = 'completed';
     case Failed = 'failed';
     case Ignored = 'ignored';
-    case WaitingHuman = 'waiting_human';
 
     public function label(): string
     {
@@ -23,7 +22,6 @@ enum AgentRunStatus: string
             self::Completed => 'Concluido',
             self::Failed => 'Falhou',
             self::Ignored => 'Ignorado',
-            self::WaitingHuman => 'Aguardando humano',
         };
     }
 
@@ -34,6 +32,6 @@ enum AgentRunStatus: string
 
     public function isTerminal(): bool
     {
-        return in_array($this, [self::Completed, self::Failed, self::Ignored, self::WaitingHuman], true);
+        return in_array($this, [self::Completed, self::Failed, self::Ignored], true);
     }
 }

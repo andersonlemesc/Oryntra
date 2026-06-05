@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 use App\Enums\AgentRunStatus;
 use App\Filament\Widgets\AgentRunStatsOverview;
+use App\Filament\Widgets\HumanTakeoverConversationsTable;
 use App\Filament\Widgets\RecentFailedRunsTable;
 use App\Filament\Widgets\RunsThroughputChart;
-use App\Filament\Widgets\WaitingHumanRunsTable;
 use App\Models\AgentRun;
+use App\Models\ChatwootConnection;
+use App\Models\ChatwootConversationState;
 use App\Models\User;
 use App\Models\Workspace;
 use Filament\Facades\Filament;
@@ -21,23 +23,27 @@ use Tests\TestCase;
 uses(TestCase::class);
 uses(RefreshDatabase::class);
 
-it('renders the waiting-human widget scoped to the tenant', function () {
+it('renders the human-takeover widget scoped to the tenant', function () {
     [$user, $workspace] = createUserWithWorkspaceForDashboard();
     $otherWorkspace = Workspace::factory()->create();
 
-    $visible = AgentRun::factory()->for($workspace)->create([
-        'status' => AgentRunStatus::WaitingHuman,
-        'started_at' => now(),
+    $visible = ChatwootConversationState::create([
+        'workspace_id' => $workspace->id,
+        'chatwoot_connection_id' => ChatwootConnection::factory()->for($workspace)->create()->id,
+        'conversation_id' => 501,
+        'human_takeover_at' => now(),
     ]);
-    $hidden = AgentRun::factory()->for($otherWorkspace)->create([
-        'status' => AgentRunStatus::WaitingHuman,
-        'started_at' => now(),
+    $hidden = ChatwootConversationState::create([
+        'workspace_id' => $otherWorkspace->id,
+        'chatwoot_connection_id' => ChatwootConnection::factory()->for($otherWorkspace)->create()->id,
+        'conversation_id' => 502,
+        'human_takeover_at' => now(),
     ]);
 
     actingAs($user);
     bootFilamentTenantForDashboard($workspace);
 
-    Livewire::test(WaitingHumanRunsTable::class)
+    Livewire::test(HumanTakeoverConversationsTable::class)
         ->assertCanSeeTableRecords([$visible])
         ->assertCanNotSeeTableRecords([$hidden]);
 });
@@ -80,9 +86,11 @@ it('renders the stats overview without errors and reflects tenant counts', funct
         'started_at' => now()->subHour(),
         'finished_at' => now()->subHour()->addMinute(),
     ]);
-    AgentRun::factory()->for($workspace)->create([
-        'status' => AgentRunStatus::WaitingHuman,
-        'started_at' => now()->subHour(),
+    ChatwootConversationState::create([
+        'workspace_id' => $workspace->id,
+        'chatwoot_connection_id' => ChatwootConnection::factory()->for($workspace)->create()->id,
+        'conversation_id' => 601,
+        'human_takeover_at' => now(),
     ]);
     AgentRun::factory()->for($otherWorkspace)->completed()->create([
         'started_at' => now()->subHour(),
@@ -94,7 +102,7 @@ it('renders the stats overview without errors and reflects tenant counts', funct
 
     Livewire::test(AgentRunStatsOverview::class)
         ->assertSuccessful()
-        ->assertSee('Aguardando humano')
+        ->assertSee('Conversas com humano')
         ->assertSee('Concluidas');
 });
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs\Agent;
 
 use App\Actions\AgentTools\SendDocument;
+use App\Enums\AgentResponseMode;
 use App\Enums\AgentRunStatus;
 use App\Models\AgentRun;
 use App\Services\Chatwoot\ChatwootAgentBotClient;
@@ -139,7 +140,6 @@ class FinalizeAgentRunJob implements ShouldQueue
     private function resolveTerminalStatus(array $output): AgentRunStatus
     {
         return match ($output['status'] ?? null) {
-            AgentRunStatus::WaitingHuman->value => AgentRunStatus::WaitingHuman,
             AgentRunStatus::Failed->value => AgentRunStatus::Failed,
             default => AgentRunStatus::Completed,
         };
@@ -181,6 +181,10 @@ class FinalizeAgentRunJob implements ShouldQueue
             $output['response_delivery'] = $this->skippedResponseDelivery('unsupported_response_type');
 
             return $output;
+        }
+
+        if ($run->loadMissing('agent')->agent?->response_mode === AgentResponseMode::SuggestionOnly) {
+            return $this->deliverSuggestionToChatwoot($run, $output, $responseType, $content);
         }
 
         if ($responseType === 'send_document') {
@@ -275,6 +279,60 @@ class FinalizeAgentRunJob implements ShouldQueue
             'sent_at' => (string) Carbon::now()->toISOString(),
             'conversation_id' => (int) $run->conversation_id,
             'response_type' => $responseType,
+        ];
+
+        return $output;
+    }
+
+    /**
+     * Copilot mode: never reply to the customer. Open the conversation so a human
+     * agent sees it, then post the agent's response as a private note for them to
+     * use. send_document suggestions are posted as a textual note (no file is sent).
+     *
+     * @param  array<string, mixed> $output
+     * @return array<string, mixed>
+     */
+    private function deliverSuggestionToChatwoot(AgentRun $run, array $output, string $responseType, string $content): array
+    {
+        $note = $content;
+
+        if ($note === '' && $responseType === 'send_document') {
+            $note = 'Sugestao: enviar documento ao cliente.';
+        }
+
+        if ($note === '') {
+            $output['response_delivery'] = $this->skippedResponseDelivery('empty_response_content');
+
+            return $output;
+        }
+
+        $run->loadMissing('chatwootConnection');
+        $connection = $run->chatwootConnection;
+
+        if ($connection === null) {
+            $output['response_delivery'] = $this->failedResponseDelivery('missing_chatwoot_connection');
+            $run->forceFill(['output' => $output])->save();
+
+            throw new RuntimeException('Cannot deliver suggestion without a Chatwoot connection.');
+        }
+
+        try {
+            $client = new ChatwootAgentBotClient($connection);
+            $client->toggleConversationStatus((int) $run->conversation_id, 'open');
+            $client->addPrivateNote((int) $run->conversation_id, $note);
+        } catch (Throwable $exception) {
+            $output['response_delivery'] = $this->failedResponseDelivery($exception->getMessage());
+            $run->forceFill(['output' => $output])->save();
+
+            throw $exception;
+        }
+
+        $output['response_delivery'] = [
+            'status' => 'completed',
+            'sent_at' => (string) Carbon::now()->toISOString(),
+            'conversation_id' => (int) $run->conversation_id,
+            'response_type' => $responseType,
+            'mode' => 'suggestion',
         ];
 
         return $output;

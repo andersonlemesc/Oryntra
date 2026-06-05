@@ -9,11 +9,11 @@ use App\Filament\Pages\Profile\ProfilePage;
 use App\Filament\Pages\Profile\SecurityPage;
 use App\Filament\Pages\Tenancy\EditWorkspaceProfile;
 use App\Filament\Widgets\AgentRunStatsOverview;
+use App\Filament\Widgets\HumanTakeoverConversationsTable;
 use App\Filament\Widgets\RecentContactsTable;
 use App\Filament\Widgets\RecentFailedRunsTable;
 use App\Filament\Widgets\RecentLeadsStatsOverview;
 use App\Filament\Widgets\RunsThroughputChart;
-use App\Filament\Widgets\WaitingHumanRunsTable;
 use App\Http\Middleware\RedirectToRegisterIfNoUsers;
 use App\Models\Workspace;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
@@ -94,7 +94,7 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
                 AgentRunStatsOverview::class,
-                WaitingHumanRunsTable::class,
+                HumanTakeoverConversationsTable::class,
                 RunsThroughputChart::class,
                 RecentFailedRunsTable::class,
                 RecentLeadsStatsOverview::class,

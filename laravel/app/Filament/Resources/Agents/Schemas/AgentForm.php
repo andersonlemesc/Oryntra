@@ -81,7 +81,7 @@ class AgentForm
                                             ->label('Modo de resposta')
                                             ->options(self::responseModeOptions())
                                             ->default(AgentResponseMode::Automatic->value)
-                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Automatico = a IA envia direto ao cliente. Manual = a resposta fica aguardando aprovacao humana antes de sair.')
+                                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Automatico = a IA responde direto ao cliente (e para de responder se um atendente humano assumir). Sugestao (copilot) = a IA nao responde ao cliente; posta cada resposta como nota privada para o atendente usar.')
                                             ->required(),
                                     ]),
 

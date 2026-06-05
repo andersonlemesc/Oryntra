@@ -8,14 +8,12 @@ enum AgentResponseMode: string
 {
     case Automatic = 'automatic';
     case SuggestionOnly = 'suggestion_only';
-    case HumanApproval = 'human_approval';
 
     public function label(): string
     {
         return match ($this) {
             self::Automatic => 'Automatico',
-            self::SuggestionOnly => 'Sugestao apenas',
-            self::HumanApproval => 'Aprovacao humana',
+            self::SuggestionOnly => 'Sugestao (copilot)',
         };
     }
 }

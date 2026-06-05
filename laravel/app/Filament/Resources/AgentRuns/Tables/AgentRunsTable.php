@@ -5,16 +5,13 @@ declare(strict_types=1);
 namespace App\Filament\Resources\AgentRuns\Tables;
 
 use App\Enums\AgentRunStatus;
-use App\Filament\Resources\AgentRuns\Support\AgentRunHitlActions;
 use App\Models\Agent;
 use App\Models\AgentRun;
 use Filament\Actions\ViewAction;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 class AgentRunsTable
 {
@@ -35,7 +32,6 @@ class AgentRunsTable
                     ->formatStateUsing(fn (AgentRunStatus|string $state): string => self::statusEnum($state)->label())
                     ->color(fn (AgentRunStatus|string $state): string => match (self::statusEnum($state)) {
                         AgentRunStatus::Completed => 'success',
-                        AgentRunStatus::WaitingHuman => 'warning',
                         AgentRunStatus::Failed => 'danger',
                         AgentRunStatus::Running => 'info',
                         default => 'gray',
@@ -67,16 +63,9 @@ class AgentRunsTable
                 SelectFilter::make('agent_id')
                     ->label('Agente')
                     ->options(fn (): array => self::agentOptions()),
-                Filter::make('waiting_human')
-                    ->label('So aguardando humano')
-                    ->toggle()
-                    ->query(fn (Builder $query): Builder => $query->where('status', AgentRunStatus::WaitingHuman->value)),
             ])
             ->recordActions([
                 ViewAction::make(),
-                AgentRunHitlActions::approve(),
-                AgentRunHitlActions::edit(),
-                AgentRunHitlActions::reject(),
             ])
             ->toolbarActions([]);
     }

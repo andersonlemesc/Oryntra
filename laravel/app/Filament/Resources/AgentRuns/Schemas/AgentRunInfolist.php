@@ -232,7 +232,6 @@ class AgentRunInfolist
     {
         return match ($status) {
             AgentRunStatus::Completed => 'success',
-            AgentRunStatus::WaitingHuman => 'warning',
             AgentRunStatus::Failed => 'danger',
             AgentRunStatus::Running => 'info',
             default => 'gray',

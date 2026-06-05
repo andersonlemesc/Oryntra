@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\Chatwoot\ApplyConversationStateFromWebhook;
 use App\Actions\Chatwoot\ClassifyChatwootWebhookEvent;
 use App\Actions\Chatwoot\EnqueueAgentRunForEvent;
 use App\Actions\Chatwoot\ResolveAgentForChatwootEvent;
@@ -85,6 +86,26 @@ it('accepts Chatwoot signatures with sha256 prefix', function () {
     Queue::assertPushed(ProcessChatwootWebhookEventJob::class, 1);
 });
 
+it('accepts agent bot signatures computed over timestamp and body', function () {
+    Queue::fake();
+    $connection = ChatwootConnection::factory()->create([
+        'account_id' => 123,
+        'webhook_secret' => 'webhook-secret',
+    ]);
+    $payload = chatwootWebhookPayload(messageId: 987, conversationId: 654, accountId: 123);
+    $body = json_encode($payload, JSON_THROW_ON_ERROR);
+    $timestamp = (string) now()->timestamp;
+    $signature = hash_hmac('sha256', "{$timestamp}.{$body}", 'webhook-secret');
+
+    postJson(chatwootWebhookUrl($connection), $payload, [
+        'X-Chatwoot-Timestamp' => $timestamp,
+        'X-Chatwoot-Signature' => "sha256={$signature}",
+    ])->assertAccepted();
+
+    expect(ChatwootWebhookEvent::count())->toBe(1);
+    Queue::assertPushed(ProcessChatwootWebhookEventJob::class, 1);
+});
+
 it('rejects unsigned webhooks when no webhook secret is configured', function () {
     Queue::fake();
     $connection = ChatwootConnection::factory()->create([
@@ -157,6 +178,7 @@ it('processes queued webhook events under a conversation lock and enters debounc
 
     (new ProcessChatwootWebhookEventJob($event->id))->handle(
         app(ClassifyChatwootWebhookEvent::class),
+        app(ApplyConversationStateFromWebhook::class),
         app(ResolveAgentForChatwootEvent::class),
         app(EnqueueAgentRunForEvent::class),
     );
@@ -169,17 +191,18 @@ it('processes queued webhook events under a conversation lock and enters debounc
         ->and($event->processing_started_at)->not->toBeNull();
 });
 
-it('ignores outgoing Chatwoot messages so Oryntra does not reply to agents', function () {
+it('ignores the bot own outgoing Chatwoot messages so Oryntra does not reply to itself', function () {
     $event = ChatwootWebhookEvent::factory()->create([
         'event_name' => 'message_created',
         'conversation_id' => 654,
         'chatwoot_message_id' => '987',
         'status' => 'queued',
-        'payload' => chatwootRealMessagePayload(messageType: 'outgoing', senderType: 'user'),
+        'payload' => chatwootRealMessagePayload(messageType: 'outgoing', senderType: 'agent_bot'),
     ]);
 
     (new ProcessChatwootWebhookEventJob($event->id))->handle(
         app(ClassifyChatwootWebhookEvent::class),
+        app(ApplyConversationStateFromWebhook::class),
         app(ResolveAgentForChatwootEvent::class),
         app(EnqueueAgentRunForEvent::class),
     );
@@ -202,6 +225,7 @@ it('ignores private Chatwoot messages', function () {
 
     (new ProcessChatwootWebhookEventJob($event->id))->handle(
         app(ClassifyChatwootWebhookEvent::class),
+        app(ApplyConversationStateFromWebhook::class),
         app(ResolveAgentForChatwootEvent::class),
         app(EnqueueAgentRunForEvent::class),
     );
@@ -245,6 +269,7 @@ it('processes incoming Chatwoot media messages with captions', function () {
     $classification = app(ClassifyChatwootWebhookEvent::class)->execute($event);
     (new ProcessChatwootWebhookEventJob($event->id))->handle(
         app(ClassifyChatwootWebhookEvent::class),
+        app(ApplyConversationStateFromWebhook::class),
         app(ResolveAgentForChatwootEvent::class),
         app(EnqueueAgentRunForEvent::class),
     );

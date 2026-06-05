@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\Chatwoot\ApplyConversationStateFromWebhook;
 use App\Actions\Chatwoot\ClassifyChatwootWebhookEvent;
 use App\Actions\Chatwoot\EnqueueAgentRunForEvent;
 use App\Actions\Chatwoot\ResolveAgentForChatwootEvent;
@@ -43,6 +44,7 @@ function runProcessJob(int $eventId): void
 {
     (new ProcessChatwootWebhookEventJob($eventId))->handle(
         app(ClassifyChatwootWebhookEvent::class),
+        app(ApplyConversationStateFromWebhook::class),
         app(ResolveAgentForChatwootEvent::class),
         app(EnqueueAgentRunForEvent::class),
     );
@@ -107,7 +109,7 @@ it('still marks event ignored when classification fails before resolver runs', f
         'payload' => [
             'event' => 'message_created',
             'message_type' => 'outgoing',
-            'sender' => ['type' => 'User'],
+            'sender' => ['type' => 'agent_bot'],
         ],
         'status' => 'queued',
     ]);

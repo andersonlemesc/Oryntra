@@ -34,23 +34,6 @@ it('lists only agent runs for the current Filament tenant', function () {
         ->assertCanNotSeeTableRecords([$hiddenRun]);
 });
 
-it('filters runs by the waiting_human toggle filter', function () {
-    [$user, $workspace] = createUserWithWorkspaceForAgentRuns();
-    $waitingRun = AgentRun::factory()->for($workspace)->create([
-        'status' => AgentRunStatus::WaitingHuman,
-        'started_at' => now(),
-    ]);
-    $completedRun = AgentRun::factory()->for($workspace)->completed()->create();
-
-    actingAs($user);
-    bootFilamentTenantForAgentRuns($workspace);
-
-    Livewire::test(ListAgentRuns::class)
-        ->filterTable('waiting_human')
-        ->assertCanSeeTableRecords([$waitingRun])
-        ->assertCanNotSeeTableRecords([$completedRun]);
-});
-
 it('renders the trace timeline tab with multiple step types', function () {
     [$user, $workspace] = createUserWithWorkspaceForAgentRuns();
     $run = AgentRun::factory()->for($workspace)->create([
@@ -99,7 +82,7 @@ it('renders the trace timeline tab with multiple step types', function () {
 it('renders the view page with handoff payload and side-effect badges', function () {
     [$user, $workspace] = createUserWithWorkspaceForAgentRuns();
     $run = AgentRun::factory()->for($workspace)->create([
-        'status' => AgentRunStatus::WaitingHuman,
+        'status' => AgentRunStatus::Completed,
         'started_at' => now()->subMinute(),
         'output' => [
             'handoff' => [

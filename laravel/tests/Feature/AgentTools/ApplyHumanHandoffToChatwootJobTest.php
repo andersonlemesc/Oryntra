@@ -45,7 +45,7 @@ it('applies configured human handoff side effects to Chatwoot', function () {
         'chatwoot_account_id' => 5,
         'conversation_id' => 99,
         'thread_id' => "workspace:{$workspace->id}:account:5:conversation:99",
-        'status' => AgentRunStatus::WaitingHuman,
+        'status' => AgentRunStatus::Completed,
         'output' => humanHandoffOutputForJobTest(),
     ]);
 
@@ -113,7 +113,7 @@ it('skips already completed actions when retrying handoff side effects', functio
         'chatwoot_account_id' => 5,
         'conversation_id' => 99,
         'thread_id' => "workspace:{$workspace->id}:account:5:conversation:99",
-        'status' => AgentRunStatus::WaitingHuman,
+        'status' => AgentRunStatus::Completed,
         'output' => $output,
     ]);
 
@@ -239,7 +239,7 @@ it('falls back to the binding label and template when the specialist leaves them
 
 it('stores failed side effect state when the job fails permanently', function () {
     $run = AgentRun::factory()->create([
-        'status' => AgentRunStatus::WaitingHuman,
+        'status' => AgentRunStatus::Completed,
         'output' => humanHandoffOutputForJobTest(),
     ]);
 

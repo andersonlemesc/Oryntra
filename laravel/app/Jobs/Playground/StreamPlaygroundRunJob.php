@@ -151,7 +151,6 @@ class StreamPlaygroundRunJob implements ShouldQueue
 
         $messageStatus = match ($runtimeStatus) {
             'completed' => PlaygroundMessageStatus::Completed,
-            'waiting_human' => PlaygroundMessageStatus::WaitingHuman,
             default => PlaygroundMessageStatus::Failed,
         };
 
@@ -168,7 +167,6 @@ class StreamPlaygroundRunJob implements ShouldQueue
         $run->forceFill([
             'status' => match ($runtimeStatus) {
                 'completed' => AgentRunStatus::Completed,
-                'waiting_human' => AgentRunStatus::WaitingHuman,
                 default => AgentRunStatus::Failed,
             },
             'output' => $data,

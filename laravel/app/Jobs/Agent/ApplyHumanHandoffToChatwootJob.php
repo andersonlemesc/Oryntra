@@ -7,6 +7,7 @@ namespace App\Jobs\Agent;
 use App\Models\AgentChatwootBinding;
 use App\Models\AgentRun;
 use App\Models\AgentSpecialist;
+use App\Models\ChatwootConversationState;
 use App\Services\Chatwoot\ChatwootAdminApiClient;
 use App\Services\Chatwoot\ChatwootAgentBotClient;
 use App\Support\AgentTools\HandoffPrivateNoteRenderer;
@@ -69,6 +70,14 @@ class ApplyHumanHandoffToChatwootJob implements ShouldQueue
         $this->runAction($run, 'open_conversation', function () use ($client, $conversationId): void {
             $client->toggleConversationStatus($conversationId, 'open');
         });
+
+        // A handoff hands the conversation to a human, so lock the bot out of it
+        // until the conversation is resolved (same guard as a manual takeover).
+        ChatwootConversationState::markHumanTakeover(
+            (int) $run->workspace_id,
+            (int) $run->chatwoot_connection_id,
+            $conversationId,
+        );
 
         if (filled($customerMessage)) {
             $this->runAction($run, 'customer_message', function () use ($client, $conversationId, $customerMessage): void {

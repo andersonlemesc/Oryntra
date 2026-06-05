@@ -73,6 +73,10 @@ class ClassifyChatwootWebhookEvent
             'content' => is_string(data_get($payload, 'content')) ? data_get($payload, 'content') : null,
             'content_type' => is_string(data_get($payload, 'content_type')) ? data_get($payload, 'content_type') : null,
             'private' => data_get($payload, 'private') === true,
+            'conversation_status' => $this->conversationStatus(
+                data_get($payload, 'status')
+                    ?? data_get($payload, 'conversation.status')
+            ),
             'attachments' => $this->attachments(is_array($attachments) ? $attachments : []),
         ];
     }
@@ -139,5 +143,32 @@ class ClassifyChatwootWebhookEvent
     private function senderType(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? mb_strtolower($value) : null;
+    }
+
+    private function conversationStatus(mixed $value): ?string
+    {
+        if (is_int($value)) {
+            return match ($value) {
+                0 => 'open',
+                1 => 'resolved',
+                2 => 'pending',
+                3 => 'snoozed',
+                default => null,
+            };
+        }
+
+        if (is_string($value)) {
+            $value = mb_strtolower($value);
+
+            return match ($value) {
+                '0', 'open' => 'open',
+                '1', 'resolved' => 'resolved',
+                '2', 'pending' => 'pending',
+                '3', 'snoozed' => 'snoozed',
+                default => $value !== '' ? $value : null,
+            };
+        }
+
+        return null;
     }
 }

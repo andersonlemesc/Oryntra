@@ -306,56 +306,6 @@ class AgentRuntimeClient
     }
 
     /**
-     * Resume a paused agent run after a human decision.
-     *
-     * @param array{decision:string,response_content?:string|null,reason?:string|null,actor_id?:int|null} $payload
-     *
-     * @throws AgentRuntimeException
-     */
-    public function resume(AgentRun $run, array $payload): void
-    {
-        $baseUrl = rtrim((string) config('services.agent_runtime.base_url'), '/');
-        $token = (string) config('services.agent_runtime.internal_token');
-
-        if ($token === '') {
-            throw new AgentRuntimeException('Agent runtime internal token is not configured.');
-        }
-
-        try {
-            $response = Http::asJson()
-                ->acceptJson()
-                ->timeout((int) config('services.agent_runtime.timeout', 30))
-                ->withHeaders(['X-Internal-Token' => $token])
-                ->post("{$baseUrl}/v1/runs/{$run->id}/resume", $payload);
-
-            if ($response->failed()) {
-                throw new AgentRuntimeException(sprintf(
-                    'Agent runtime resume failed for run %d: HTTP %d',
-                    $run->id,
-                    $response->status(),
-                ));
-            }
-        } catch (AgentRuntimeException $exception) {
-            Log::warning('agent_runtime.resume.failed', [
-                'agent_run_id' => $run->id,
-                'message' => $exception->getMessage(),
-            ]);
-
-            throw $exception;
-        } catch (Throwable $exception) {
-            Log::warning('agent_runtime.resume.failed', [
-                'agent_run_id' => $run->id,
-                'message' => $exception->getMessage(),
-            ]);
-
-            throw new AgentRuntimeException(
-                sprintf('Agent runtime resume failed for run %d: %s', $run->id, $exception->getMessage()),
-                previous: $exception,
-            );
-        }
-    }
-
-    /**
      * Build the full runtime request payload for an agent run. Public so the
      * playground (which streams the same contract over SSE) can reuse it.
      *
@@ -915,7 +865,7 @@ class AgentRuntimeClient
 
         if (
             ! is_string($status)
-            || ! in_array($status, ['completed', 'waiting_human', 'failed'], true)
+            || ! in_array($status, ['completed', 'failed'], true)
             || ! is_array($responsePayload)
             || ! is_array($trace)
             || ! is_array($usage)

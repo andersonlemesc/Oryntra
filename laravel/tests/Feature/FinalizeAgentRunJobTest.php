@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\AgentResponseMode;
 use App\Enums\AgentRunStatus;
 use App\Jobs\Agent\FinalizeAgentRunJob;
 use App\Models\Agent;
@@ -94,6 +95,51 @@ it('delivers the runtime response to Chatwoot and transitions linked events to p
         && $request['content'] === 'Ola!');
 });
 
+it('delivers a copilot response as a private note and opens the conversation, never publicly', function () {
+    Http::fake([
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/toggle_status' => Http::response(['status' => 'open']),
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages' => Http::response(['id' => 123]),
+    ]);
+
+    $workspace = Workspace::factory()->create();
+    $connection = ChatwootConnection::factory()->for($workspace)->create([
+        'base_url' => 'http://chatwoot.test',
+        'account_id' => 5,
+        'api_access_token' => 'agent-bot-token',
+    ]);
+    $agent = Agent::factory()->active()->for($workspace)->create([
+        'response_mode' => AgentResponseMode::SuggestionOnly,
+    ]);
+
+    $run = AgentRun::factory()->create([
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $connection->id,
+        'conversation_id' => 99,
+        'chatwoot_account_id' => 5,
+        'status' => AgentRunStatus::Running,
+        'started_at' => now()->subSeconds(5),
+    ]);
+
+    (new FinalizeAgentRunJob($run->id, finalizeRuntimeResult([
+        'response' => ['type' => 'text', 'content' => 'Sugiro responder: bom dia!', 'confidence' => 1.0],
+    ])))->handle();
+
+    $freshRun = $run->fresh();
+
+    expect($freshRun?->status)->toBe(AgentRunStatus::Completed)
+        ->and($freshRun?->output['response_delivery']['status'] ?? null)->toBe('completed')
+        ->and($freshRun?->output['response_delivery']['mode'] ?? null)->toBe('suggestion');
+
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/conversations/99/toggle_status')
+        && $request['status'] === 'open');
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/conversations/99/messages')
+        && $request['private'] === true
+        && $request['content'] === 'Sugiro responder: bom dia!');
+    Http::assertNotSent(fn (Request $request): bool => str_ends_with($request->url(), '/conversations/99/messages')
+        && ($request['private'] ?? null) === false);
+});
+
 it('does not deliver twice when response delivery already completed', function () {
     $run = AgentRun::factory()->create([
         'status' => AgentRunStatus::Running,
@@ -116,27 +162,6 @@ it('does not deliver twice when response delivery already completed', function (
         ->and($run->fresh()?->output['response_delivery']['status'] ?? null)->toBe('completed');
 
     Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/conversations/'));
-});
-
-it('marks the run waiting_human when the runtime escalates', function () {
-    $run = AgentRun::factory()->create([
-        'status' => AgentRunStatus::Running,
-        'started_at' => now(),
-    ]);
-
-    (new FinalizeAgentRunJob($run->id, finalizeRuntimeResult([
-        'status' => 'waiting_human',
-        'response' => [
-            'type' => 'escalate',
-            'content' => null,
-            'handoff_reason' => 'confidence_below_threshold',
-            'confidence' => 0.2,
-        ],
-    ])))->handle();
-
-    $freshRun = $run->fresh();
-    expect($freshRun?->status)->toBe(AgentRunStatus::WaitingHuman)
-        ->and($freshRun?->output['response']['handoff_reason'] ?? null)->toBe('confidence_below_threshold');
 });
 
 it('marks the run failed when the runtime reports failure', function () {

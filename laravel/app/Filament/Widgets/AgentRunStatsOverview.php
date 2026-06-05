@@ -6,6 +6,7 @@ namespace App\Filament\Widgets;
 
 use App\Enums\AgentRunStatus;
 use App\Models\AgentRun;
+use App\Models\ChatwootConversationState;
 use Filament\Facades\Filament;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -35,6 +36,7 @@ class AgentRunStatsOverview extends StatsOverviewWidget
         $totalCurrent = array_sum($current);
         $totalPrevious = array_sum($previous);
         $completedDelta = ($current['completed'] ?? 0) - ($previous['completed'] ?? 0);
+        $takeoverCount = $this->humanTakeoverCount($tenantId);
 
         return [
             Stat::make('Total', (string) $totalCurrent)
@@ -43,9 +45,9 @@ class AgentRunStatsOverview extends StatsOverviewWidget
             Stat::make('Concluidas', (string) ($current['completed'] ?? 0))
                 ->description($this->describeDelta($completedDelta, 'vs 24h anteriores'))
                 ->color('success'),
-            Stat::make('Aguardando humano', (string) ($current['waiting_human'] ?? 0))
-                ->color(($current['waiting_human'] ?? 0) > 0 ? 'warning' : 'gray')
-                ->description('Precisam revisao manual'),
+            Stat::make('Conversas com humano', (string) $takeoverCount)
+                ->color($takeoverCount > 0 ? 'warning' : 'gray')
+                ->description('Atendente assumiu, bot pausado'),
             Stat::make('Falhas', (string) ($current['failed'] ?? 0))
                 ->color(($current['failed'] ?? 0) > 0 ? 'danger' : 'gray')
                 ->description('Erros nas ultimas 24h'),
@@ -78,6 +80,14 @@ class AgentRunStatsOverview extends StatsOverviewWidget
         }
 
         return $result;
+    }
+
+    private function humanTakeoverCount(int $tenantId): int
+    {
+        return ChatwootConversationState::query()
+            ->where('workspace_id', $tenantId)
+            ->whereNotNull('human_takeover_at')
+            ->count();
     }
 
     private function describeDelta(int $delta, string $suffix): string

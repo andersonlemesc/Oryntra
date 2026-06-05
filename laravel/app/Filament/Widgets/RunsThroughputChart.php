@@ -20,18 +20,16 @@ class RunsThroughputChart extends ChartWidget
 
     protected ?string $maxHeight = '300px';
 
-    private const STATUSES = ['completed', 'failed', 'waiting_human'];
+    private const STATUSES = ['completed', 'failed'];
 
     private const COLORS = [
         'completed' => 'rgb(34,197,94)',
         'failed' => 'rgb(239,68,68)',
-        'waiting_human' => 'rgb(234,179,8)',
     ];
 
     private const LABELS = [
         'completed' => 'Concluidas',
         'failed' => 'Falhas',
-        'waiting_human' => 'Aguardando humano',
     ];
 
     protected function getType(): string

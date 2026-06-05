@@ -122,8 +122,8 @@ class EditAgent extends EditRecord
             $response = app(AgentRuntimeClient::class)->run($run);
 
             $run->update([
-                'status' => ($response['status'] ?? null) === 'waiting_human'
-                    ? AgentRunStatus::WaitingHuman
+                'status' => ($response['status'] ?? null) === 'failed'
+                    ? AgentRunStatus::Failed
                     : AgentRunStatus::Completed,
                 'output' => $response,
                 'finished_at' => now(),

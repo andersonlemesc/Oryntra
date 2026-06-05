@@ -31,11 +31,11 @@ it('creates agent associated with workspace with FK', function () {
 
 it('casts status and response_mode as enums', function () {
     $agent = Agent::factory()->active()->create([
-        'response_mode' => AgentResponseMode::HumanApproval,
+        'response_mode' => AgentResponseMode::SuggestionOnly,
     ]);
 
     expect($agent->status)->toBe(AgentStatus::Active)
-        ->and($agent->response_mode)->toBe(AgentResponseMode::HumanApproval);
+        ->and($agent->response_mode)->toBe(AgentResponseMode::SuggestionOnly);
 });
 
 it('casts jsonb configs as arrays', function () {
