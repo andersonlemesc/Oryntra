@@ -20,6 +20,19 @@ class Workspace extends Model implements HasName
     use HasFactory;
 
     /**
+     * Guard tenant route binding against non-numeric ids so a bogus path like
+     * `/admin/new` resolves to 404 instead of a Postgres bigint cast error (500).
+     */
+    public function resolveRouteBinding($value, $field = null): ?Model
+    {
+        if ($field === null && ! ctype_digit((string) $value)) {
+            return null;
+        }
+
+        return parent::resolveRouteBinding($value, $field);
+    }
+
+    /**
      * @return BelongsToMany<User, $this>
      */
     public function users(): BelongsToMany

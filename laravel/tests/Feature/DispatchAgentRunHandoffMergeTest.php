@@ -54,7 +54,7 @@ it('preserves full handoff payload after DispatchAgentRunJob merges runtime resp
     ]);
 
     Http::fake([
-        'http://agent-python:8000/internal/chatwoot/messages' => function () use ($run, $workspace, $agent, $specialist) {
+        'http://agent-python:8000/internal/chatwoot/messages/dispatch' => function () use ($run, $workspace, $agent, $specialist) {
             app(RequestHumanHandoff::class)->execute([
                 'workspace_id' => $workspace->id,
                 'agent_id' => $agent->id,

@@ -323,17 +323,23 @@ it('resolves the correct table when both tables share the same id', function () 
         'chatwoot_connection_id' => $connection->id,
     ]);
 
+    // Force a shared id explicitly. Relying on autoincrement starting at 1 is not
+    // portable: Postgres sequences are not rolled back between tests (unlike SQLite
+    // rowids), so the two tables drift apart across the suite.
+    $sharedId = 90001;
     $productDoc = ProductDocument::factory()->for($workspace)->for($product)->create([
+        'id' => $sharedId,
         'path' => 'documents/product.pdf',
         'original_filename' => 'produto.pdf',
     ]);
     $standaloneDoc = Document::factory()->for($workspace)->create([
+        'id' => $sharedId,
         'category' => 'catalog',
         'path' => 'documents/standalone.pdf',
         'original_filename' => 'avulso.pdf',
     ]);
 
-    // Both rows are the first in their respective tables → same autoincrement id.
+    // Both rows now share the same id across the two tables.
     expect($productDoc->id)->toBe($standaloneDoc->id);
 
     Storage::disk('s3')->put('documents/product.pdf', 'product-bytes');
