@@ -106,6 +106,7 @@ class ApiTokensPage extends Page
                         ->options($this->abilityOptions())
                         ->descriptions($this->abilityDescriptions())
                         ->columns(3)
+                        ->bulkToggleable()
                         ->required(),
                 ])
                 ->action(fn (array $data) => $this->createToken($data)),
