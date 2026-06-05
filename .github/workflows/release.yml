@@ -1,0 +1,27 @@
+name: Release
+
+# Push a semver tag (e.g. v1.0.0) to cut a GitHub Release with auto-generated
+# notes. A published release then triggers the Deploy workflow.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          draft: false
+          # Treat pre-release tags (v1.0.0-rc.1, v1.0.0-beta) as pre-releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}

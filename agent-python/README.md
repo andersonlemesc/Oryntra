@@ -32,7 +32,11 @@ uv run pytest
 uv run ruff check .
 uv run ruff format .
 uv run mypy src/
+uv run python -m oryntra_agent.manage setup-checkpointer
 ```
+
+Use `setup-checkpointer` antes de habilitar `LANGGRAPH_CHECKPOINTER=postgres`.
+O comando cria/atualiza as tabelas internas do LangGraph no `POSTGRES_URL`.
 
 ## Estrutura
 

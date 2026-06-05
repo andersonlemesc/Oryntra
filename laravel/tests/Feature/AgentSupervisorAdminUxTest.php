@@ -1,0 +1,532 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Enums\AgentLlmProvider;
+use App\Enums\AgentMode;
+use App\Enums\AgentResponseMode;
+use App\Enums\AgentRunStatus;
+use App\Enums\AgentSpecialistStatus;
+use App\Enums\AgentStatus;
+use App\Filament\Resources\Agents\Pages\CreateAgent;
+use App\Filament\Resources\Agents\Pages\EditAgent;
+use App\Filament\Resources\Agents\RelationManagers\ChatwootBindingsRelationManager;
+use App\Filament\Resources\Agents\RelationManagers\SpecialistsRelationManager;
+use App\Models\Agent;
+use App\Models\AgentChatwootBinding;
+use App\Models\AgentLlmKey;
+use App\Models\AgentRun;
+use App\Models\AgentSpecialist;
+use App\Models\ChatwootConnection;
+use App\Models\ExternalTool;
+use App\Models\User;
+use App\Models\Workspace;
+use App\Services\AgentRuntime\AgentRuntimeClient;
+use Filament\Actions\CreateAction;
+use Filament\Actions\Testing\TestAction;
+use Filament\Facades\Filament;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Http;
+use Livewire\Livewire;
+
+use function Pest\Laravel\actingAs;
+use function Pest\Laravel\assertDatabaseHas;
+
+use Tests\TestCase;
+
+uses(TestCase::class);
+uses(RefreshDatabase::class);
+
+it('shows supervisor fields only for supervisor agents', function () {
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(CreateAgent::class)
+        ->assertFormFieldHidden('supervisor_llm_key_id')
+        ->assertFormFieldHidden('supervisor_llm_model__choice')
+        ->assertFormFieldHidden('supervisor_prompt')
+        ->fillForm(['mode' => AgentMode::Supervisor->value])
+        ->assertFormFieldVisible('supervisor_llm_key_id')
+        ->assertFormFieldVisible('supervisor_llm_model__choice')
+        ->assertFormFieldVisible('supervisor_prompt');
+});
+
+it('requires supervisor llm configuration when creating a supervisor agent', function () {
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(CreateAgent::class)
+        ->fillForm(supervisorAdminUxAgentFormData([
+            'mode' => AgentMode::Supervisor->value,
+            'supervisor_llm_key_id' => null,
+            'supervisor_llm_model' => null,
+            'supervisor_prompt' => null,
+        ]))
+        ->call('create')
+        ->assertHasFormErrors([
+            'supervisor_llm_key_id' => 'required',
+            'supervisor_llm_model__choice' => 'required',
+            'supervisor_prompt' => 'required',
+        ]);
+});
+
+it('allows single agents without supervisor-only configuration', function () {
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(CreateAgent::class)
+        ->fillForm(supervisorAdminUxAgentFormData([
+            'mode' => AgentMode::Single->value,
+            'supervisor_llm_key_id' => null,
+            'supervisor_llm_model' => null,
+            'supervisor_prompt' => null,
+        ]))
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    assertDatabaseHas(Agent::class, [
+        'workspace_id' => $workspace->id,
+        'mode' => AgentMode::Single->value,
+    ]);
+});
+
+it('requires runtime-ready llm fields for specialists created in the relation manager', function () {
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+    $agent = Agent::factory()->supervisor()->for($workspace)->create();
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(SpecialistsRelationManager::class, [
+        'ownerRecord' => $agent,
+        'pageClass' => EditAgent::class,
+    ])
+        ->callAction(TestAction::make(CreateAction::class)->table(), [
+            'name' => 'Suporte',
+            'status' => AgentSpecialistStatus::Active->value,
+            'role_prompt' => 'Answer support questions.',
+            'llm_key_id' => null,
+            'llm_model__choice' => null,
+            'llm_temperature' => 0.2,
+            'intent_keywords' => ['ajuda'],
+            'tools_allowlist' => [],
+            'priority' => 10,
+            'confidence_threshold' => 0.6,
+        ])
+        ->assertHasFormErrors([
+            'llm_key_id' => 'required',
+            'llm_model__choice' => 'required',
+        ]);
+});
+
+it('creates specialists scoped to the current Filament tenant', function () {
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+    $agent = Agent::factory()->supervisor()->for($workspace)->create();
+    $llmKey = AgentLlmKey::factory()->provider(AgentLlmProvider::OpenAI)->for($workspace)->create();
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(SpecialistsRelationManager::class, [
+        'ownerRecord' => $agent,
+        'pageClass' => EditAgent::class,
+    ])
+        ->callAction(TestAction::make(CreateAction::class)->table(), [
+            'name' => 'Suporte',
+            'status' => AgentSpecialistStatus::Active->value,
+            'description' => 'Atendimento de suporte.',
+            'role_prompt' => 'Answer support questions.',
+            'intent_keywords' => ['ajuda', 'suporte'],
+            'llm_key_id' => $llmKey->id,
+            'llm_model__choice' => '__custom__',
+            'llm_model' => 'gpt-4.1-nano',
+            'llm_temperature' => 0.2,
+            'tools_allowlist' => [],
+            'handoff_config' => [
+                'enabled' => true,
+                'default_priority' => 'high',
+                'customer_message' => 'Vou transferir voce para um atendente.',
+                'rules' => [
+                    [
+                        'name' => 'Pedido humano',
+                        'enabled' => true,
+                        'keywords' => ['humano', 'atendente'],
+                        'priority' => 'high',
+                        'reason' => 'Cliente pediu atendimento humano.',
+                        'customer_message' => null,
+                    ],
+                ],
+            ],
+            'product_tools_config' => [
+                'query_enabled' => true,
+            ],
+            'priority' => 10,
+            'confidence_threshold' => 0.6,
+        ])
+        ->assertHasNoFormErrors();
+
+    assertDatabaseHas(AgentSpecialist::class, [
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'name' => 'Suporte',
+        'llm_key_id' => $llmKey->id,
+        'llm_model' => 'gpt-4.1-nano',
+    ]);
+
+    $specialist = AgentSpecialist::query()
+        ->where('agent_id', $agent->id)
+        ->where('name', 'Suporte')
+        ->firstOrFail();
+    $handoffConfig = $specialist->getAttribute('handoff_config');
+
+    assert(is_array($handoffConfig));
+
+    expect($specialist->tools_allowlist)->toContain('request_human_handoff')
+        ->and($specialist->tools_allowlist)->toContain('query_products')
+        ->and($handoffConfig['enabled'])->toBeTrue()
+        ->and($handoffConfig['rules'][0]['keywords'])->toBe(['humano', 'atendente']);
+});
+
+it('reconciles document tools into the allowlist from the Documentos tab toggles', function () {
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+    $agent = Agent::factory()->supervisor()->for($workspace)->create();
+    $llmKey = AgentLlmKey::factory()->provider(AgentLlmProvider::OpenAI)->for($workspace)->create();
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(SpecialistsRelationManager::class, [
+        'ownerRecord' => $agent,
+        'pageClass' => EditAgent::class,
+    ])
+        ->callAction(TestAction::make(CreateAction::class)->table(), [
+            'name' => 'Vendas',
+            'status' => AgentSpecialistStatus::Active->value,
+            'role_prompt' => 'Vende e envia catalogos.',
+            'intent_keywords' => ['catalogo'],
+            'llm_key_id' => $llmKey->id,
+            'llm_model__choice' => '__custom__',
+            'llm_model' => 'gpt-4.1-nano',
+            'llm_temperature' => 0.2,
+            'tools_allowlist' => [],
+            'document_tools_config' => [
+                'query_enabled' => true,
+                'send_enabled' => true,
+                'allowed_categories' => ['catalog', 'manual'],
+            ],
+            'priority' => 10,
+            'confidence_threshold' => 0.6,
+        ])
+        ->assertHasNoFormErrors();
+
+    $specialist = AgentSpecialist::query()
+        ->where('agent_id', $agent->id)
+        ->where('name', 'Vendas')
+        ->firstOrFail();
+
+    expect($specialist->tools_allowlist)->toContain('query_documents')
+        ->and($specialist->tools_allowlist)->toContain('send_document');
+
+    $documentConfig = $specialist->getAttribute('document_tools_config');
+    assert(is_array($documentConfig));
+
+    expect($documentConfig['allowed_categories'])->toBe(['catalog', 'manual'])
+        ->and($documentConfig['send_enabled'])->toBeTrue()
+        ->and($documentConfig['query_enabled'])->toBeTrue();
+});
+
+it('reconciles external-tool connectors into the allowlist from the APIs externas tab', function () {
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+    $agent = Agent::factory()->supervisor()->for($workspace)->create();
+    $llmKey = AgentLlmKey::factory()->provider(AgentLlmProvider::OpenAI)->for($workspace)->create();
+    ExternalTool::factory()->for($workspace)->create(['slug' => 'query_orders', 'label' => 'Status do pedido']);
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(SpecialistsRelationManager::class, [
+        'ownerRecord' => $agent,
+        'pageClass' => EditAgent::class,
+    ])
+        ->callAction(TestAction::make(CreateAction::class)->table(), [
+            'name' => 'Pedidos',
+            'status' => AgentSpecialistStatus::Active->value,
+            'role_prompt' => 'Consulta pedidos via API.',
+            'intent_keywords' => ['pedido'],
+            'llm_key_id' => $llmKey->id,
+            'llm_model__choice' => '__custom__',
+            'llm_model' => 'gpt-4.1-nano',
+            'llm_temperature' => 0.2,
+            'tools_allowlist' => [],
+            'external_tool_slugs' => ['query_orders'],
+            'priority' => 10,
+            'confidence_threshold' => 0.6,
+        ])
+        ->assertHasNoFormErrors();
+
+    $specialist = AgentSpecialist::query()
+        ->where('agent_id', $agent->id)
+        ->where('name', 'Pedidos')
+        ->firstOrFail();
+
+    expect($specialist->tools_allowlist)->toContain('query_orders');
+});
+
+it('configures Chatwoot handoff destination on the binding relation manager', function () {
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+    $agent = Agent::factory()->supervisor()->for($workspace)->create();
+    $connection = ChatwootConnection::factory()->for($workspace)->create();
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(ChatwootBindingsRelationManager::class, [
+        'ownerRecord' => $agent,
+        'pageClass' => EditAgent::class,
+    ])
+        ->callAction(TestAction::make(CreateAction::class)->table(), [
+            'chatwoot_connection_id' => $connection->id,
+            'status' => 'active',
+            'inbox_ids' => [],
+            'ignore_assigned_conversations' => false,
+            'ignore_label_names' => [],
+            'handoff_label_name' => 'human_handoff',
+            'handoff_assign_strategy' => 'team_then_agent',
+            'handoff_team_id' => 12,
+            'handoff_team_name' => 'Suporte',
+            'handoff_agent_id' => 34,
+            'handoff_agent_name' => 'Ada',
+            'handoff_private_note_template' => 'Motivo: {reason}',
+        ])
+        ->assertHasNoFormErrors();
+
+    assertDatabaseHas(AgentChatwootBinding::class, [
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $connection->id,
+        'handoff_label_name' => 'human_handoff',
+        'handoff_assign_strategy' => 'team_then_agent',
+        'handoff_team_id' => 12,
+        'handoff_team_name' => 'Suporte',
+        'handoff_agent_id' => 34,
+        'handoff_agent_name' => 'Ada',
+        'handoff_private_note_template' => 'Motivo: {reason}',
+    ]);
+});
+
+it('sends admin-configured supervisor and specialist credentials to the runtime as objects', function () {
+    Config::set('services.agent_runtime.base_url', 'http://agent-python:8000');
+    Config::set('services.agent_runtime.internal_token', 'ci-token');
+
+    Http::fake([
+        'http://agent-python:8000/internal/chatwoot/messages' => Http::response([
+            'status' => 'completed',
+            'response' => [
+                'type' => 'text',
+                'content' => 'Ok.',
+                'document_id' => null,
+                'handoff_reason' => null,
+                'confidence' => 0.9,
+            ],
+            'specialist_id' => 5,
+            'trace' => [],
+            'usage' => [
+                'supervisor' => ['input_tokens' => 0, 'output_tokens' => 0],
+                'specialist' => ['input_tokens' => 0, 'output_tokens' => 0],
+                'total_cost_cents' => 0,
+            ],
+        ]),
+    ]);
+
+    $workspace = Workspace::factory()->create();
+    $connection = ChatwootConnection::factory()->for($workspace)->create();
+    $llmKey = AgentLlmKey::factory()->provider(AgentLlmProvider::OpenAI)->for($workspace)->create([
+        'api_key' => 'sk-admin-configured',
+    ]);
+    $agent = Agent::factory()->active()->supervisor()->for($workspace)->create([
+        'supervisor_llm_key_id' => $llmKey->id,
+        'supervisor_llm_model' => 'gpt-4.1-nano',
+    ]);
+
+    AgentSpecialist::factory()->for($agent)->create([
+        'workspace_id' => $workspace->id,
+        'name' => 'Suporte',
+        'role_prompt' => 'Answer support questions.',
+        'intent_keywords' => ['ajuda'],
+        'llm_key_id' => $llmKey->id,
+        'llm_model' => 'gpt-4.1-nano',
+        'confidence_threshold' => 0.6,
+    ]);
+
+    $run = AgentRun::factory()->create([
+        'workspace_id' => $workspace->id,
+        'agent_id' => $agent->id,
+        'chatwoot_connection_id' => $connection->id,
+        'chatwoot_account_id' => 5,
+        'conversation_id' => 99,
+        'thread_id' => "workspace:{$workspace->id}:account:5:conversation:99",
+        'input' => ['messages' => [['id' => '123', 'content' => 'preciso de ajuda']]],
+    ]);
+
+    app(AgentRuntimeClient::class)->run($run);
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body());
+
+        return $body instanceof stdClass
+            && $body->supervisor->llm_api_key === 'sk-admin-configured'
+            && $body->supervisor->llm_provider === 'openai'
+            && $body->supervisor->llm_model === 'gpt-4.1-nano'
+            && $body->specialists[0]->llm_api_key === 'sk-admin-configured'
+            && $body->specialists[0]->llm_provider === 'openai'
+            && $body->specialists[0]->llm_model === 'gpt-4.1-nano'
+            && isset($body->specialists[0]->handoff_config)
+            && $body->contact instanceof stdClass
+            && $body->inbox instanceof stdClass
+            && $body->guard_config instanceof stdClass
+            && isset($body->media_policy->audio->enabled)
+            && isset($body->media_policy->image->enabled)
+            && isset($body->media_policy->document->enabled)
+            && isset($body->media_policy->video->enabled)
+            && $body->runtime_config instanceof stdClass;
+    });
+});
+
+it('can run a real-runtime smoke from the manually configured agent edit page', function () {
+    Config::set('services.agent_runtime.base_url', 'http://agent-python:8000');
+    Config::set('services.agent_runtime.internal_token', 'ci-token');
+
+    Http::fake([
+        'http://agent-python:8000/internal/chatwoot/messages' => Http::response([
+            'status' => 'completed',
+            'response' => [
+                'type' => 'text',
+                'content' => 'Ok.',
+                'document_id' => null,
+                'handoff_reason' => null,
+                'confidence' => 0.9,
+            ],
+            'specialist_id' => 5,
+            'trace' => [
+                [
+                    'step' => 3,
+                    'type' => 'specialist_response',
+                    'specialist_id' => 5,
+                    'tool' => null,
+                    'input' => [],
+                    'output' => ['response_type' => 'text', 'source' => 'llm'],
+                    'tokens' => ['input' => 0, 'output' => 0],
+                    'latency_ms' => 0,
+                    'ts' => now()->toISOString(),
+                ],
+            ],
+            'usage' => [
+                'supervisor' => ['input_tokens' => 0, 'output_tokens' => 0],
+                'specialist' => ['input_tokens' => 0, 'output_tokens' => 0],
+                'total_cost_cents' => 0,
+            ],
+        ]),
+    ]);
+
+    [$user, $workspace] = supervisorAdminUxUserAndWorkspace();
+    $connection = ChatwootConnection::factory()->for($workspace)->create();
+    $llmKey = AgentLlmKey::factory()->provider(AgentLlmProvider::OpenAI)->for($workspace)->create([
+        'api_key' => 'sk-admin-action',
+    ]);
+    $agent = Agent::factory()->active()->supervisor()->for($workspace)->create([
+        'supervisor_llm_key_id' => $llmKey->id,
+        'supervisor_llm_model' => 'gpt-4.1-nano',
+    ]);
+
+    AgentSpecialist::factory()->for($agent)->create([
+        'workspace_id' => $workspace->id,
+        'name' => 'Suporte',
+        'role_prompt' => 'Answer support questions.',
+        'intent_keywords' => ['ajuda'],
+        'llm_key_id' => $llmKey->id,
+        'llm_model' => 'gpt-4.1-nano',
+    ]);
+
+    actingAs($user);
+    supervisorAdminUxBootFilamentTenant($workspace);
+
+    Livewire::test(EditAgent::class, ['record' => $agent->id])
+        ->callAction('testRuntime', data: [
+            'chatwoot_connection_id' => $connection->id,
+            'message' => 'preciso de ajuda no suporte',
+        ])
+        ->assertHasNoFormErrors()
+        ->assertNotified('Runtime testado com sucesso');
+
+    $run = AgentRun::query()->latest('id')->firstOrFail();
+    $output = $run->output;
+
+    assert(is_array($output));
+
+    expect($run->agent_id)->toBe($agent->id)
+        ->and($run->workspace_id)->toBe($workspace->id)
+        ->and($run->status)->toBe(AgentRunStatus::Completed)
+        ->and($output['response']['content'])->toBe('Ok.');
+
+    Http::assertSent(fn (Request $request): bool => $request['supervisor']['llm_api_key'] === 'sk-admin-action'
+        && $request['specialists'][0]['llm_api_key'] === 'sk-admin-action');
+});
+
+/**
+ * @return array{User, Workspace}
+ */
+function supervisorAdminUxUserAndWorkspace(): array
+{
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create();
+    $workspace->users()->attach($user, ['role' => 'owner']);
+
+    return [$user, $workspace];
+}
+
+function supervisorAdminUxBootFilamentTenant(Workspace $workspace): void
+{
+    Filament::setCurrentPanel('admin');
+    Filament::setTenant($workspace);
+    Filament::bootCurrentPanel();
+}
+
+/**
+ * @param  array<string, mixed> $overrides
+ * @return array<string, mixed>
+ */
+function supervisorAdminUxAgentFormData(array $overrides = []): array
+{
+    return [
+        'name' => 'Atendimento Principal',
+        'status' => AgentStatus::Active->value,
+        'mode' => AgentMode::Single->value,
+        'description' => 'Agente de atendimento.',
+        'locale' => 'pt_BR',
+        'timezone' => 'America/Sao_Paulo',
+        'response_mode' => AgentResponseMode::Automatic->value,
+        'debounce_config' => [
+            'enabled' => true,
+            'window_seconds' => 8,
+            'max_wait_seconds' => 20,
+            'max_messages' => 10,
+        ],
+        'media_policy' => [],
+        'guard_config' => [],
+        'rag_config' => [],
+        'runtime_config' => [
+            'graph' => 'default_support_agent',
+            'checkpointing' => true,
+            'tool_call_limit' => 8,
+        ],
+        ...$overrides,
+    ];
+}

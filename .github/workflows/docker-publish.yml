@@ -1,0 +1,150 @@
+name: Build & Publish Images
+
+# Build the three application images (laravel app, python agent, nginx) for
+# amd64 + arm64, push by digest, then merge per-arch digests into a single
+# multi-arch manifest tagged by ref:
+#
+#   tag v1.2.0     -> :1.2.0  + :latest
+#   push main      -> :latest + :main-<sha>
+#   push develop   -> :develop + :develop-<sha>
+#
+# A published image is then pulled by the Deploy workflow (no build on the VPS).
+#
+# Required secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN (Docker Hub access token).
+#
+# Action refs are pinned to commit SHAs (Dependabot keeps them current — see
+# .github/dependabot.yml).
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NS: andersonlemes
+
+jobs:
+  build:
+    name: Build ${{ matrix.image.name }} (${{ matrix.platform.suffix }})
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: oryntra,        file: docker/laravel/Dockerfile,      context: '.',           target: prod }
+          - { name: oryntra-nginx,  file: docker/laravel/Dockerfile,      context: '.',           target: web }
+          - { name: oryntra-agent,  file: docker/agent-python/Dockerfile, context: agent-python,  target: '' }
+        platform:
+          - { arch: linux/amd64, runner: ubuntu-latest,    suffix: amd64 }
+          - { arch: linux/arm64, runner: ubuntu-24.04-arm, suffix: arm64 }
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.file }}
+          target: ${{ matrix.image.target }}
+          platforms: ${{ matrix.platform.arch }}
+          push: true
+          provenance: mode=max
+          sbom: true
+          # nginx (web target) reuses the laravel `prod` stage — let it read the
+          # laravel cache scope too so the shared stages are not rebuilt.
+          cache-from: |
+            type=gha,scope=${{ matrix.image.name }}-${{ matrix.platform.suffix }}
+            type=gha,scope=oryntra-${{ matrix.platform.suffix }}
+          cache-to: type=gha,scope=${{ matrix.image.name }}-${{ matrix.platform.suffix }},mode=max
+          outputs: type=image,name=${{ env.IMAGE_NS }}/${{ matrix.image.name }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          # `__` delimiter: image names share a prefix (oryntra vs oryntra-agent),
+          # so a `digest-oryntra-*` glob would also match the others. `oryntra__`
+          # cannot prefix-collide with `oryntra-agent__`.
+          name: digest-${{ matrix.image.name }}__${{ matrix.platform.suffix }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  merge:
+    name: Merge & tag ${{ matrix.image }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [oryntra, oryntra-nginx, oryntra-agent]
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: digest-${{ matrix.image }}__*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Resolve tags
+        id: tags
+        env:
+          IMAGE: ${{ env.IMAGE_NS }}/${{ matrix.image }}
+          GH_REF: ${{ github.ref }}
+          GH_REF_NAME: ${{ github.ref_name }}
+          GH_SHA: ${{ github.sha }}
+        run: |
+          SHA_SHORT="${GH_SHA:0:7}"
+          TAGS=""
+          if [[ "${GH_REF}" == refs/tags/v* ]]; then
+            VERSION="${GH_REF_NAME#v}"
+            TAGS="${IMAGE}:${VERSION},${IMAGE}:latest"
+          elif [[ "${GH_REF}" == refs/heads/main ]]; then
+            TAGS="${IMAGE}:latest,${IMAGE}:main-${SHA_SHORT}"
+          elif [[ "${GH_REF}" == refs/heads/develop ]]; then
+            TAGS="${IMAGE}:develop,${IMAGE}:develop-${SHA_SHORT}"
+          fi
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push manifest
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ env.IMAGE_NS }}/${{ matrix.image }}
+          MERGE_TAGS: ${{ steps.tags.outputs.tags }}
+        run: |
+          IFS=',' read -ra TAG_ARRAY <<< "${MERGE_TAGS}"
+          TAG_ARGS=""
+          for tag in "${TAG_ARRAY[@]}"; do
+            TAG_ARGS="${TAG_ARGS} -t ${tag}"
+          done
+          docker buildx imagetools create ${TAG_ARGS} \
+            $(printf "${IMAGE}@sha256:%s " *)
+
+      - name: Inspect
+        env:
+          IMAGE: ${{ env.IMAGE_NS }}/${{ matrix.image }}
+        run: |
+          REF="${{ github.ref }}"
+          if [[ "${REF}" == refs/tags/v* ]]; then
+            docker buildx imagetools inspect "${IMAGE}:latest"
+          fi

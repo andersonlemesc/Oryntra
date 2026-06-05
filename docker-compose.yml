@@ -26,18 +26,25 @@ services:
 
   laravel-app:
     build:
-      context: ./docker/laravel
+      context: .
+      dockerfile: docker/laravel/Dockerfile
+      target: base
       args:
         WWWUSER: ${WWWUSER:-1000}
         WWWGROUP: ${WWWGROUP:-1000}
     image: oryntra/laravel:dev
+    pull_policy: build
     container_name: oryntra-laravel-app
     restart: unless-stopped
     volumes:
       - ./laravel:/var/www/html/laravel
     environment:
-      DB_HOST: postgres
+      # Point at pgbouncer in production (set LARAVEL_DB_HOST=pgbouncer) to pool
+      # the many Horizon worker connections. Defaults to direct postgres in dev.
+      DB_HOST: ${LARAVEL_DB_HOST:-postgres}
       REDIS_HOST: redis
+    extra_hosts:
+      - "minio.127.0.0.1.nip.io:172.21.0.1"
     working_dir: /var/www/html/laravel
     depends_on:
       postgres:
@@ -49,10 +56,15 @@ services:
 
   laravel-horizon:
     image: oryntra/laravel:dev
+    pull_policy: build
     container_name: oryntra-laravel-horizon
     restart: unless-stopped
+    healthcheck:
+      disable: true
     volumes:
       - ./laravel:/var/www/html/laravel
+    extra_hosts:
+      - "minio.127.0.0.1.nip.io:172.21.0.1"
     working_dir: /var/www/html/laravel
     command: ["php", "artisan", "horizon"]
     depends_on:
@@ -65,10 +77,15 @@ services:
 
   laravel-scheduler:
     image: oryntra/laravel:dev
+    pull_policy: build
     container_name: oryntra-laravel-scheduler
     restart: unless-stopped
+    healthcheck:
+      disable: true
     volumes:
       - ./laravel:/var/www/html/laravel
+    extra_hosts:
+      - "minio.127.0.0.1.nip.io:172.21.0.1"
     working_dir: /var/www/html/laravel
     command: ["php", "artisan", "schedule:work"]
     depends_on:
@@ -79,8 +96,11 @@ services:
 
   laravel-reverb:
     image: oryntra/laravel:dev
+    pull_policy: build
     container_name: oryntra-laravel-reverb
     restart: unless-stopped
+    healthcheck:
+      disable: true
     volumes:
       - ./laravel:/var/www/html/laravel
     working_dir: /var/www/html/laravel
@@ -98,13 +118,26 @@ services:
       context: ./agent-python
       dockerfile: ../docker/agent-python/Dockerfile
     image: oryntra/agent-python:dev
+    pull_policy: build
     container_name: oryntra-agent-python
     restart: unless-stopped
+    command: ["uvicorn", "oryntra_agent.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src"]
     volumes:
       - ./agent-python/src:/app/src
     environment:
-      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
-      POSTGRES_URL: ${POSTGRES_URL}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-replace_me_with_long_random_string}
+      AGENT_RUNTIME_INTERNAL_TOKEN: ${AGENT_RUNTIME_INTERNAL_TOKEN:-${INTERNAL_API_TOKEN:-replace_me_with_long_random_string}}
+      LARAVEL_INTERNAL_BASE_URL: ${LARAVEL_INTERNAL_BASE_URL:-http://nginx}
+      POSTGRES_URL: ${POSTGRES_URL:-postgresql://oryntra:oryntra_dev_pw@postgres:5432/oryntra}
+      LANGGRAPH_CHECKPOINTER: ${LANGGRAPH_CHECKPOINTER:-postgres}
+      # Concurrent runs per worker process (effective cap = UVICORN_WORKERS * this).
+      AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-8}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # LangSmith tracing (opt-in) — read directly by the langchain libs.
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-oryntra-agent}
     expose:
       - "8000"
     depends_on:
@@ -130,6 +163,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - oryntra-net
+
+  # Connection pooler for the Laravel tier. In production point the PHP services
+  # at this (LARAVEL_DB_HOST=pgbouncer) so the many Horizon workers share a small
+  # pool of Postgres connections instead of one each.
+  #
+  # NOTE: transaction pooling breaks server-side prepared statements. The Python
+  # agent service uses the LangGraph Postgres checkpointer (which relies on
+  # prepared statements), so it stays pointed directly at postgres — do not route
+  # POSTGRES_URL through pgbouncer in transaction mode without disabling prepares.
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: oryntra-pgbouncer
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_USER: ${DB_USERNAME:-oryntra}
+      DB_PASSWORD: ${DB_PASSWORD:-oryntra_dev_pw}
+      DB_NAME: ${DB_DATABASE:-oryntra}
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-1000}
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-25}
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - oryntra-net
 
@@ -175,7 +235,7 @@ services:
     container_name: oryntra-mailpit
     restart: unless-stopped
     ports:
-      - "8025:8025"
-      - "1025:1025"
+      - "8026:8025"   # UI (Chatwoot mailhog usa 8025 do host)
+      - "1026:1025"   # SMTP (Chatwoot mailhog usa 1025 do host)
     networks:
       - oryntra-net

@@ -1,0 +1,24 @@
+# Gitleaks configuration for Oryntra.
+# Extends the upstream default rule set; only adds an allowlist for known
+# false positives so the security gate stays green without history rewrites.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Third-party reference specs and example payloads (not project secrets)"
+paths = [
+    # Vendored Chatwoot OpenAPI specifications. These carry example values such
+    # as a sample `website_token` (a public client-side widget identifier, not a
+    # secret). They are documentation, not credentials.
+    '''docs/integrations/chatwoot/openapi-application\.json''',
+    '''docs/integrations/chatwoot/openapi-full\.json''',
+    # Example env templates ship placeholder values by design.
+    '''.*\.env\.example''',
+    '''.*\.env\.production\.example''',
+    '''.*\.env\.stack\.example''',
+    # Vendored AI-agent skill docs contain intentionally fake "bad example"
+    # secrets (e.g. sk_live_abc123) to illustrate what NOT to commit.
+    '''laravel/\.claude/.*''',
+    '''laravel/\.agents/.*''',
+]

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Actions\Fortify;
 
 use App\Models\User;
@@ -16,7 +18,9 @@ class CreateNewUser implements CreatesNewUsers
     /**
      * Validate and create a newly registered user.
      *
-     * @param  array<string, string>  $input
+     * First registered user becomes super_admin (mirrors Chatwoot install flow).
+     *
+     * @param array<string, string> $input
      *
      * @throws ValidationException
      */
@@ -34,10 +38,21 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $this->passwordRules(),
         ])->validate();
 
-        return User::create([
+        $isFirstUser = User::query()->doesntExist();
+
+        $user = User::create([
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => Hash::make($input['password']),
+            'is_super_admin' => $isFirstUser,
         ]);
+
+        // Self-registered users set their own password here, so the account is
+        // immediately usable. Marking it verified keeps email_verified_at a
+        // consistent "onboarded / can authenticate" signal — only sync-created
+        // users awaiting an invitation stay unverified.
+        $user->forceFill(['email_verified_at' => now()])->save();
+
+        return $user;
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
 
     /*
@@ -33,6 +35,28 @@ return [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
+    ],
+
+    'agent_runtime' => [
+        'base_url' => env('AGENT_RUNTIME_URL', env('AGENT_PYTHON_URL', 'http://agent-python:8000')),
+        'internal_token' => env('AGENT_RUNTIME_INTERNAL_TOKEN', env('INTERNAL_API_TOKEN')),
+        'timeout' => (int) env('AGENT_RUNTIME_TIMEOUT', 30),
+        'accept_timeout' => (int) env('AGENT_RUNTIME_ACCEPT_TIMEOUT', 10),
+        'stream_timeout' => (int) env('AGENT_RUNTIME_STREAM_TIMEOUT', 180),
+        'ingest_timeout' => (int) env('AGENT_RUNTIME_INGEST_TIMEOUT', 600),
+        'run_timeout' => (int) env('AGENT_RUN_TIMEOUT', 180),
+        'max_concurrency_per_account' => (int) env('AGENT_MAX_CONCURRENCY_PER_ACCOUNT', 3),
+    ],
+
+    'chatwoot' => [
+        'internal_base_url' => env('CHATWOOT_PLATFORM_BASE_URL'),
+    ],
+
+    'google_calendar' => [
+        'client_id' => env('GOOGLE_CALENDAR_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CALENDAR_CLIENT_SECRET'),
+        'redirect_uri' => env('GOOGLE_CALENDAR_REDIRECT_URI'),
+        'application_name' => env('GOOGLE_CALENDAR_APP_NAME', 'Oryntra'),
     ],
 
 ];

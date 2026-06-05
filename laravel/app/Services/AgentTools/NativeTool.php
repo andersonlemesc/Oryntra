@@ -1,0 +1,29 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services\AgentTools;
+
+enum NativeTool: string
+{
+    case RequestHumanHandoff = 'request_human_handoff';
+    case RequestTeamHandoff = 'request_team_handoff';
+    case ChatwootSendMessage = 'chatwoot_send_message';
+    case ChatwootAddPrivateNote = 'chatwoot_add_private_note';
+    case ChatwootAddLabel = 'chatwoot_add_label';
+    case ChatwootAssignTeam = 'chatwoot_assign_team';
+    case ChatwootAssignAgent = 'chatwoot_assign_agent';
+    case ChatwootGetContact = 'chatwoot_get_contact';
+    case ChatwootUpdateContact = 'chatwoot_update_contact';
+    case UpdateContactMemory = 'update_contact_memory';
+    case ResolveConversation = 'resolve_conversation';
+    case QueryProducts = 'query_products';
+    case QueryDocuments = 'query_documents';
+    case SearchKnowledgeBase = 'search_knowledge_base';
+    case SendDocument = 'send_document';
+    case GcalListEvents = 'gcal_list_events';
+    case GcalCreateEvent = 'gcal_create_event';
+    case GcalUpdateEvent = 'gcal_update_event';
+    case GcalDeleteEvent = 'gcal_delete_event';
+    case GcalFindFreeSlots = 'gcal_find_free_slots';
+}

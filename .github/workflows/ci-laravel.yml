@@ -1,5 +1,8 @@
 name: CI Laravel
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches: [main, develop]
@@ -29,7 +32,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U oryntra -d oryntra_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -46,10 +49,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP 8.3
+      - name: Setup PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: pdo_pgsql, pgsql, intl, bcmath, redis, zip, gd, pcntl, sockets
           coverage: pcov
           tools: composer:v2
@@ -86,6 +89,12 @@ jobs:
           QUEUE_CONNECTION=redis
           MAIL_MAILER=array
           INTERNAL_API_TOKEN=ci_test_token
+          AWS_ACCESS_KEY_ID=testing
+          AWS_SECRET_ACCESS_KEY=testing
+          AWS_DEFAULT_REGION=us-east-1
+          AWS_BUCKET=oryntra-test
+          AWS_ENDPOINT=http://localhost:9000
+          AWS_USE_PATH_STYLE_ENDPOINT=true
           EOF
           php artisan key:generate
 
@@ -95,7 +104,20 @@ jobs:
 
       - name: Larastan (static analysis)
         working-directory: laravel
-        run: ./vendor/bin/phpstan analyse --no-progress
+        run: ./vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: laravel/package-lock.json
+
+      - name: Build frontend assets
+        working-directory: laravel
+        run: |
+          npm ci
+          npm run build
 
       - name: Migrate
         working-directory: laravel

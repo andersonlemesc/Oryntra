@@ -1,0 +1,19 @@
+Oryntra
+Copyright 2026 Anderson Lemes
+
+This product includes software developed by Anderson Lemes and the Oryntra
+contributors.
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file for the
+full terms.
+
+"Oryntra" and the Oryntra logo are trademarks of Anderson Lemes. The Apache
+License does not grant permission to use these marks, except as required for
+reasonable and customary use in describing the origin of the work (see Section
+6 of the License).
+
+This repository integrates with, but does not include, Chatwoot
+(https://www.chatwoot.com/), which is distributed under its own license.
+Reference material under docs/integrations/chatwoot/ is derived from Chatwoot's
+publicly published OpenAPI specifications and is the property of its respective
+authors.

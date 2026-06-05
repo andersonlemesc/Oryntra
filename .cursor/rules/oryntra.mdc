@@ -24,7 +24,6 @@ Laravel 13 + PHP 8.3 + Filament 3 + Fortify + Horizon + Reverb + Postgres+pgvect
 - PHP: PSR-12, return types, `config()` fora de config files
 - Filament Resources em `app/Filament/Resources/`
 - Tenancy via `HasTenants` trait
-- Datas: `Carbon::now('America/Sao_Paulo')`
 - Python: type hints (mypy strict), Pydantic em payloads
 - Testes: Pest + pytest, coverage 60% mínimo
 - Git: branches `feature/*`, conventional commits, PR sempre

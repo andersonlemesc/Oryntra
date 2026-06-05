@@ -12,6 +12,10 @@ Guia consolidado pra integrar Oryntra com Chatwoot. Specs OpenAPI baixadas neste
 
 Fonte: `https://github.com/chatwoot/chatwoot/tree/develop/swagger`. Reatualizar periodicamente.
 
+## Referências internas
+
+- [`captain-rag-reference.md`](captain-rag-reference.md) — análise do módulo Captain (RAG, embeddings, geração de FAQ, ferramentas de Copilot, extração de PDF) com recomendações para Fase 10 do Oryntra.
+
 ## Tipos de token (3)
 
 ### 1. User Access Token

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Support\Str;
 
 return [
@@ -69,7 +71,7 @@ return [
 
     'prefix' => env(
         'HORIZON_PREFIX',
-        Str::slug(env('APP_NAME', 'laravel'), '_').'_horizon:'
+        Str::slug((string) env('APP_NAME', 'laravel'), '_') . '_horizon:'
     ),
 
     /*
@@ -98,6 +100,13 @@ return [
 
     'waits' => [
         'redis:default' => 60,
+        'redis:emails' => 60,
+        'redis:chatwoot-sync' => 300,
+        'redis:chatwoot-webhooks' => 30,
+        'redis:chatwoot-send' => 60,
+        'redis:agent' => 120,
+        'redis:documents' => 600,
+        'redis:playground' => 200,
     ],
 
     /*
@@ -196,35 +205,81 @@ return [
     |
     */
 
+    /*
+    | Supervisor topology is split by need, not by queue: idle RAM scales with
+    | the number of supervisors (each holds a master + min worker, ~88MB per PHP
+    | process), so only the hot, latency-sensitive queues of the message path get
+    | a dedicated supervisor. Everything else shares one background pool. Queues
+    | stay separate for routing/metrics — only the worker pools are consolidated.
+    |
+    | Dedicated (message hot path, fast):
+    |   - agent              : the runs (dispatch + response delivery)
+    |   - chatwoot-webhooks  : ingestion front door, bursty
+    | Consolidated (everything else):
+    |   - background : chatwoot-send + chatwoot-sync + documents + rag + emails
+    |                  + playground + default. Uses the longest timeout (1200s,
+    |                  for documents/rag) and highest memory (512MB) of the group,
+    |                  so heavy jobs are not killed mid-run. Kept OFF the agent
+    |                  pool so a slow document/rag job never blocks a chat reply.
+    */
     'defaults' => [
-        'supervisor-1' => [
+        'agent-supervisor' => [
             'connection' => 'redis',
-            'queue' => ['default'],
+            'queue' => ['agent'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
-            'maxProcesses' => 1,
+            'maxProcesses' => 2,
+            'memory' => 256,
+            'tries' => 2,
+            'timeout' => 120,
+            'backoff' => 15,
+        ],
+
+        'chatwoot-webhooks-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['chatwoot-webhooks'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 2,
+            'memory' => 128,
+            'tries' => 3,
+            'timeout' => 30,
+            'backoff' => 5,
+        ],
+
+        // balance:false (not auto) is deliberate: `auto` keeps a minimum of one
+        // worker PER QUEUE, which would force ~7 idle workers here (one per
+        // merged queue) and defeat the consolidation. With `false` the pool runs
+        // exactly maxProcesses workers that pull from the queue list in priority
+        // order — so the whole cold tier costs maxProcesses workers, not seven.
+        'background-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['chatwoot-send', 'chatwoot-sync', 'documents', 'rag', 'emails', 'playground', 'default'],
+            'balance' => false,
+            'maxProcesses' => 2,
             'maxTime' => 0,
             'maxJobs' => 0,
-            'memory' => 128,
-            'tries' => 1,
-            'timeout' => 60,
+            'memory' => 512,
+            'tries' => 3,
+            'timeout' => 1200,
+            'backoff' => 30,
             'nice' => 0,
         ],
     ],
 
     'environments' => [
         'production' => [
-            'supervisor-1' => [
-                'maxProcesses' => 10,
-                'balanceMaxShift' => 1,
-                'balanceCooldown' => 3,
-            ],
+            'agent-supervisor' => ['maxProcesses' => (int) env('HORIZON_AGENT_MAX', 3)],
+            'chatwoot-webhooks-supervisor' => ['maxProcesses' => (int) env('HORIZON_CHATWOOT_WEBHOOKS_MAX', 2)],
+            'background-supervisor' => ['maxProcesses' => (int) env('HORIZON_BACKGROUND_MAX', 2)],
         ],
 
         'local' => [
-            'supervisor-1' => [
-                'maxProcesses' => 3,
-            ],
+            // Env-driven so load tests can raise the local ceiling without
+            // switching APP_ENV to production.
+            'agent-supervisor' => ['maxProcesses' => (int) env('HORIZON_AGENT_MAX', 1)],
+            'chatwoot-webhooks-supervisor' => ['maxProcesses' => (int) env('HORIZON_CHATWOOT_WEBHOOKS_MAX', 1)],
+            'background-supervisor' => ['maxProcesses' => 1],
         ],
     ],
 

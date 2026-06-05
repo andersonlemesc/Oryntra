@@ -1,0 +1,30 @@
+{
+    "name": "@oryntra/mcp",
+    "version": "0.1.0",
+    "description": "MCP server that lets AI agents manage an Oryntra workspace (agents, specialists, LLM keys, products, knowledge base, external tools) via a workspace-scoped API token.",
+    "type": "module",
+    "bin": {
+        "oryntra-mcp": "./dist/index.js"
+    },
+    "files": [
+        "dist",
+        "README.md"
+    ],
+    "scripts": {
+        "build": "node scripts/build.mjs",
+        "dev": "node --watch --enable-source-maps --experimental-strip-types src/index.ts",
+        "start": "node dist/index.js",
+        "typecheck": "node scripts/build.mjs --no-emit"
+    },
+    "engines": {
+        "node": ">=22"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.17.5",
+        "zod": "^3.25.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.13.5",
+        "typescript": "^5.7.2"
+    }
+}

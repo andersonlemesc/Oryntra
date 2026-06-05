@@ -1,0 +1,134 @@
+# Production overlay — apply on top of the base compose:
+#
+#   cp .env.production.example .env   # then edit secrets + domain
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d \
+#     nginx laravel-app laravel-horizon laravel-scheduler laravel-reverb \
+#     agent-python minio
+#
+# Topology (MODEST usage, mostly one account):
+#   - Postgres and Redis are EXTERNAL managed services. Point the app at them via
+#     LARAVEL_DB_HOST / REDIS_HOST / POSTGRES_URL in .env. No DB/Redis/pgbouncer
+#     containers run here, so the deploy command lists services explicitly.
+#   - An EXISTING external Traefik (shared network) terminates TLS and routes by
+#     Host. nginx (web/panel/webhooks) and reverb (websocket, same host on /app)
+#     get Traefik labels; nothing is published to the host directly.
+#   - MinIO stays internal-only (Laravel streams media to Chatwoot; no public URLs).
+#   - Do NOT start mailpit in production (dev-only mail catcher) — use real SMTP.
+#
+# Required .env keys for routing:
+#   TRAEFIK_NETWORK        name of the existing external Traefik docker network
+#   TRAEFIK_ENTRYPOINT     Traefik https entrypoint (e.g. websecure)
+#   TRAEFIK_CERTRESOLVER   Traefik cert resolver (e.g. letsencrypt)
+#   APP_DOMAIN             public host, e.g. app.your-domain.com
+
+networks:
+  # Existing Traefik network, created and owned outside this stack.
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
+
+services:
+  nginx:
+    # Published image with the Laravel public/ (Vite + Filament assets) baked in.
+    image: andersonlemes/oryntra-nginx:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    # Assets and conf are baked into the image — drop the dev bind-mounts.
+    volumes: !override []
+    # Traefik reaches nginx over the shared network; no host port publishing.
+    ports: !override []
+    networks:
+      - oryntra-net
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+      - "traefik.http.routers.oryntra-app.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.oryntra-app.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.oryntra-app.tls=true"
+      - "traefik.http.routers.oryntra-app.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.oryntra-app.loadbalancer.server.port=80"
+
+  laravel-app:
+    # App code baked into the published image — no build, no bind-mount in prod.
+    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    build: !reset null
+    volumes: !override []
+    environment:
+      DB_HOST: ${LARAVEL_DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      REDIS_HOST: ${REDIS_HOST}
+    # Managed Postgres/Redis live outside the stack — drop the base deps so the
+    # explicit `up` list does not pull local DB/Redis containers.
+    depends_on: !reset null
+
+  laravel-horizon:
+    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    volumes: !override []
+    environment:
+      DB_HOST: ${LARAVEL_DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      REDIS_HOST: ${REDIS_HOST}
+      HORIZON_AGENT_MAX: ${HORIZON_AGENT_MAX:-3}
+      HORIZON_CHATWOOT_WEBHOOKS_MAX: ${HORIZON_CHATWOOT_WEBHOOKS_MAX:-2}
+      HORIZON_BACKGROUND_MAX: ${HORIZON_BACKGROUND_MAX:-2}
+      AGENT_MAX_CONCURRENCY_PER_ACCOUNT: ${AGENT_MAX_CONCURRENCY_PER_ACCOUNT:-5}
+      AGENT_RUN_TIMEOUT: ${AGENT_RUN_TIMEOUT:-180}
+    depends_on: !reset null
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+
+  laravel-scheduler:
+    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    volumes: !override []
+    environment:
+      DB_HOST: ${LARAVEL_DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      REDIS_HOST: ${REDIS_HOST}
+
+  laravel-reverb:
+    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    volumes: !override []
+    # Websocket on the same host, routed by Traefik on the /app path prefix.
+    ports: !override []
+    networks:
+      - oryntra-net
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+      - "traefik.http.routers.oryntra-reverb.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/app`)"
+      - "traefik.http.routers.oryntra-reverb.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.oryntra-reverb.tls=true"
+      - "traefik.http.routers.oryntra-reverb.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      # Higher priority than the catch-all app router so /app wins.
+      - "traefik.http.routers.oryntra-reverb.priority=100"
+      - "traefik.http.services.oryntra-reverb.loadbalancer.server.port=8081"
+
+  agent-python:
+    image: andersonlemes/oryntra-agent:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    build: !reset null
+    volumes: !override []
+    # Multi-worker, no --reload. Connects directly to managed Postgres via
+    # POSTGRES_URL (.env). 2 workers x AGENT_MAX_CONCURRENCY execution slots.
+    command: ["sh", "-c", "uvicorn oryntra_agent.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-2}"]
+    environment:
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+      AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-8}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LANGGRAPH_CHECKPOINTER: postgres
+    depends_on: !reset null
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+
+  minio:
+    # Internal-only object storage. No host ports, no Traefik route.
+    ports: !override []
