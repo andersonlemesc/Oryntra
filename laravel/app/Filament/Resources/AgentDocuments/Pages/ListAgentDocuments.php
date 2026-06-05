@@ -10,6 +10,7 @@ use App\Filament\Resources\AgentDocuments\AgentDocumentResource;
 use App\Jobs\Rag\IndexKnowledgeDocumentJob;
 use App\Models\AgentDocument;
 use App\Models\AgentLlmKey;
+use App\Models\User;
 use App\Models\Workspace;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
@@ -18,6 +19,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Utilities\Get;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class ListAgentDocuments extends ListRecords
@@ -37,6 +39,7 @@ class ListAgentDocuments extends ListRecords
         return Action::make('configureEmbeddings')
             ->label('Configurar embeddings')
             ->icon('heroicon-o-cpu-chip')
+            ->visible(fn (): bool => $this->userCanManageCurrentWorkspace())
             ->fillForm(fn (): array => $this->currentEmbeddingConfig())
             ->schema([
                 Select::make('embedding_llm_key_id')
@@ -70,6 +73,16 @@ class ListAgentDocuments extends ListRecords
                     (string) $data['embedding_model'],
                 );
             });
+    }
+
+    private function userCanManageCurrentWorkspace(): bool
+    {
+        $user = Auth::user();
+        $tenant = Filament::getTenant();
+
+        return $user instanceof User
+            && $tenant instanceof Workspace
+            && $user->canManageWorkspace($tenant);
     }
 
     /**

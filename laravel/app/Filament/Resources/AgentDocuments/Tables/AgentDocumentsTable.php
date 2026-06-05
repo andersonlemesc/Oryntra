@@ -7,12 +7,16 @@ namespace App\Filament\Resources\AgentDocuments\Tables;
 use App\Enums\AgentDocumentStatus;
 use App\Jobs\Rag\IndexKnowledgeDocumentJob;
 use App\Models\AgentDocument;
+use App\Models\User;
+use App\Models\Workspace;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class AgentDocumentsTable
 {
@@ -56,6 +60,7 @@ class AgentDocumentsTable
                 Action::make('reindex')
                     ->label('Reindexar')
                     ->icon('heroicon-o-arrow-path')
+                    ->visible(fn (): bool => self::userCanManageCurrentWorkspace())
                     ->requiresConfirmation()
                     ->modalDescription('Reprocessa o documento e regenera os embeddings. Pode consumir creditos do seu provedor.')
                     ->action(function (AgentDocument $record): void {
@@ -68,5 +73,15 @@ class AgentDocumentsTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    private static function userCanManageCurrentWorkspace(): bool
+    {
+        $user = Auth::user();
+        $tenant = Filament::getTenant();
+
+        return $user instanceof User
+            && $tenant instanceof Workspace
+            && $user->canManageWorkspace($tenant);
     }
 }

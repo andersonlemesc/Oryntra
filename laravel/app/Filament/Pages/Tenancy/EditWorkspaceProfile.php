@@ -23,8 +23,9 @@ class EditWorkspaceProfile extends EditTenantProfile
             ->components([
                 TextInput::make('name')
                     ->label('Nome do workspace')
-                    ->required()
-                    ->maxLength(255),
+                    ->disabled()
+                    ->dehydrated(false)
+                    ->helperText('Sincronizado do Chatwoot — não editável.'),
                 Select::make('timezone')
                     ->label('Fuso horario')
                     ->options(self::timezoneOptions())
