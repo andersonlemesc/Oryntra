@@ -11,7 +11,21 @@
 
                     <div class="mt-3 text-xs text-amber-800 dark:text-amber-300">
                         <p class="mb-1 font-medium">Conectar via MCP:</p>
+
+                        <p class="mb-1 mt-2 font-medium text-[11px] opacity-70">Claude Code</p>
                         <pre class="overflow-x-auto rounded bg-white dark:bg-gray-900 px-3 py-2 font-mono text-xs leading-relaxed"><code class="select-all whitespace-pre">claude mcp add oryntra \
+  --env ORYNTRA_API_URL={{ url('/api/v1') }} \
+  --env ORYNTRA_API_TOKEN={{ $plainTextToken }} \
+  -- npx -y @oryntra/mcp</code></pre>
+
+                        <p class="mb-1 mt-2 font-medium text-[11px] opacity-70">Codex CLI</p>
+                        <pre class="overflow-x-auto rounded bg-white dark:bg-gray-900 px-3 py-2 font-mono text-xs leading-relaxed"><code class="select-all whitespace-pre">codex mcp add oryntra \
+  --env ORYNTRA_API_URL={{ url('/api/v1') }} \
+  --env ORYNTRA_API_TOKEN={{ $plainTextToken }} \
+  -- npx -y @oryntra/mcp</code></pre>
+
+                        <p class="mb-1 mt-2 font-medium text-[11px] opacity-70">Gemini CLI</p>
+                        <pre class="overflow-x-auto rounded bg-white dark:bg-gray-900 px-3 py-2 font-mono text-xs leading-relaxed"><code class="select-all whitespace-pre">gemini mcp add oryntra \
   --env ORYNTRA_API_URL={{ url('/api/v1') }} \
   --env ORYNTRA_API_TOKEN={{ $plainTextToken }} \
   -- npx -y @oryntra/mcp</code></pre>
