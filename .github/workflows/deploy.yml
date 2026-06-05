@@ -70,6 +70,12 @@ jobs:
             git checkout "${REF}"
             git pull --ff-only origin "${REF}" || true
 
+            # Load the production .env FIRST, then resolve the image tag AFTER
+            # so the tag/ref wins over any ORYNTRA_VERSION pinned in .env.
+            set -a
+            . ./.env
+            set +a
+
             # Which published image tag to run.
             if [ -n "${TAG_INPUT}" ]; then
               ORYNTRA_VERSION="${TAG_INPUT}"
@@ -82,12 +88,7 @@ jobs:
             else
               ORYNTRA_VERSION="${REF}"
             fi
-
-            # Load the production .env, then force the resolved image tag.
-            set -a
-            . ./.env
-            ORYNTRA_VERSION="${ORYNTRA_VERSION}"
-            set +a
+            export ORYNTRA_VERSION
             echo "Deploying image tag: ${ORYNTRA_VERSION} (stack ref: ${REF})"
 
             # Stack deploy pulls the pre-built images — no build on the server.
