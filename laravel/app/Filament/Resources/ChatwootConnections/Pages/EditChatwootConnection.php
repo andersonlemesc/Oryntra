@@ -24,8 +24,13 @@ class EditChatwootConnection extends EditRecord
     {
         $save = ['status' => $data['status']];
 
-        if (filled($data['admin_api_token'] ?? null)) {
-            $save['admin_api_token'] = $data['admin_api_token'];
+        // Secret fields use ->dehydrated(filled) so a blank input keeps the stored
+        // value; only persist the ones the operator actually re-entered. Each is
+        // encrypted by the model cast.
+        foreach (['api_access_token', 'webhook_secret', 'admin_api_token'] as $secretField) {
+            if (filled($data[$secretField] ?? null)) {
+                $save[$secretField] = $data[$secretField];
+            }
         }
 
         return $save;

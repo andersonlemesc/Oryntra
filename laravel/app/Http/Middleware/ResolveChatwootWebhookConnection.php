@@ -52,9 +52,25 @@ class ResolveChatwootWebhookConnection
             return false;
         }
 
-        $expectedSignature = hash_hmac('sha256', $request->getContent(), $secret);
         $signature = str($signature)->after('sha256=')->toString();
+        $body = $request->getContent();
+        $timestamp = (string) $request->header('X-Chatwoot-Timestamp');
 
-        return hash_equals($expectedSignature, $signature);
+        // Chatwoot agent bot webhooks sign "{timestamp}.{body}" (see
+        // lib/webhooks/trigger.rb). Account-level webhooks may sign the raw body,
+        // so accept either to stay compatible.
+        $signedPayloads = [];
+        if ($timestamp !== '') {
+            $signedPayloads[] = "{$timestamp}.{$body}";
+        }
+        $signedPayloads[] = $body;
+
+        foreach ($signedPayloads as $signedPayload) {
+            if (hash_equals(hash_hmac('sha256', $signedPayload, $secret), $signature)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
