@@ -30,13 +30,15 @@
 version: "3.9"
 
 networks:
-  # Rede interna do stack (overlay, criada pelo deploy).
-  oryntra:
-    driver: overlay
-  # Rede do Traefik que já existe no swarm (criada fora deste stack).
+  # Rede do Traefik (TLS/roteamento), já existente no swarm.
   traefik:
     external: true
     name: ${TRAEFIK_NETWORK:-traefik}
+  # Rede onde vivem Postgres/Redis e onde os serviços se comunicam.
+  # Aponte para a sua rede externa via APP_NETWORK (default: app_network).
+  app_network:
+    external: true
+    name: ${APP_NETWORK:-app_network}
 
 secrets:
   # Senha do Postgres, criada fora do stack:
@@ -49,7 +51,7 @@ services:
   nginx:
     image: andersonlemes/oryntra-nginx:${ORYNTRA_VERSION:-latest}
     networks:
-      - oryntra
+      - app_network
       - traefik
     deploy:
       replicas: 1
@@ -105,7 +107,7 @@ services:
       REVERB_PORT: "443"
       REVERB_SCHEME: https
     networks:
-      - oryntra
+      - app_network
     secrets:
       - postgres_password
     deploy:
@@ -120,6 +122,9 @@ services:
   laravel-horizon:
     image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
     command: ["php", "artisan", "horizon"]
+    # Imagem traz HEALTHCHECK de php-fpm:9000; este serviço não abre a 9000.
+    healthcheck:
+      disable: true
     environment:
       APP_KEY: ${APP_KEY}
       DB_CONNECTION: pgsql
@@ -144,7 +149,7 @@ services:
       AGENT_MAX_CONCURRENCY_PER_ACCOUNT: ${AGENT_MAX_CONCURRENCY_PER_ACCOUNT:-5}
       AGENT_RUN_TIMEOUT: ${AGENT_RUN_TIMEOUT:-180}
     networks:
-      - oryntra
+      - app_network
     secrets:
       - postgres_password
     deploy:
@@ -159,6 +164,8 @@ services:
   laravel-scheduler:
     image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
     command: ["php", "artisan", "schedule:work"]
+    healthcheck:
+      disable: true
     environment:
       APP_KEY: ${APP_KEY}
       DB_CONNECTION: pgsql
@@ -172,7 +179,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       QUEUE_CONNECTION: redis
     networks:
-      - oryntra
+      - app_network
     secrets:
       - postgres_password
     deploy:
@@ -187,6 +194,9 @@ services:
   laravel-reverb:
     image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
     command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
+    # Imagem traz HEALTHCHECK de php-fpm:9000; reverb escuta 8081, não 9000.
+    healthcheck:
+      disable: true
     environment:
       APP_KEY: ${APP_KEY}
       REDIS_HOST: ${REDIS_HOST}
@@ -196,7 +206,7 @@ services:
       REVERB_APP_KEY: ${REVERB_APP_KEY}
       REVERB_APP_SECRET: ${REVERB_APP_SECRET}
     networks:
-      - oryntra
+      - app_network
       - traefik
     deploy:
       replicas: 1
@@ -240,7 +250,7 @@ services:
       AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-8}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
-      - oryntra
+      - app_network
     secrets:
       - postgres_password
     deploy:
