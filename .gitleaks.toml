@@ -16,6 +16,7 @@ paths = [
     # Example env templates ship placeholder values by design.
     '''.*\.env\.example''',
     '''.*\.env\.production\.example''',
+    '''.*\.env\.stack\.example''',
     # Vendored AI-agent skill docs contain intentionally fake "bad example"
     # secrets (e.g. sk_live_abc123) to illustrate what NOT to commit.
     '''laravel/\.claude/.*''',

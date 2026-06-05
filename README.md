@@ -138,6 +138,19 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d \
 
 Deploy automatizado por SSH ao publicar um release: ver [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
+### Instalação via Docker Swarm
+
+Para quem só quer instalar o sistema a partir das imagens publicadas (Docker Hub
+`andersonlemes/oryntra-*`), há um stack Swarm de exemplo em
+[`docker-stack.yml`](docker-stack.yml) — apenas a aplicação, com Postgres, Redis e S3
+externos e Traefik na borda:
+
+```bash
+cp .env.stack.example .env && nano .env
+set -a && . ./.env && set +a
+docker stack deploy -c docker-stack.yml oryntra
+```
+
 ## Contribuição e segurança
 
 - Como contribuir: [`CONTRIBUTING.md`](CONTRIBUTING.md)

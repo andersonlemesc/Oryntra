@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !.env.production.example
+!.env.stack.example
 
 # Laravel
 /laravel/vendor/
