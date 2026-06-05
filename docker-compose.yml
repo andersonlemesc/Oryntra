@@ -26,7 +26,9 @@ services:
 
   laravel-app:
     build:
-      context: ./docker/laravel
+      context: .
+      dockerfile: docker/laravel/Dockerfile
+      target: base
       args:
         WWWUSER: ${WWWUSER:-1000}
         WWWGROUP: ${WWWGROUP:-1000}

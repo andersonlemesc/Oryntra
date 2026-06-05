@@ -2,13 +2,16 @@
 # Oryntra — exemplo de stack Docker Swarm (apenas o SISTEMA)
 #
 # Para quem só quer instalar: este stack sobe apenas a aplicação Oryntra a
-# partir de imagens publicadas no Docker Hub. Postgres, Redis e o storage S3
-# NÃO fazem parte daqui — você aponta para os seus (gerenciados ou próprios).
+# partir de imagens publicadas no Docker Hub (andersonlemes/oryntra,
+# -agent, -nginx). Postgres, Redis e o storage S3 NÃO fazem parte daqui —
+# você aponta para os seus (gerenciados ou próprios).
 #
 # Pré-requisitos:
 #   - Docker Swarm inicializado:            docker swarm init
 #   - Um Traefik já rodando no swarm, com uma rede overlay externa (TLS/roteamento)
 #   - Postgres (com a extensão pgvector), Redis e um bucket S3 acessíveis
+#   - Secret com a senha do Postgres:       docker secret create postgres_password -
+#     (o app lê via DB_PASSWORD_FILE; o agent monta a POSTGRES_URL a partir dela)
 #
 # Como subir:
 #   1. Copie o .env de exemplo e preencha:
@@ -34,6 +37,12 @@ networks:
   traefik:
     external: true
     name: ${TRAEFIK_NETWORK:-traefik}
+
+secrets:
+  # Senha do Postgres, criada fora do stack:
+  #   printf 'minha_senha' | docker secret create postgres_password -
+  postgres_password:
+    external: true
 
 services:
   # --- Front HTTP: nginx servindo os assets e passando PHP para o php-fpm ------
@@ -62,7 +71,7 @@ services:
 
   # --- App Laravel (php-fpm) ---------------------------------------------------
   laravel-app:
-    image: andersonlemes/oryntra-laravel:${ORYNTRA_VERSION:-latest}
+    image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
     environment:
       APP_NAME: ${APP_NAME:-Oryntra}
       APP_ENV: production
@@ -74,7 +83,7 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE}
       DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
@@ -97,6 +106,8 @@ services:
       REVERB_SCHEME: https
     networks:
       - oryntra
+    secrets:
+      - postgres_password
     deploy:
       replicas: 1
       restart_policy:
@@ -107,7 +118,7 @@ services:
 
   # --- Filas (Horizon) ---------------------------------------------------------
   laravel-horizon:
-    image: andersonlemes/oryntra-laravel:${ORYNTRA_VERSION:-latest}
+    image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
     command: ["php", "artisan", "horizon"]
     environment:
       APP_KEY: ${APP_KEY}
@@ -116,7 +127,7 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE}
       DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
@@ -134,6 +145,8 @@ services:
       AGENT_RUN_TIMEOUT: ${AGENT_RUN_TIMEOUT:-180}
     networks:
       - oryntra
+    secrets:
+      - postgres_password
     deploy:
       replicas: 1
       restart_policy:
@@ -144,7 +157,7 @@ services:
 
   # --- Scheduler ---------------------------------------------------------------
   laravel-scheduler:
-    image: andersonlemes/oryntra-laravel:${ORYNTRA_VERSION:-latest}
+    image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
     command: ["php", "artisan", "schedule:work"]
     environment:
       APP_KEY: ${APP_KEY}
@@ -153,13 +166,15 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE}
       DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       QUEUE_CONNECTION: redis
     networks:
       - oryntra
+    secrets:
+      - postgres_password
     deploy:
       replicas: 1
       restart_policy:
@@ -170,7 +185,7 @@ services:
 
   # --- Reverb (websocket, roteado pelo Traefik em APP_DOMAIN/app) --------------
   laravel-reverb:
-    image: andersonlemes/oryntra-laravel:${ORYNTRA_VERSION:-latest}
+    image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
     command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
     environment:
       APP_KEY: ${APP_KEY}
@@ -202,19 +217,32 @@ services:
 
   # --- Runtime de IA (Python, privado) ----------------------------------------
   agent-python:
-    image: andersonlemes/oryntra-agent-python:${ORYNTRA_VERSION:-latest}
-    command: ["sh", "-c", "uvicorn oryntra_agent.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-2}"]
+    image: andersonlemes/oryntra-agent:${ORYNTRA_VERSION:-latest}
+    # POSTGRES_URL é montada em runtime a partir de DB_* + o secret
+    # postgres_password — a senha nunca aparece no stack nem no shell env.
+    # ($$ escapa o $ para o compose: a expansão acontece dentro do container.)
+    command:
+      - sh
+      - -c
+      - >-
+        export POSTGRES_URL="postgresql://$${DB_USERNAME}:$$(cat /run/secrets/postgres_password)@$${DB_HOST}:$${DB_PORT:-5432}/$${DB_DATABASE}";
+        exec uvicorn oryntra_agent.main:app --host 0.0.0.0 --port 8000 --workers $${UVICORN_WORKERS:-2}
     environment:
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
       AGENT_RUNTIME_INTERNAL_TOKEN: ${INTERNAL_API_TOKEN}
       LARAVEL_INTERNAL_BASE_URL: http://nginx
-      POSTGRES_URL: ${POSTGRES_URL}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_DATABASE: ${DB_DATABASE}
       LANGGRAPH_CHECKPOINTER: postgres
       UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
       AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-8}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - oryntra
+    secrets:
+      - postgres_password
     deploy:
       replicas: 1
       restart_policy:

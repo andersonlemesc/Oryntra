@@ -29,6 +29,11 @@ networks:
 
 services:
   nginx:
+    # Published image with the Laravel public/ (Vite + Filament assets) baked in.
+    image: andersonlemes/oryntra-nginx:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    # Assets and conf are baked into the image — drop the dev bind-mounts.
+    volumes: !override []
     # Traefik reaches nginx over the shared network; no host port publishing.
     ports: !override []
     networks:
@@ -44,6 +49,11 @@ services:
       - "traefik.http.services.oryntra-app.loadbalancer.server.port=80"
 
   laravel-app:
+    # App code baked into the published image — no build, no bind-mount in prod.
+    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    build: !reset null
+    volumes: !override []
     environment:
       DB_HOST: ${LARAVEL_DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
@@ -53,6 +63,9 @@ services:
     depends_on: !reset null
 
   laravel-horizon:
+    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    volumes: !override []
     environment:
       DB_HOST: ${LARAVEL_DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
@@ -69,12 +82,18 @@ services:
           memory: 1500M
 
   laravel-scheduler:
+    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    volumes: !override []
     environment:
       DB_HOST: ${LARAVEL_DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
       REDIS_HOST: ${REDIS_HOST}
 
   laravel-reverb:
+    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    volumes: !override []
     # Websocket on the same host, routed by Traefik on the /app path prefix.
     ports: !override []
     networks:
@@ -92,6 +111,10 @@ services:
       - "traefik.http.services.oryntra-reverb.loadbalancer.server.port=8081"
 
   agent-python:
+    image: andersonlemes/oryntra-agent:${DEPLOY_TAG:-latest}
+    pull_policy: always
+    build: !reset null
+    volumes: !override []
     # Multi-worker, no --reload. Connects directly to managed Postgres via
     # POSTGRES_URL (.env). 2 workers x AGENT_MAX_CONCURRENCY execution slots.
     command: ["sh", "-c", "uvicorn oryntra_agent.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-2}"]

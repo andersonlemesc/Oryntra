@@ -1,20 +1,25 @@
 name: Deploy
 
-# Automated deploy to a self-hosted VPS over SSH.
+# Automated deploy to a self-hosted Docker Swarm over SSH — `docker stack deploy`
+# pulls the images published by the Build & Publish workflow (no build on the box).
 #
 # Triggers:
 #   - a published GitHub Release (cut from `main` by the Release workflow);
-#   - manual run (workflow_dispatch) for a chosen ref.
+#   - manual run (workflow_dispatch) for a chosen ref / image tag (rollback).
 #
 # Required secrets (configure under the `production` GitHub Environment):
-#   DEPLOY_SSH_HOST   - server hostname or IP
-#   DEPLOY_SSH_USER   - SSH user
+#   DEPLOY_SSH_HOST   - swarm manager hostname or IP
+#   DEPLOY_SSH_USER   - SSH user (must be able to run docker)
 #   DEPLOY_SSH_KEY    - private key with access to the server
 #   DEPLOY_SSH_PORT   - SSH port (optional, defaults to 22)
-#   DEPLOY_PATH       - absolute path of the repo checkout on the server
+#   DEPLOY_PATH       - path of the repo checkout on the manager (holds docker-stack.yml + .env)
 #
-# The server is expected to hold a clone of this repo with a production `.env`
-# (see .env.production.example) already in place and NOT tracked by Git.
+# Server prerequisites (one-time):
+#   - Docker Swarm initialised, external Traefik network present.
+#   - Postgres/Redis/S3 reachable from the swarm overlay.
+#   - Secret created:  printf 'PWD' | docker secret create postgres_password -
+#   - A production .env (see .env.stack.example) in DEPLOY_PATH, untracked by Git.
+#   - Published images are public on Docker Hub (no registry login needed to pull).
 
 on:
   release:
@@ -22,9 +27,13 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Git ref (branch or tag) to deploy'
+        description: 'Git ref (branch or tag) to checkout for the stack file + migrations'
         required: false
         default: 'main'
+      tag:
+        description: 'Image tag to deploy (blank = derive from ref; e.g. 1.1.0 for rollback)'
+        required: false
+        default: ''
 
 concurrency:
   group: deploy-production
@@ -48,20 +57,48 @@ jobs:
             cd "${{ secrets.DEPLOY_PATH }}"
 
             REF="${{ github.event.release.tag_name || github.event.inputs.ref || 'main' }}"
-            echo "Deploying ref: ${REF}"
+            TAG_INPUT="${{ github.event.inputs.tag || '' }}"
 
+            # Sync the stack file + migrations source on the server.
             git fetch --all --tags --prune
             git checkout "${REF}"
             git pull --ff-only origin "${REF}" || true
 
-            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
-            SERVICES="nginx laravel-app laravel-horizon laravel-scheduler laravel-reverb agent-python minio"
+            # Which published image tag to run.
+            if [ -n "${TAG_INPUT}" ]; then
+              ORYNTRA_VERSION="${TAG_INPUT}"
+            elif [[ "${REF}" == v*.*.* ]]; then
+              ORYNTRA_VERSION="${REF#v}"
+            elif [ "${REF}" = "main" ]; then
+              ORYNTRA_VERSION="latest"
+            elif [ "${REF}" = "develop" ]; then
+              ORYNTRA_VERSION="develop"
+            else
+              ORYNTRA_VERSION="${REF}"
+            fi
 
-            $COMPOSE pull || true
-            $COMPOSE up -d --build $SERVICES
+            # Load the production .env, then force the resolved image tag.
+            set -a
+            . ./.env
+            ORYNTRA_VERSION="${ORYNTRA_VERSION}"
+            set +a
+            echo "Deploying image tag: ${ORYNTRA_VERSION} (stack ref: ${REF})"
 
-            # Run migrations and refresh caches on the app container.
-            $COMPOSE exec -T laravel-app php artisan migrate --force
-            $COMPOSE exec -T laravel-app php artisan optimize
+            # Stack deploy pulls the pre-built images — no build on the server.
+            docker stack deploy --detach=false -c docker-stack.yml oryntra
 
-            $COMPOSE ps
+            # Wait for a laravel-app task on this node, then migrate + cache.
+            CID=""
+            for _ in $(seq 1 60); do
+              CID="$(docker ps -qf 'name=oryntra_laravel-app' | head -1)"
+              [ -n "${CID}" ] && break
+              sleep 3
+            done
+            if [ -z "${CID}" ]; then
+              echo "laravel-app container not found on this node; run migrations manually." >&2
+              exit 1
+            fi
+            docker exec "${CID}" php artisan migrate --force
+            docker exec "${CID}" php artisan optimize
+
+            docker stack services oryntra
