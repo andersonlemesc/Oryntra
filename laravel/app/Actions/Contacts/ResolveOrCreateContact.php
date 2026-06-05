@@ -17,6 +17,7 @@ class ResolveOrCreateContact
      */
     public function execute(
         int $workspaceId,
+        int $chatwootAccountId,
         int $chatwootConnectionId,
         array $sender,
         ?Carbon $messageAt = null,
@@ -30,9 +31,11 @@ class ResolveOrCreateContact
         $now = Carbon::now();
         $messageAt ??= $now;
 
+        // Chatwoot contacts are account-level — the same contact id is shared by
+        // every connection (agent bot) on the account, so we key by account.
         $attributes = [
             'workspace_id' => $workspaceId,
-            'chatwoot_connection_id' => $chatwootConnectionId,
+            'chatwoot_account_id' => $chatwootAccountId,
             'chatwoot_contact_id' => $chatwootContactId,
         ];
 
@@ -50,6 +53,7 @@ class ResolveOrCreateContact
             $contact = Contact::query()->firstOrCreate(
                 $attributes,
                 array_merge($payload, [
+                    'chatwoot_connection_id' => $chatwootConnectionId,
                     'first_seen_at' => $now,
                     'last_seen_at' => $now,
                     'last_message_at' => $messageAt,

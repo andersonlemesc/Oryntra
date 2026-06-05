@@ -24,6 +24,7 @@ class ContactFactory extends Factory
         return [
             'workspace_id' => Workspace::factory(),
             'chatwoot_connection_id' => ChatwootConnection::factory(),
+            'chatwoot_account_id' => fake()->unique()->numberBetween(1, 100000),
             'chatwoot_contact_id' => fake()->unique()->numberBetween(1, 100000),
             'identifier' => null,
             'name' => fake()->name(),

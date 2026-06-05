@@ -104,11 +104,12 @@ class SyncChatwootContactsJob implements ShouldQueue
 
         $contact = Contact::query()->firstOrNew([
             'workspace_id' => (int) $connection->workspace_id,
-            'chatwoot_connection_id' => (int) $connection->id,
+            'chatwoot_account_id' => (int) $connection->account_id,
             'chatwoot_contact_id' => (int) $chatwootContactId,
         ]);
 
         if (! $contact->exists) {
+            $contact->chatwoot_connection_id = (int) $connection->id;
             $contact->first_seen_at = $now;
             $contact->last_seen_at = $now;
             $contact->lead_status = 'new';

@@ -23,6 +23,7 @@ it('creates new contacts and updates existing ones from Chatwoot', function () {
     $existing = Contact::factory()->create([
         'workspace_id' => $workspace->id,
         'chatwoot_connection_id' => $connection->id,
+        'chatwoot_account_id' => 5,
         'chatwoot_contact_id' => 1,
         'name' => 'Antigo',
         'lead_status' => 'qualified',

@@ -30,6 +30,7 @@ it('creates a contact from a Chatwoot sender payload', function () {
 
     $contact = app(ResolveOrCreateContact::class)->execute(
         workspaceId: $workspace->id,
+        chatwootAccountId: $connection->account_id,
         chatwootConnectionId: $connection->id,
         sender: $sender,
     );
@@ -53,10 +54,25 @@ it('does not duplicate the contact when called twice for the same sender', funct
 
     $sender = ['id' => 42, 'name' => 'Anderson'];
 
-    app(ResolveOrCreateContact::class)->execute($workspace->id, $connection->id, $sender);
-    app(ResolveOrCreateContact::class)->execute($workspace->id, $connection->id, $sender);
+    app(ResolveOrCreateContact::class)->execute($workspace->id, $connection->account_id, $connection->id, $sender);
+    app(ResolveOrCreateContact::class)->execute($workspace->id, $connection->account_id, $connection->id, $sender);
 
     expect(Contact::query()->count())->toBe(1);
+});
+
+it('keeps a single contact across connections on the same Chatwoot account', function () {
+    $workspace = Workspace::factory()->create();
+    $connectionA = ChatwootConnection::factory()->for($workspace)->create(['account_id' => 77]);
+    $connectionB = ChatwootConnection::factory()->for($workspace)->create(['account_id' => 77]);
+
+    $sender = ['id' => 17, 'name' => 'Anderson', 'phone_number' => '+554192082350'];
+
+    $first = app(ResolveOrCreateContact::class)->execute($workspace->id, 77, $connectionA->id, $sender);
+    $second = app(ResolveOrCreateContact::class)->execute($workspace->id, 77, $connectionB->id, $sender);
+
+    expect($second->id)->toBe($first->id)
+        ->and(Contact::query()->count())->toBe(1)
+        ->and($first->fresh()->chatwoot_connection_id)->toBe($connectionA->id);
 });
 
 it('updates last_message_at to the newer timestamp on repeat resolves', function () {
@@ -68,6 +84,7 @@ it('updates last_message_at to the newer timestamp on repeat resolves', function
 
     $contact = app(ResolveOrCreateContact::class)->execute(
         $workspace->id,
+        $connection->account_id,
         $connection->id,
         ['id' => 42, 'name' => 'Anderson'],
         $earlier,
@@ -75,6 +92,7 @@ it('updates last_message_at to the newer timestamp on repeat resolves', function
 
     app(ResolveOrCreateContact::class)->execute(
         $workspace->id,
+        $connection->account_id,
         $connection->id,
         ['id' => 42, 'name' => 'Anderson Lemes'],
         $later,
@@ -94,8 +112,8 @@ it('isolates contacts across workspaces with the same chatwoot_contact_id', func
 
     $sender = ['id' => 42, 'name' => 'Cliente comum'];
 
-    $contactA = app(ResolveOrCreateContact::class)->execute($workspaceA->id, $connectionA->id, $sender);
-    $contactB = app(ResolveOrCreateContact::class)->execute($workspaceB->id, $connectionB->id, $sender);
+    $contactA = app(ResolveOrCreateContact::class)->execute($workspaceA->id, $connectionA->account_id, $connectionA->id, $sender);
+    $contactB = app(ResolveOrCreateContact::class)->execute($workspaceB->id, $connectionB->account_id, $connectionB->id, $sender);
 
     expect($contactA->id)->not->toBe($contactB->id)
         ->and(Contact::query()->count())->toBe(2);
@@ -107,6 +125,7 @@ it('throws when sender id is missing', function () {
 
     expect(fn () => app(ResolveOrCreateContact::class)->execute(
         $workspace->id,
+        $connection->account_id,
         $connection->id,
         ['name' => 'sem id'],
     ))->toThrow(InvalidArgumentException::class);

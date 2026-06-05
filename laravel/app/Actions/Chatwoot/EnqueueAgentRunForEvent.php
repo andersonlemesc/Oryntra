@@ -121,6 +121,7 @@ class EnqueueAgentRunForEvent
         try {
             return $this->resolveContact->execute(
                 workspaceId: (int) $event->workspace_id,
+                chatwootAccountId: (int) $event->chatwoot_account_id,
                 chatwootConnectionId: (int) $event->chatwoot_connection_id,
                 sender: $sender,
                 messageAt: $messageAt,

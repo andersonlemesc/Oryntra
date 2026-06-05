@@ -16,7 +16,8 @@ use Illuminate\Support\Carbon;
 /**
  * @property int                  $id
  * @property int                  $workspace_id
- * @property int                  $chatwoot_connection_id
+ * @property int|null             $chatwoot_connection_id
+ * @property int                  $chatwoot_account_id
  * @property int                  $chatwoot_contact_id
  * @property string|null          $identifier
  * @property string|null          $name
@@ -47,6 +48,7 @@ use Illuminate\Support\Carbon;
 #[Fillable([
     'workspace_id',
     'chatwoot_connection_id',
+    'chatwoot_account_id',
     'chatwoot_contact_id',
     'identifier',
     'name',
@@ -84,6 +86,7 @@ class Contact extends Model
     protected function casts(): array
     {
         return [
+            'chatwoot_account_id' => 'integer',
             'chatwoot_contact_id' => 'integer',
             'additional_attributes' => 'array',
             'chatwoot_custom_attributes' => 'array',
