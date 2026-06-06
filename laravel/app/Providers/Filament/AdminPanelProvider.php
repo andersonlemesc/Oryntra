@@ -51,7 +51,7 @@ class AdminPanelProvider extends PanelProvider
                 . '</span>'
             ))
             ->brandLogoHeight('1.5rem')
-            ->favicon(asset('favicon_io/favicon.ico'))
+            ->favicon(fn (): string => asset('favicon_io/favicon.ico'))
             ->tenant(Workspace::class)
             ->tenantProfile(EditWorkspaceProfile::class)
             ->searchableTenantMenu()
