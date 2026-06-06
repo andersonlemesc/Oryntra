@@ -1,6 +1,6 @@
 {
     "name": "@oryntra/mcp",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "MCP server that lets AI agents manage an Oryntra workspace (agents, specialists, LLM keys, products, knowledge base, external tools) via a workspace-scoped API token.",
     "repository": {
         "type": "git",
