@@ -1,18 +1,56 @@
 name: Release
 
-# Push a semver tag (e.g. v1.0.0) to cut a GitHub Release with auto-generated
-# notes. A published release then triggers the Deploy workflow.
+# Cut a release two ways:
+#   - push a semver tag `vX.Y.Z` (git / gh / GitHub UI), OR
+#   - run this workflow manually with a `version` input — it creates the tag on
+#     `main` for you (no local checkout, no stale-main risk).
+#
+# In both cases the tag push then triggers Build & Publish (images) + Deploy,
+# and the `release` job below makes the GitHub Release with auto notes.
+#
+# NOTE: the manual run needs a `RELEASE_PAT` secret — a token (classic: repo +
+# workflow scope; or fine-grained: Contents=write, Actions=write). A tag pushed
+# with the default GITHUB_TOKEN does NOT trigger other workflows (anti-recursion),
+# so the build/deploy would not run.
 
 on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versão a lançar (ex: 0.1.3 ou v0.1.3) — cria a tag na main'
+        required: true
 
 permissions:
   contents: write
 
 jobs:
+  tag:
+    name: Create tag on main
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.RELEASE_PAT }}
+      - name: Create and push tag
+        run: |
+          V="${{ github.event.inputs.version }}"
+          case "$V" in v*) : ;; *) V="v${V}" ;; esac
+          if git rev-parse "${V}" >/dev/null 2>&1; then
+            echo "Tag ${V} already exists." >&2
+            exit 1
+          fi
+          git tag "${V}"
+          git push origin "${V}"
+          echo "Created and pushed ${V} on main."
+
   release:
+    name: GitHub Release
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
