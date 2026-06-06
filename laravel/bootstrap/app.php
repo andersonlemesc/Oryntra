@@ -25,13 +25,16 @@ return Application::configure(basePath: dirname(__DIR__))
         // sees the real client IP and the https scheme (secure cookies, redirects).
         $middleware->trustProxies(at: '*');
 
-        // But never trust an arbitrary X-Forwarded-Host: restrict to the app's own
-        // host (from APP_URL) so a forged Host cannot poison generated links
-        // (password resets, signed URLs). Empty APP_URL => no restriction.
+        // Restrict the trusted Host so a forged X-Forwarded-Host cannot poison
+        // generated links (password resets, signed URLs). Allow the public host
+        // (APP_URL) plus the in-cluster service names used by internal calls
+        // (agent -> laravel via http://nginx, health checks via localhost).
+        // Those names are not externally routable — they cannot be abused for
+        // poisoned links — and internal routes stay token-guarded regardless.
         $middleware->trustHosts(at: function (): array {
             $host = parse_url((string) config('app.url'), PHP_URL_HOST);
 
-            return is_string($host) && $host !== '' ? [$host] : [];
+            return array_values(array_filter([$host, 'nginx', 'localhost']));
         });
 
         $middleware->alias([
