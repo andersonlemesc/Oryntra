@@ -2,4 +2,3 @@ node_modules/
 dist/
 *.log
 scripts/smoke.mjs
-package-lock.json
