@@ -15,7 +15,10 @@ and the abilities (scopes) the token may use. Copy the token — it is shown onl
 
 ## Install
 
-Published package (recommended):
+Register the published server with your AI client (replace the URL and token).
+The Oryntra panel shows these same snippets right after you generate a token.
+
+**Claude Code**
 
 ```bash
 claude mcp add oryntra \
@@ -23,6 +26,27 @@ claude mcp add oryntra \
   --env ORYNTRA_API_TOKEN='your-token' \
   -- npx -y @oryntra/mcp
 ```
+
+**Codex CLI**
+
+```bash
+codex mcp add oryntra \
+  --env ORYNTRA_API_URL=https://your-domain.com/api/v1 \
+  --env ORYNTRA_API_TOKEN='your-token' \
+  -- npx -y @oryntra/mcp
+```
+
+**Gemini CLI**
+
+```bash
+gemini mcp add oryntra \
+  --env ORYNTRA_API_URL=https://your-domain.com/api/v1 \
+  --env ORYNTRA_API_TOKEN='your-token' \
+  -- npx -y @oryntra/mcp
+```
+
+Other clients (Cursor, Windsurf, …) that use a JSON config: add a server that runs
+`npx -y @oryntra/mcp` with the two env vars below.
 
 From a local checkout (before publishing), point at the built entrypoint instead:
 
