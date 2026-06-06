@@ -134,6 +134,10 @@ services:
     healthcheck:
       disable: true
     environment:
+      # Mesmo APP_NAME do app: define o prefixo das chaves Redis
+      # (Str::slug(APP_NAME)-database-). Sem isto o worker usa o prefixo
+      # "laravel-" e não enxerga as filas/broadcasts publicados pelo app.
+      APP_NAME: ${APP_NAME:-Oryntra}
       APP_KEY: ${APP_KEY}
       DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST}
@@ -184,6 +188,10 @@ services:
     healthcheck:
       disable: true
     environment:
+      # Mesmo APP_NAME do app: define o prefixo das chaves Redis
+      # (Str::slug(APP_NAME)-database-). Sem isto o worker usa o prefixo
+      # "laravel-" e não enxerga as filas/broadcasts publicados pelo app.
+      APP_NAME: ${APP_NAME:-Oryntra}
       APP_KEY: ${APP_KEY}
       DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST}
@@ -215,6 +223,10 @@ services:
     healthcheck:
       disable: true
     environment:
+      # Mesmo APP_NAME do app: define o prefixo das chaves Redis
+      # (Str::slug(APP_NAME)-database-). Sem isto o worker usa o prefixo
+      # "laravel-" e não enxerga as filas/broadcasts publicados pelo app.
+      APP_NAME: ${APP_NAME:-Oryntra}
       APP_KEY: ${APP_KEY}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT:-6379}
