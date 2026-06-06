@@ -9,6 +9,14 @@
         <p>Este token é <strong>global</strong> — ele permite ao Oryntra importar todas as accounts e usuários da instância Chatwoot. Não está vinculado a nenhum workspace específico.</p>
     </div>
 
+    @if ($errors->any())
+        <div class="errors">
+            @foreach ($errors->all() as $error)
+                <p>{{ $error }}</p>
+            @endforeach
+        </div>
+    @endif
+
     @if ($lastError && ! $errors->any())
         <div class="errors">
             <strong>Ultimo erro de sincronizacao:</strong>
