@@ -3,14 +3,23 @@ import Pusher from 'pusher-js';
 
 window.Pusher = Pusher;
 
-// Reverb speaks the Pusher protocol. These VITE_REVERB_* values mirror the
-// server-side REVERB_* env and tell the browser which WebSocket to open.
+// Reverb speaks the Pusher protocol. Connection details are injected at runtime
+// via window.__ORYNTRA_REVERB__ (rendered server-side from config) so the built
+// bundle is domain-agnostic; the VITE_REVERB_* values remain as a dev fallback
+// for `npm run dev`, where import.meta.env is populated from .env.
+const reverb = window.__ORYNTRA_REVERB__ ?? {};
+
+const key = reverb.key ?? import.meta.env.VITE_REVERB_APP_KEY;
+const host = reverb.host ?? import.meta.env.VITE_REVERB_HOST;
+const port = reverb.port ?? import.meta.env.VITE_REVERB_PORT;
+const scheme = reverb.scheme ?? import.meta.env.VITE_REVERB_SCHEME ?? 'https';
+
 window.Echo = new Echo({
     broadcaster: 'reverb',
-    key: import.meta.env.VITE_REVERB_APP_KEY,
-    wsHost: import.meta.env.VITE_REVERB_HOST,
-    wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
-    wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
-    forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
+    key,
+    wsHost: host,
+    wsPort: port ?? 80,
+    wssPort: port ?? 443,
+    forceTLS: scheme === 'https',
     enabledTransports: ['ws', 'wss'],
 });

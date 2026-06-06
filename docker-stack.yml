@@ -145,6 +145,17 @@ services:
       # http://localhost and registers the wrong webhook in Chatwoot.
       APP_URL: https://${APP_DOMAIN}
       CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-https://${APP_DOMAIN}}
+      # Queued jobs broadcast over Reverb (e.g. agent run events the playground
+      # listens to). Without BROADCAST_CONNECTION the worker defaults to the
+      # "null" driver and silently drops every event; without the REVERB_*
+      # credentials it cannot authenticate to the Reverb server.
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: ${REVERB_APP_ID:-oryntra}
+      REVERB_APP_KEY: ${REVERB_APP_KEY}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET}
+      REVERB_HOST: ${APP_DOMAIN}
+      REVERB_PORT: "443"
+      REVERB_SCHEME: https
       DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
