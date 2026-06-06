@@ -10,6 +10,17 @@
 @endphp
 
 <x-filament-panels::page>
+    {{-- Reverb connection details for the browser. Injected server-side from the
+         runtime config so the published image stays domain-agnostic (the build
+         has no VITE_REVERB_* values). The app key is public by design. --}}
+    <script>
+        window.__ORYNTRA_REVERB__ = @js([
+            'key' => config('broadcasting.connections.reverb.key'),
+            'host' => config('broadcasting.connections.reverb.options.host'),
+            'port' => config('broadcasting.connections.reverb.options.port'),
+            'scheme' => config('broadcasting.connections.reverb.options.scheme'),
+        ]);
+    </script>
     @vite('resources/js/echo.js')
 
     {{-- Full-screen ChatGPT-style overlay: covers the panel chrome. --}}
