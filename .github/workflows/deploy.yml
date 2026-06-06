@@ -103,6 +103,9 @@ jobs:
             # sees local containers). It joins app_network and mounts the
             # postgres_password secret (the image entrypoint maps *_FILE -> env).
             docker service rm oryntra_migrate >/dev/null 2>&1 || true
+            # --detach (not --detach=false): a one-off task runs and exits, so it
+            # never reaches "1/1 running" — --detach=false would hang forever at
+            # "0 out of 1 tasks". Create detached, then poll the task state.
             docker service create \
               --name oryntra_migrate \
               --restart-condition none \
@@ -116,11 +119,18 @@ jobs:
               --env DB_DATABASE="${DB_DATABASE}" \
               --env DB_USERNAME="${DB_USERNAME}" \
               --env DB_PASSWORD_FILE=/run/secrets/postgres_password \
-              --detach=false \
+              --detach \
               "andersonlemes/oryntra:${ORYNTRA_VERSION}" \
-              php artisan migrate --force || true
+              php artisan migrate --force
 
-            STATE="$(docker service ps oryntra_migrate --format '{{.CurrentState}}' --no-trunc 2>/dev/null | head -1)"
+            STATE=""
+            for _ in $(seq 1 60); do
+              STATE="$(docker service ps oryntra_migrate --format '{{.CurrentState}}' --no-trunc 2>/dev/null | head -1)"
+              case "${STATE}" in
+                Complete*|Failed*|Rejected*) break ;;
+              esac
+              sleep 3
+            done
             docker service logs oryntra_migrate 2>&1 | tail -30 || true
             docker service rm oryntra_migrate >/dev/null 2>&1 || true
             case "${STATE}" in
