@@ -94,18 +94,34 @@ jobs:
             # Stack deploy pulls the pre-built images — no build on the server.
             docker stack deploy --detach=false -c docker-stack.yml oryntra
 
-            # Wait for a laravel-app task on this node, then migrate + cache.
-            CID=""
-            for _ in $(seq 1 60); do
-              CID="$(docker ps -qf 'name=oryntra_laravel-app' | head -1)"
-              [ -n "${CID}" ] && break
-              sleep 3
-            done
-            if [ -z "${CID}" ]; then
-              echo "laravel-app container not found on this node; run migrations manually." >&2
-              exit 1
-            fi
-            docker exec "${CID}" php artisan migrate --force
-            docker exec "${CID}" php artisan optimize
+            # Run migrations as a one-off Swarm service pinned to the manager, so
+            # it works regardless of which node runs laravel-app (docker exec only
+            # sees local containers). It joins app_network and mounts the
+            # postgres_password secret (the image entrypoint maps *_FILE -> env).
+            docker service rm oryntra_migrate >/dev/null 2>&1 || true
+            docker service create \
+              --name oryntra_migrate \
+              --restart-condition none \
+              --constraint 'node.role==manager' \
+              --network "${APP_NETWORK:-app_network}" \
+              --secret postgres_password \
+              --env APP_KEY="${APP_KEY}" \
+              --env DB_CONNECTION=pgsql \
+              --env DB_HOST="${DB_HOST}" \
+              --env DB_PORT="${DB_PORT:-5432}" \
+              --env DB_DATABASE="${DB_DATABASE}" \
+              --env DB_USERNAME="${DB_USERNAME}" \
+              --env DB_PASSWORD_FILE=/run/secrets/postgres_password \
+              --detach=false \
+              "andersonlemes/oryntra:${ORYNTRA_VERSION}" \
+              php artisan migrate --force || true
+
+            STATE="$(docker service ps oryntra_migrate --format '{{.CurrentState}}' --no-trunc 2>/dev/null | head -1)"
+            docker service logs oryntra_migrate 2>&1 | tail -30 || true
+            docker service rm oryntra_migrate >/dev/null 2>&1 || true
+            case "${STATE}" in
+              Complete*) echo "migrations: ok" ;;
+              *) echo "migrations failed or in state: ${STATE}" >&2; exit 1 ;;
+            esac
 
             docker stack services oryntra
