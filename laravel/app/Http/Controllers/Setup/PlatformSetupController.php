@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Setup;
 use App\Http\Controllers\Controller;
 use App\Jobs\Chatwoot\SyncChatwootAccountsJob;
 use App\Models\ChatwootPlatformConnection;
+use App\Models\Workspace;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,6 +52,19 @@ class PlatformSetupController extends Controller
                 ->withInput($request->only('base_url'))
                 ->withErrors([
                     'base_url' => $this->humanizeSyncError($e->getMessage()),
+                ]);
+        }
+
+        // Connected, but the sync created no workspace (e.g. the account is not
+        // a permissible of this Platform App). Send the operator back to the
+        // setup screen with a clear message instead of a dead /admin 404.
+        if (! Workspace::query()->exists()) {
+            return redirect()
+                ->route('setup.platform.show')
+                ->withInput($request->only('base_url'))
+                ->withErrors([
+                    'platform_token' => 'Conexão OK, mas nenhuma conta foi encontrada para este Platform App. '
+                        . 'Confirme no Chatwoot que a conta é permissible deste app (Super Admin → Platform Apps) e tente novamente.',
                 ]);
         }
 
