@@ -1,0 +1,40 @@
+name: Publish MCP
+
+# Publish the @oryntra/mcp npm package (packages/oryntra-mcp). Run manually:
+#   Actions -> Publish MCP -> Run workflow.
+# It builds and publishes the version currently in package.json — bump that
+# version (via a PR) before publishing a new release.
+#
+# Requires an NPM_TOKEN secret (npm automation token for the @oryntra org).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # npm provenance (public repo)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/oryntra-mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
