@@ -62,6 +62,10 @@ jobs:
             set -euo pipefail
             cd "${{ secrets.DEPLOY_PATH }}"
 
+            # The checkout may be owned by a different user than the SSH user;
+            # mark it safe so git does not abort with "dubious ownership".
+            git config --global --add safe.directory "${{ secrets.DEPLOY_PATH }}"
+
             REF="${{ github.event.release.tag_name || github.event.inputs.ref || github.ref_name }}"
             TAG_INPUT="${{ github.event.inputs.tag || '' }}"
 
