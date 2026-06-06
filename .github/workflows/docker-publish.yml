@@ -17,10 +17,12 @@ name: Build & Publish Images
 
 on:
   push:
-    # Release tags drive :X.Y.Z + :latest. develop publishes a single mutable
-    # :develop for pre-release testing. main does NOT publish — releases own :latest.
-    branches: [develop]
+    # Release tags drive :X.Y.Z + :latest. main does NOT publish.
     tags: ['v*.*.*']
+  # :develop is built ON DEMAND, not on every develop merge — so accumulating
+  # PRs don't trigger a publish (and Docker Hub pulls) each time. Run this
+  # workflow manually from the develop branch when you want a fresh :develop.
+  workflow_dispatch:
 
 permissions:
   contents: read
