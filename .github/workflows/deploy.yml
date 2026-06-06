@@ -138,4 +138,15 @@ jobs:
               *) echo "migrations failed or in state: ${STATE}" >&2; exit 1 ;;
             esac
 
+            # Force a rolling restart of the PHP tier. `docker stack deploy`
+            # already recreates tasks when the image tag changes, but a same-tag
+            # redeploy (e.g. re-pushing `latest`) leaves the running tasks — and
+            # their warm OPcache (validate_timestamps=0) — untouched. Forcing the
+            # update guarantees every task restarts with a cold OPcache and a
+            # fresh read of the service environment.
+            for svc in laravel-app laravel-horizon laravel-scheduler laravel-reverb; do
+              echo "Forcing restart: oryntra_${svc}"
+              docker service update --detach=false --force "oryntra_${svc}"
+            done
+
             docker stack services oryntra

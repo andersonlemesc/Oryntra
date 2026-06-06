@@ -80,6 +80,7 @@ services:
       APP_KEY: ${APP_KEY}
       APP_DEBUG: "false"
       APP_URL: https://${APP_DOMAIN}
+      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-https://${APP_DOMAIN}}
       DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
@@ -139,6 +140,11 @@ services:
       # "laravel-" e não enxerga as filas/broadcasts publicados pelo app.
       APP_NAME: ${APP_NAME:-Oryntra}
       APP_KEY: ${APP_KEY}
+      # Workers build absolute URLs (e.g. the Chatwoot agent-bot webhook in
+      # ProvisionChatwootAgentBotJob). Without APP_URL the job falls back to
+      # http://localhost and registers the wrong webhook in Chatwoot.
+      APP_URL: https://${APP_DOMAIN}
+      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-https://${APP_DOMAIN}}
       DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
