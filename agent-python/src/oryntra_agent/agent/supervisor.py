@@ -14,7 +14,9 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.graph import END, START, StateGraph
+from psycopg import Connection
 from psycopg_pool import ConnectionPool
+from pydantic import SecretStr
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
@@ -57,7 +59,7 @@ from oryntra_agent.api.schemas import (
 )
 from oryntra_agent.settings import settings
 
-_checkpointer_pool: "ConnectionPool | None" = None
+_checkpointer_pool: "ConnectionPool[Connection[dict[str, Any]]] | None" = None
 _runtime_llm_credentials: ContextVar["RuntimeLlmCredentials | None"] = ContextVar(
     "runtime_llm_credentials",
     default=None,
@@ -301,7 +303,7 @@ def runtime_checkpointer() -> Any:
         return InMemorySaver()
 
     if _checkpointer_pool is None:
-        _checkpointer_pool = ConnectionPool(
+        _checkpointer_pool = ConnectionPool[Connection[dict[str, Any]]](
             conninfo=settings.postgres_url,
             min_size=settings.pg_pool_min_size,
             max_size=settings.pg_pool_max_size,
@@ -1603,7 +1605,7 @@ def chat_model_for_credential(credential: LlmCredential, temperature: float) -> 
             kwargs["base_url"] = base_url
         return ChatOpenAI(
             model=credential.model,
-            api_key=credential.api_key,
+            openai_api_key=SecretStr(credential.api_key),
             temperature=temperature,
             **kwargs,
         )
@@ -1613,8 +1615,8 @@ def chat_model_for_credential(credential: LlmCredential, temperature: float) -> 
         if base_url is not None:
             kwargs["base_url"] = base_url
         return ChatAnthropic(
-            model=credential.model,
-            api_key=credential.api_key,
+            model_name=credential.model,
+            anthropic_api_key=SecretStr(credential.api_key),
             temperature=temperature,
             **kwargs,
         )
@@ -1625,7 +1627,7 @@ def chat_model_for_credential(credential: LlmCredential, temperature: float) -> 
             kwargs["client_options"] = {"api_endpoint": base_url}
         return ChatGoogleGenerativeAI(
             model=credential.model,
-            api_key=credential.api_key,
+            google_api_key=SecretStr(credential.api_key),
             temperature=temperature,
             **kwargs,
         )

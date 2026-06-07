@@ -448,7 +448,7 @@ def _make_get_contact_tool(ctx: ToolRuntimeContext) -> StructuredTool:
 
 
 def _make_update_memory_tool(ctx: ToolRuntimeContext) -> StructuredTool:
-    def run(type: str, content: str, confidence: float | None = None) -> str:
+    def run(type: Literal["preference", "fact", "constraint", "history", "custom"], content: str, confidence: float | None = None) -> str:
         try:
             response = update_contact_memory(
                 UpdateContactMemoryRequest(
@@ -736,7 +736,7 @@ def _make_search_knowledge_base_tool(ctx: ToolRuntimeContext) -> StructuredTool:
 
 
 def _make_send_document_tool(ctx: ToolRuntimeContext) -> StructuredTool:
-    def run(document_ids: list[int], document_type: str, caption: str = "") -> str:
+    def run(document_ids: list[int], document_type: Literal["product", "standalone"], caption: str = "") -> str:
         try:
             response = send_document(
                 SendDocumentRequest(

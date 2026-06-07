@@ -15,6 +15,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import SecretStr
+
 logger = logging.getLogger(__name__)
 
 PDF_MIME = "application/pdf"
@@ -127,7 +129,7 @@ def _build_vision_model(cred: VisionCredential) -> Any:
         kwargs: dict[str, Any] = {}
         if base_url is not None:
             kwargs["base_url"] = base_url
-        return ChatOpenAI(model=cred.model, api_key=cred.api_key, temperature=0, **kwargs)
+        return ChatOpenAI(model=cred.model, openai_api_key=SecretStr(cred.api_key), temperature=0, **kwargs)
 
     if cred.provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
@@ -137,7 +139,7 @@ def _build_vision_model(cred: VisionCredential) -> Any:
             kwargs["base_url"] = base_url
         return ChatAnthropic(
             model_name=cred.model,
-            api_key=cred.api_key,
+            anthropic_api_key=SecretStr(cred.api_key),
             temperature=0,
             timeout=None,
             stop=None,
@@ -152,7 +154,7 @@ def _build_vision_model(cred: VisionCredential) -> Any:
             kwargs["client_options"] = {"api_endpoint": base_url}
         return ChatGoogleGenerativeAI(
             model=cred.model,
-            google_api_key=cred.api_key,
+            google_api_key=SecretStr(cred.api_key),
             temperature=0,
             **kwargs,
         )
