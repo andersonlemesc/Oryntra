@@ -142,13 +142,13 @@ Deploy automatizado por SSH ao publicar um release: ver [`.github/workflows/depl
 
 Para quem só quer instalar o sistema a partir das imagens publicadas (Docker Hub
 `andersonlemes/oryntra-*`), há um stack Swarm de exemplo em
-[`docker-stack.yml`](docker-stack.yml) — apenas a aplicação, com Postgres, Redis e S3
+[`docker-compose.prod.yml`](docker-compose.prod.yml) — apenas a aplicação, com Postgres, Redis e S3
 externos e Traefik na borda:
 
 ```bash
 cp .env.stack.example .env && nano .env
 set -a && . ./.env && set +a
-docker stack deploy -c docker-stack.yml oryntra
+docker stack deploy -c docker-compose.prod.yml oryntra
 ```
 
 ## Contribuição e segurança
