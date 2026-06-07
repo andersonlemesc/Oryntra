@@ -320,26 +320,64 @@ def test_runtime_checkpointer_defaults_to_memory() -> None:
     assert isinstance(runtime_checkpointer(), InMemorySaver)
 
 
-def test_runtime_checkpointer_uses_postgres_when_configured(monkeypatch) -> None:
-    class FakeContext:
-        entered = False
+def test_runtime_checkpointer_uses_a_validated_pool_for_postgres(monkeypatch) -> None:
+    created_kwargs: list[dict] = []
 
-        def __enter__(self) -> str:
-            self.entered = True
-            return "postgres-checkpointer"
+    class FakePool:
+        check_connection = staticmethod(lambda conn: None)
 
-        def __exit__(self, exc_type, exc, tb) -> None:
+        def __init__(self, **kwargs) -> None:
+            created_kwargs.append(kwargs)
+
+        def close(self) -> None:  # exercised by close_runtime_checkpointer
             return None
 
-    fake_context = FakeContext()
+    monkeypatch.setattr(supervisor, "ConnectionPool", FakePool)
+    monkeypatch.setattr(supervisor, "PostgresSaver", lambda pool: ("saver", pool))
     settings_module.settings.langgraph_checkpointer = "postgres"
     settings_module.settings.postgres_url = "postgresql://test:test@postgres:5432/test"
-    monkeypatch.setattr(supervisor.PostgresSaver, "from_conn_string", lambda url: fake_context)
-    supervisor._postgres_checkpointer_context = None
+    supervisor.close_runtime_checkpointer()
 
-    assert runtime_checkpointer() == "postgres-checkpointer"
-    assert fake_context.entered is True
-    assert supervisor._postgres_checkpointer_context is fake_context
+    saver_a = runtime_checkpointer()
+
+    assert saver_a[0] == "saver"
+    assert isinstance(saver_a[1], FakePool)
+    # The pool validates a connection on checkout, so a connection the server
+    # dropped while idle is discarded instead of reused dead.
+    assert created_kwargs[0]["check"] is supervisor.ConnectionPool.check_connection
+    assert created_kwargs[0]["conninfo"] == "postgresql://test:test@postgres:5432/test"
+    assert created_kwargs[0]["kwargs"]["keepalives"] == 1
+
+    # The pool is a process-wide singleton: a second call reuses it rather than
+    # opening a new connection per run.
+    saver_b = runtime_checkpointer()
+    assert saver_b[1] is saver_a[1]
+    assert len(created_kwargs) == 1
+
+
+def test_runtime_checkpointer_rebuilds_pool_after_close(monkeypatch) -> None:
+    pools: list[object] = []
+
+    class FakePool:
+        check_connection = staticmethod(lambda conn: None)
+
+        def __init__(self, **kwargs) -> None:
+            pools.append(self)
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(supervisor, "ConnectionPool", FakePool)
+    monkeypatch.setattr(supervisor, "PostgresSaver", lambda pool: pool)
+    settings_module.settings.langgraph_checkpointer = "postgres"
+    supervisor.close_runtime_checkpointer()
+
+    runtime_checkpointer()
+    supervisor.close_runtime_checkpointer()
+    runtime_checkpointer()
+
+    assert len(pools) == 2
+    assert supervisor._checkpointer_pool is pools[1]
 
 
 def test_single_agent_path_stays_compatible() -> None:

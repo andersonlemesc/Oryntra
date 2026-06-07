@@ -2,7 +2,6 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
-from contextlib import AbstractContextManager
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -15,6 +14,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.graph import END, START, StateGraph
+from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
@@ -57,7 +57,7 @@ from oryntra_agent.api.schemas import (
 )
 from oryntra_agent.settings import settings
 
-_postgres_checkpointer_context: AbstractContextManager[Any] | None = None
+_checkpointer_pool: "ConnectionPool | None" = None
 _runtime_llm_credentials: ContextVar["RuntimeLlmCredentials | None"] = ContextVar(
     "runtime_llm_credentials",
     default=None,
@@ -285,15 +285,48 @@ def build_runtime_graph() -> Any:
 
 
 def runtime_checkpointer() -> Any:
-    global _postgres_checkpointer_context
+    """Return the LangGraph checkpointer for the runtime.
 
-    if settings.langgraph_checkpointer == "postgres":
-        if _postgres_checkpointer_context is None:
-            _postgres_checkpointer_context = PostgresSaver.from_conn_string(settings.postgres_url)
+    For Postgres we keep a process-wide ``ConnectionPool`` instead of a single
+    long-lived connection. ``check=ConnectionPool.check_connection`` validates
+    each connection on checkout, so one that the server/network dropped during an
+    idle gap between conversations is discarded and replaced — fixing the
+    "server closed the connection unexpectedly" failure that hit the first query
+    of a run after the process had been idle. TCP keepalives drop half-open
+    sockets early as a second line of defence.
+    """
+    global _checkpointer_pool
 
-        return _postgres_checkpointer_context.__enter__()
+    if settings.langgraph_checkpointer != "postgres":
+        return InMemorySaver()
 
-    return InMemorySaver()
+    if _checkpointer_pool is None:
+        _checkpointer_pool = ConnectionPool(
+            conninfo=settings.postgres_url,
+            min_size=settings.pg_pool_min_size,
+            max_size=settings.pg_pool_max_size,
+            open=True,
+            check=ConnectionPool.check_connection,
+            kwargs={
+                "autocommit": True,
+                "prepare_threshold": 0,
+                "keepalives": 1,
+                "keepalives_idle": 30,
+                "keepalives_interval": 10,
+                "keepalives_count": 5,
+            },
+        )
+
+    return PostgresSaver(_checkpointer_pool)
+
+
+def close_runtime_checkpointer() -> None:
+    """Close the checkpointer connection pool, if one was opened."""
+    global _checkpointer_pool
+
+    if _checkpointer_pool is not None:
+        _checkpointer_pool.close()
+        _checkpointer_pool = None
 
 
 def runtime_config(payload: ChatwootRuntimeRequest) -> dict[str, dict[str, str]]:
