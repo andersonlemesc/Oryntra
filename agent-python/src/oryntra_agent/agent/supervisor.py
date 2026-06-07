@@ -16,8 +16,7 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.graph import END, START, StateGraph
 from psycopg import Connection
 from psycopg_pool import ConnectionPool
-from pydantic import SecretStr
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 from typing_extensions import TypedDict
 
 from oryntra_agent.agent.streaming import (
