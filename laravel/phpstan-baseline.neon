@@ -331,12 +331,6 @@ parameters:
 			path: app/Models/Document.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Database\\ConnectionInterface\:\:getDriverName\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Models/Product.php
-
-		-
 			message: '#^Class App\\Models\\Product uses generic trait Illuminate\\Database\\Eloquent\\Factories\\HasFactory but does not specify its types\: TFactory$#'
 			identifier: missingType.generics
 			count: 1

@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property int                       $id
@@ -120,7 +121,7 @@ class Product extends Model
      */
     public function scopeBySearch(Builder $query, string $search): Builder
     {
-        $operator = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+        $operator = self::driverNameForQuery($query) === 'pgsql' ? 'ilike' : 'like';
 
         return $query->where(function (Builder $q) use ($operator, $search): void {
             $q->where('name', $operator, "%{$search}%")
@@ -140,7 +141,7 @@ class Product extends Model
      */
     public static function orWhereTagMatches(Builder $query, string $term): void
     {
-        if ($query->getConnection()->getDriverName() === 'pgsql') {
+        if (self::driverNameForQuery($query) === 'pgsql') {
             $query->orWhereRaw(
                 'EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) AS tag WHERE unaccent(lower(tag)) ILIKE unaccent(lower(?)))',
                 ['%' . $term . '%'],
@@ -148,6 +149,14 @@ class Product extends Model
         } else {
             $query->orWhereRaw('lower(tags) like ?', ['%' . mb_strtolower($term) . '%']);
         }
+    }
+
+    /**
+     * @param Builder<Product> $query
+     */
+    private static function driverNameForQuery(Builder $query): string
+    {
+        return DB::connection($query->getModel()->getConnectionName())->getDriverName();
     }
 
     /**
