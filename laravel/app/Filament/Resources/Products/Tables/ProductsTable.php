@@ -33,6 +33,10 @@ class ProductsTable
                     ->label('Categoria')
                     ->sortable()
                     ->toggleable(),
+                TextColumn::make('tags')
+                    ->label('Tags')
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('documents_count')
                     ->label('Documentos')
                     ->counts('documents')

@@ -27,8 +27,19 @@ class ProductFactory extends Factory
             'description' => fake()->sentence(),
             'price' => fake()->randomFloat(2, 10, 1000),
             'metadata' => null,
+            'tags' => null,
             'active' => true,
         ];
+    }
+
+    /**
+     * @param array<int, string> $tags
+     */
+    public function withTags(array $tags): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'tags' => $tags,
+        ]);
     }
 
     public function inactive(): static

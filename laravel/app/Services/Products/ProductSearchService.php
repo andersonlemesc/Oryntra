@@ -98,6 +98,9 @@ class ProductSearchService
                             ->orWhere('description', 'like', $search)
                             ->orWhere('sku', 'like', $search);
                     }
+
+                    // sinônimos/aliases: "televisor" casa tag de um produto "Smart TV"
+                    Product::orWhereTagMatches($sub, $token);
                 }
             });
         }
