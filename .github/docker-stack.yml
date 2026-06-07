@@ -1,10 +1,14 @@
 # =============================================================================
-# Oryntra — exemplo de stack Docker Swarm (apenas o SISTEMA)
+# Oryntra — stack Docker Swarm usado pelo deploy AUTOMÁTICO (CI/CD).
 #
-# Para quem só quer instalar: este stack sobe apenas a aplicação Oryntra a
-# partir de imagens publicadas no Docker Hub (andersonlemes/oryntra,
-# -agent, -nginx). Postgres, Redis e o storage S3 NÃO fazem parte daqui —
-# você aponta para os seus (gerenciados ou próprios).
+# Este é o arquivo que o workflow .github/workflows/deploy.yml aplica no
+# manager via `docker stack deploy -c .github/docker-stack.yml oryntra`.
+# Para instalar manualmente, use o template da raiz docker-compose.prod.yml
+# (conteúdo equivalente, com instruções voltadas a quem baixa o projeto).
+#
+# Sobe apenas a aplicação Oryntra a partir de imagens publicadas no Docker Hub
+# (andersonlemes/oryntra, -agent, -nginx). Postgres, Redis e o storage S3 NÃO
+# fazem parte daqui — você aponta para os seus (gerenciados ou próprios).
 #
 # Pré-requisitos:
 #   - Docker Swarm inicializado:            docker swarm init
@@ -12,15 +16,7 @@
 #   - Postgres (com a extensão pgvector), Redis e um bucket S3 acessíveis
 #   - Secret com a senha do Postgres:       docker secret create postgres_password -
 #     (o app lê via DB_PASSWORD_FILE; o agent monta a POSTGRES_URL a partir dela)
-#
-# Como subir:
-#   1. Copie o .env de exemplo e preencha:
-#        cp .env.stack.example .env && nano .env
-#   2. Carregue as variáveis e faça o deploy (stack deploy NÃO lê .env sozinho):
-#        set -a && . ./.env && set +a
-#        docker stack deploy -c docker-stack.yml oryntra
-#   3. Rode as migrations uma vez:
-#        docker exec $(docker ps -qf name=oryntra_laravel-app) php artisan migrate --force
+#   - Um .env no DEPLOY_PATH do manager (o CI/CD carrega antes do deploy).
 #
 # Observação: Swarm IGNORA `build:`, `depends_on`, `container_name` e
 # `restart:`. As imagens precisam estar prontas no registry, e o Traefik lê
@@ -80,7 +76,9 @@ services:
       APP_KEY: ${APP_KEY}
       APP_DEBUG: "false"
       APP_URL: https://${APP_DOMAIN}
-      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-https://${APP_DOMAIN}}
+      # Empty when unset (the nested ${...} default broke Swarm interpolation,
+      # leaving a stray "}" in the URL). The app falls back to APP_URL.
+      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-}
       DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
@@ -144,7 +142,9 @@ services:
       # ProvisionChatwootAgentBotJob). Without APP_URL the job falls back to
       # http://localhost and registers the wrong webhook in Chatwoot.
       APP_URL: https://${APP_DOMAIN}
-      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-https://${APP_DOMAIN}}
+      # Empty when unset (the nested ${...} default broke Swarm interpolation,
+      # leaving a stray "}" in the URL). The app falls back to APP_URL.
+      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-}
       # Queued jobs broadcast over Reverb (e.g. agent run events the playground
       # listens to). Without BROADCAST_CONNECTION the worker defaults to the
       # "null" driver and silently drops every event; without the REVERB_*

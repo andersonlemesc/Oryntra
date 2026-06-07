@@ -1,134 +1,322 @@
-# Production overlay — apply on top of the base compose:
+# =============================================================================
+# Oryntra — exemplo de stack Docker Swarm (apenas o SISTEMA)
 #
-#   cp .env.production.example .env   # then edit secrets + domain
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d \
-#     nginx laravel-app laravel-horizon laravel-scheduler laravel-reverb \
-#     agent-python minio
+# Para quem só quer instalar: este stack sobe apenas a aplicação Oryntra a
+# partir de imagens publicadas no Docker Hub (andersonlemes/oryntra,
+# -agent, -nginx). Postgres, Redis e o storage S3 NÃO fazem parte daqui —
+# você aponta para os seus (gerenciados ou próprios).
 #
-# Topology (MODEST usage, mostly one account):
-#   - Postgres and Redis are EXTERNAL managed services. Point the app at them via
-#     LARAVEL_DB_HOST / REDIS_HOST / POSTGRES_URL in .env. No DB/Redis/pgbouncer
-#     containers run here, so the deploy command lists services explicitly.
-#   - An EXISTING external Traefik (shared network) terminates TLS and routes by
-#     Host. nginx (web/panel/webhooks) and reverb (websocket, same host on /app)
-#     get Traefik labels; nothing is published to the host directly.
-#   - MinIO stays internal-only (Laravel streams media to Chatwoot; no public URLs).
-#   - Do NOT start mailpit in production (dev-only mail catcher) — use real SMTP.
+# Pré-requisitos:
+#   - Docker Swarm inicializado:            docker swarm init
+#   - Um Traefik já rodando no swarm, com uma rede overlay externa (TLS/roteamento)
+#   - Postgres (com a extensão pgvector), Redis e um bucket S3 acessíveis
+#   - Secret com a senha do Postgres:       docker secret create postgres_password -
+#     (o app lê via DB_PASSWORD_FILE; o agent monta a POSTGRES_URL a partir dela)
 #
-# Required .env keys for routing:
-#   TRAEFIK_NETWORK        name of the existing external Traefik docker network
-#   TRAEFIK_ENTRYPOINT     Traefik https entrypoint (e.g. websecure)
-#   TRAEFIK_CERTRESOLVER   Traefik cert resolver (e.g. letsencrypt)
-#   APP_DOMAIN             public host, e.g. app.your-domain.com
+# Como subir:
+#   1. Copie o .env de exemplo e preencha:
+#        cp .env.stack.example .env && nano .env
+#   2. Carregue as variáveis e faça o deploy (stack deploy NÃO lê .env sozinho):
+#        set -a && . ./.env && set +a
+#        docker stack deploy -c docker-compose.prod.yml oryntra
+#   3. Rode as migrations uma vez:
+#        docker exec $(docker ps -qf name=oryntra_laravel-app) php artisan migrate --force
+#
+# Observação: Swarm IGNORA `build:`, `depends_on`, `container_name` e
+# `restart:`. As imagens precisam estar prontas no registry, e o Traefik lê
+# `deploy.labels` (não `labels`).
+# =============================================================================
+
+version: "3.9"
 
 networks:
-  # Existing Traefik network, created and owned outside this stack.
+  # Rede do Traefik (TLS/roteamento), já existente no swarm.
   traefik:
     external: true
     name: ${TRAEFIK_NETWORK:-traefik}
+  # Rede onde vivem Postgres/Redis e onde os serviços se comunicam.
+  # Aponte para a sua rede externa via APP_NETWORK (default: app_network).
+  app_network:
+    external: true
+    name: ${APP_NETWORK:-app_network}
+
+secrets:
+  # Senha do Postgres, criada fora do stack:
+  #   printf 'minha_senha' | docker secret create postgres_password -
+  postgres_password:
+    external: true
 
 services:
+  # --- Front HTTP: nginx servindo os assets e passando PHP para o php-fpm ------
   nginx:
-    # Published image with the Laravel public/ (Vite + Filament assets) baked in.
-    image: andersonlemes/oryntra-nginx:${DEPLOY_TAG:-latest}
-    pull_policy: always
-    # Assets and conf are baked into the image — drop the dev bind-mounts.
-    volumes: !override []
-    # Traefik reaches nginx over the shared network; no host port publishing.
-    ports: !override []
+    image: andersonlemes/oryntra-nginx:${ORYNTRA_VERSION:-latest}
     networks:
-      - oryntra-net
+      - app_network
       - traefik
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
-      - "traefik.http.routers.oryntra-app.rule=Host(`${APP_DOMAIN}`)"
-      - "traefik.http.routers.oryntra-app.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
-      - "traefik.http.routers.oryntra-app.tls=true"
-      - "traefik.http.routers.oryntra-app.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
-      - "traefik.http.services.oryntra-app.loadbalancer.server.port=80"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 128M
+      labels:
+        - "traefik.enable=true"
+        # Traefik v3 (provider swarm) usa traefik.swarm.network.
+        # Em Traefik v2 (swarmMode) troque por traefik.docker.network.
+        - "traefik.swarm.network=${TRAEFIK_NETWORK:-traefik}"
+        - "traefik.http.routers.oryntra-app.rule=Host(`${APP_DOMAIN}`)"
+        - "traefik.http.routers.oryntra-app.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+        - "traefik.http.routers.oryntra-app.tls=true"
+        - "traefik.http.routers.oryntra-app.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+        - "traefik.http.services.oryntra-app.loadbalancer.server.port=80"
 
+  # --- App Laravel (php-fpm) ---------------------------------------------------
   laravel-app:
-    # App code baked into the published image — no build, no bind-mount in prod.
-    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
-    pull_policy: always
-    build: !reset null
-    volumes: !override []
+    image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
     environment:
-      DB_HOST: ${LARAVEL_DB_HOST}
+      APP_NAME: ${APP_NAME:-Oryntra}
+      APP_ENV: production
+      APP_KEY: ${APP_KEY}
+      APP_DEBUG: "false"
+      APP_URL: https://${APP_DOMAIN}
+      # Empty when unset (the nested ${...} default broke Swarm interpolation,
+      # leaving a stray "}" in the URL). The app falls back to APP_URL.
+      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-}
+      DB_CONNECTION: pgsql
+      DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_HOST: ${REDIS_HOST}
-    # Managed Postgres/Redis live outside the stack — drop the base deps so the
-    # explicit `up` list does not pull local DB/Redis containers.
-    depends_on: !reset null
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      QUEUE_CONNECTION: redis
+      BROADCAST_CONNECTION: reverb
+      FILESYSTEM_DISK: s3
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_BUCKET: ${AWS_BUCKET}
+      AWS_ENDPOINT: ${AWS_ENDPOINT}
+      AWS_USE_PATH_STYLE_ENDPOINT: ${AWS_USE_PATH_STYLE_ENDPOINT:-true}
+      AGENT_PYTHON_URL: http://agent-python:8000
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
+      REVERB_APP_ID: ${REVERB_APP_ID:-oryntra}
+      REVERB_APP_KEY: ${REVERB_APP_KEY}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET}
+      REVERB_HOST: ${APP_DOMAIN}
+      REVERB_PORT: "443"
+      REVERB_SCHEME: https
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-${APP_NAME:-Oryntra}}
+    networks:
+      - app_network
+    secrets:
+      - postgres_password
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 768M
 
+  # --- Filas (Horizon) ---------------------------------------------------------
   laravel-horizon:
-    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
-    pull_policy: always
-    volumes: !override []
+    image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
+    command: ["php", "artisan", "horizon"]
+    # Imagem traz HEALTHCHECK de php-fpm:9000; este serviço não abre a 9000.
+    healthcheck:
+      disable: true
     environment:
-      DB_HOST: ${LARAVEL_DB_HOST}
+      # Mesmo APP_NAME do app: define o prefixo das chaves Redis
+      # (Str::slug(APP_NAME)-database-). Sem isto o worker usa o prefixo
+      # "laravel-" e não enxerga as filas/broadcasts publicados pelo app.
+      APP_NAME: ${APP_NAME:-Oryntra}
+      APP_KEY: ${APP_KEY}
+      # Workers build absolute URLs (e.g. the Chatwoot agent-bot webhook in
+      # ProvisionChatwootAgentBotJob). Without APP_URL the job falls back to
+      # http://localhost and registers the wrong webhook in Chatwoot.
+      APP_URL: https://${APP_DOMAIN}
+      # Empty when unset (the nested ${...} default broke Swarm interpolation,
+      # leaving a stray "}" in the URL). The app falls back to APP_URL.
+      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-}
+      # Queued jobs broadcast over Reverb (e.g. agent run events the playground
+      # listens to). Without BROADCAST_CONNECTION the worker defaults to the
+      # "null" driver and silently drops every event; without the REVERB_*
+      # credentials it cannot authenticate to the Reverb server.
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: ${REVERB_APP_ID:-oryntra}
+      REVERB_APP_KEY: ${REVERB_APP_KEY}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET}
+      REVERB_HOST: ${APP_DOMAIN}
+      REVERB_PORT: "443"
+      REVERB_SCHEME: https
+      DB_CONNECTION: pgsql
+      DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      QUEUE_CONNECTION: redis
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_BUCKET: ${AWS_BUCKET}
+      AWS_ENDPOINT: ${AWS_ENDPOINT}
+      AGENT_PYTHON_URL: http://agent-python:8000
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
       HORIZON_AGENT_MAX: ${HORIZON_AGENT_MAX:-3}
       HORIZON_CHATWOOT_WEBHOOKS_MAX: ${HORIZON_CHATWOOT_WEBHOOKS_MAX:-2}
       HORIZON_BACKGROUND_MAX: ${HORIZON_BACKGROUND_MAX:-2}
       AGENT_MAX_CONCURRENCY_PER_ACCOUNT: ${AGENT_MAX_CONCURRENCY_PER_ACCOUNT:-5}
       AGENT_RUN_TIMEOUT: ${AGENT_RUN_TIMEOUT:-180}
-    depends_on: !reset null
+      # Queued mail is sent by Horizon workers, so they need the mailer config.
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-${APP_NAME:-Oryntra}}
+    networks:
+      - app_network
+    secrets:
+      - postgres_password
     deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
       resources:
         limits:
-          memory: 1500M
+          memory: 1024M
 
+  # --- Scheduler ---------------------------------------------------------------
   laravel-scheduler:
-    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
-    pull_policy: always
-    volumes: !override []
+    image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
+    command: ["php", "artisan", "schedule:work"]
+    healthcheck:
+      disable: true
     environment:
-      DB_HOST: ${LARAVEL_DB_HOST}
+      # Mesmo APP_NAME do app: define o prefixo das chaves Redis
+      # (Str::slug(APP_NAME)-database-). Sem isto o worker usa o prefixo
+      # "laravel-" e não enxerga as filas/broadcasts publicados pelo app.
+      APP_NAME: ${APP_NAME:-Oryntra}
+      APP_KEY: ${APP_KEY}
+      DB_CONNECTION: pgsql
+      DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_HOST: ${REDIS_HOST}
-
-  laravel-reverb:
-    image: andersonlemes/oryntra:${DEPLOY_TAG:-latest}
-    pull_policy: always
-    volumes: !override []
-    # Websocket on the same host, routed by Traefik on the /app path prefix.
-    ports: !override []
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      QUEUE_CONNECTION: redis
     networks:
-      - oryntra-net
-      - traefik
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
-      - "traefik.http.routers.oryntra-reverb.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/app`)"
-      - "traefik.http.routers.oryntra-reverb.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
-      - "traefik.http.routers.oryntra-reverb.tls=true"
-      - "traefik.http.routers.oryntra-reverb.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
-      # Higher priority than the catch-all app router so /app wins.
-      - "traefik.http.routers.oryntra-reverb.priority=100"
-      - "traefik.http.services.oryntra-reverb.loadbalancer.server.port=8081"
+      - app_network
+    secrets:
+      - postgres_password
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 256M
 
-  agent-python:
-    image: andersonlemes/oryntra-agent:${DEPLOY_TAG:-latest}
-    pull_policy: always
-    build: !reset null
-    volumes: !override []
-    # Multi-worker, no --reload. Connects directly to managed Postgres via
-    # POSTGRES_URL (.env). 2 workers x AGENT_MAX_CONCURRENCY execution slots.
-    command: ["sh", "-c", "uvicorn oryntra_agent.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-2}"]
+  # --- Reverb (websocket, roteado pelo Traefik em APP_DOMAIN/app) --------------
+  laravel-reverb:
+    image: andersonlemes/oryntra:${ORYNTRA_VERSION:-latest}
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
+    # Imagem traz HEALTHCHECK de php-fpm:9000; reverb escuta 8081, não 9000.
+    healthcheck:
+      disable: true
     environment:
+      # Mesmo APP_NAME do app: define o prefixo das chaves Redis
+      # (Str::slug(APP_NAME)-database-). Sem isto o worker usa o prefixo
+      # "laravel-" e não enxerga as filas/broadcasts publicados pelo app.
+      APP_NAME: ${APP_NAME:-Oryntra}
+      APP_KEY: ${APP_KEY}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REVERB_APP_ID: ${REVERB_APP_ID:-oryntra}
+      REVERB_APP_KEY: ${REVERB_APP_KEY}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET}
+      # reverb:start boots the full framework; without DB_* it falls back to the
+      # sqlite default and crashes. Point it at the same Postgres as the rest.
+      DB_CONNECTION: pgsql
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD_FILE: /run/secrets/postgres_password
+    networks:
+      - app_network
+      - traefik
+    secrets:
+      - postgres_password
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 256M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=${TRAEFIK_NETWORK:-traefik}"
+        - "traefik.http.routers.oryntra-reverb.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/app`)"
+        - "traefik.http.routers.oryntra-reverb.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+        - "traefik.http.routers.oryntra-reverb.tls=true"
+        - "traefik.http.routers.oryntra-reverb.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+        - "traefik.http.routers.oryntra-reverb.priority=100"
+        - "traefik.http.services.oryntra-reverb.loadbalancer.server.port=8081"
+
+  # --- Runtime de IA (Python, privado) ----------------------------------------
+  agent-python:
+    image: andersonlemes/oryntra-agent:${ORYNTRA_VERSION:-latest}
+    # POSTGRES_URL é montada em runtime a partir de DB_* + o secret
+    # postgres_password — a senha nunca aparece no stack nem no shell env.
+    # ($$ escapa o $ para o compose: a expansão acontece dentro do container.)
+    command:
+      - sh
+      - -c
+      - >-
+        export POSTGRES_URL="postgresql://$${DB_USERNAME}:$$(cat /run/secrets/postgres_password)@$${DB_HOST}:$${DB_PORT:-5432}/$${DB_DATABASE}";
+        exec uvicorn oryntra_agent.main:app --host 0.0.0.0 --port 8000 --workers $${UVICORN_WORKERS:-2}
+    environment:
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
+      AGENT_RUNTIME_INTERNAL_TOKEN: ${INTERNAL_API_TOKEN}
+      LARAVEL_INTERNAL_BASE_URL: http://nginx
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_DATABASE: ${DB_DATABASE}
+      LANGGRAPH_CHECKPOINTER: postgres
       UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
       AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-8}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      LANGGRAPH_CHECKPOINTER: postgres
-    depends_on: !reset null
+    networks:
+      - app_network
+    secrets:
+      - postgres_password
     deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
       resources:
         limits:
-          memory: 1500M
-
-  minio:
-    # Internal-only object storage. No host ports, no Traefik route.
-    ports: !override []
+          memory: 1024M

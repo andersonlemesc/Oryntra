@@ -12,7 +12,7 @@ name: Deploy
 #   DEPLOY_SSH_USER   - SSH user (must be able to run docker)
 #   DEPLOY_SSH_KEY    - private key with access to the server
 #   DEPLOY_SSH_PORT   - SSH port (optional, defaults to 22)
-#   DEPLOY_PATH       - path of the repo checkout on the manager (holds docker-stack.yml + .env)
+#   DEPLOY_PATH       - path of the repo checkout on the manager (holds .github/docker-stack.yml + .env)
 #
 # Server prerequisites (one-time):
 #   - Docker Swarm initialised, external Traefik network present.
@@ -96,7 +96,7 @@ jobs:
             echo "Deploying image tag: ${ORYNTRA_VERSION} (stack ref: ${REF})"
 
             # Stack deploy pulls the pre-built images — no build on the server.
-            docker stack deploy --detach=false -c docker-stack.yml oryntra
+            docker stack deploy --detach=false -c .github/docker-stack.yml oryntra
 
             # Run migrations as a one-off Swarm service pinned to the manager, so
             # it works regardless of which node runs laravel-app (docker exec only
