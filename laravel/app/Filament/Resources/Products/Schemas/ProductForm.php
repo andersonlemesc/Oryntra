@@ -10,6 +10,7 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
@@ -51,6 +52,10 @@ class ProductForm
                             ]),
                         TextInput::make('description')
                             ->label('Descricao')
+                            ->columnSpanFull(),
+                        TagsInput::make('tags')
+                            ->label('Tags / sinonimos')
+                            ->helperText('Ex: televisor, tv, led. Usados na busca do agente para casar termos do cliente.')
                             ->columnSpanFull(),
                         Toggle::make('active')
                             ->label('Ativo')

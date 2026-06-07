@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Queue;
 
 use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
+use function Pest\Laravel\patchJson;
 use function Pest\Laravel\postJson;
 
 use Tests\TestCase;
@@ -50,6 +51,27 @@ it('filters products by search and category', function () {
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.name', 'Mouse Gamer');
+});
+
+it('persists product tags on create and update and returns them', function () {
+    [, $headers] = workspaceToken(['product:read', 'product:write']);
+
+    $id = postJson('/api/v1/products', [
+        'name' => 'Smart TV 55',
+        'price' => 2999,
+        'tags' => ['televisor', 'tv', 'led'],
+    ], $headers)
+        ->assertCreated()
+        ->assertJsonPath('data.tags', ['televisor', 'tv', 'led'])
+        ->json('data.id');
+
+    getJson("/api/v1/products/{$id}", $headers)
+        ->assertOk()
+        ->assertJsonPath('data.tags', ['televisor', 'tv', 'led']);
+
+    patchJson("/api/v1/products/{$id}", ['tags' => ['televisor', 'smart tv']], $headers)
+        ->assertOk()
+        ->assertJsonPath('data.tags', ['televisor', 'smart tv']);
 });
 
 it('ingests knowledge from inline text and queues indexing', function () {

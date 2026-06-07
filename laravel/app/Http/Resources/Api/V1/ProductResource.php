@@ -27,6 +27,7 @@ class ProductResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price,
             'metadata' => $this->metadata,
+            'tags' => $this->tags,
             'active' => $this->active,
             'agent_ids' => $this->whenLoaded('agents', fn () => $this->agents->pluck('id')->all()),
             'documents' => DocumentSummaryResource::collection($this->whenLoaded('documents')),

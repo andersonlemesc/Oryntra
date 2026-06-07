@@ -36,12 +36,13 @@ class ImportProductsFromCsv
         $descIdx = $this->findColumnIndex($header, ['description', 'descricao', 'desc']);
         $priceIdx = $this->findColumnIndex($header, ['price', 'preco', 'valor']);
         $categoryIdx = $this->findColumnIndex($header, ['category', 'categoria', 'cat']);
+        $tagsIdx = $this->findColumnIndex($header, ['tags', 'etiquetas', 'sinonimos']);
 
         if ($nameIdx === null) {
             return ['imported' => 0, 'updated' => 0, 'errors' => ['Column "name" is required']];
         }
 
-        DB::transaction(function () use ($lines, $workspaceId, $nameIdx, $skuIdx, $descIdx, $priceIdx, $categoryIdx, &$imported, &$updated, &$errors): void {
+        DB::transaction(function () use ($lines, $workspaceId, $nameIdx, $skuIdx, $descIdx, $priceIdx, $categoryIdx, $tagsIdx, &$imported, &$updated, &$errors): void {
             foreach ($lines as $lineNum => $line) {
                 $line = trim($line);
                 if ($line === '') {
@@ -70,12 +71,15 @@ class ImportProductsFromCsv
                     ? $this->resolveCategoryId($workspaceId, $category)
                     : null;
 
+                $tags = $tagsIdx !== null ? $this->parseTags($row[$tagsIdx] ?? '') : null;
+
                 $data = [
                     'workspace_id' => $workspaceId,
                     'category_id' => $categoryId,
                     'name' => $name,
                     'description' => $description ?: null,
                     'price' => $price,
+                    'tags' => $tags ?: null,
                 ];
 
                 if ($sku !== null && $sku !== '') {
@@ -129,6 +133,21 @@ class ImportProductsFromCsv
         }
 
         return (float) $value;
+    }
+
+    /**
+     * Split a tags cell on comma/semicolon/pipe into a clean list.
+     *
+     * @return array<int, string>
+     */
+    private function parseTags(string $value): array
+    {
+        $parts = preg_split('/[,;|]/', trim($value)) ?: [];
+
+        return array_values(array_unique(array_filter(
+            array_map('trim', $parts),
+            fn (string $tag): bool => $tag !== '',
+        )));
     }
 
     private function resolveCategoryId(int $workspaceId, string $name): int

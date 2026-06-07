@@ -33,6 +33,8 @@ class UpdateProductRequest extends ApiFormRequest
             'description' => ['nullable', 'string', 'max:5000'],
             'price' => ['nullable', 'numeric', 'min:0'],
             'metadata' => ['nullable', 'array'],
+            'tags' => ['nullable', 'array'],
+            'tags.*' => ['string', 'max:60'],
             'active' => ['sometimes', 'boolean'],
             'agent_ids' => ['sometimes', 'array'],
             'agent_ids.*' => [Rule::exists('agents', 'id')->where('workspace_id', $this->workspaceId())],
