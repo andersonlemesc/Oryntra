@@ -332,6 +332,9 @@ def test_runtime_checkpointer_uses_a_validated_pool_for_postgres(monkeypatch) ->
         def close(self) -> None:  # exercised by close_runtime_checkpointer
             return None
 
+        def __class_getitem__(cls, item):
+            return cls
+
     monkeypatch.setattr(supervisor, "ConnectionPool", FakePool)
     monkeypatch.setattr(supervisor, "PostgresSaver", lambda pool: ("saver", pool))
     settings_module.settings.langgraph_checkpointer = "postgres"
@@ -366,6 +369,9 @@ def test_runtime_checkpointer_rebuilds_pool_after_close(monkeypatch) -> None:
 
         def close(self) -> None:
             return None
+
+        def __class_getitem__(cls, item):
+            return cls
 
     monkeypatch.setattr(supervisor, "ConnectionPool", FakePool)
     monkeypatch.setattr(supervisor, "PostgresSaver", lambda pool: pool)
