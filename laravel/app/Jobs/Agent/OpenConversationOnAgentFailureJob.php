@@ -219,7 +219,13 @@ class OpenConversationOnAgentFailureJob implements ShouldQueue
 
     private function record(AgentRun $run, string $status, ?string $reason): void
     {
-        $output = is_array($run->output) ? $run->output : [];
+        $fresh = AgentRun::query()->find($this->agentRunId);
+
+        if ($fresh === null) {
+            return;
+        }
+
+        $output = is_array($fresh->output) ? $fresh->output : [];
         $output['failure_handoff']['status'] = $status;
         $output['failure_handoff']['recorded_at'] = Carbon::now()->toISOString();
 
@@ -227,7 +233,7 @@ class OpenConversationOnAgentFailureJob implements ShouldQueue
             $output['failure_handoff']['reason'] = $reason;
         }
 
-        $run->forceFill(['output' => $output])->save();
+        $fresh->forceFill(['output' => $output])->save();
     }
 
     private function status(AgentRun $run): ?string
