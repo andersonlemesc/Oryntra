@@ -129,7 +129,9 @@ def _build_vision_model(cred: VisionCredential) -> Any:
         kwargs: dict[str, Any] = {}
         if base_url is not None:
             kwargs["base_url"] = base_url
-        return ChatOpenAI(model=cred.model, openai_api_key=SecretStr(cred.api_key), temperature=0, **kwargs)
+        return ChatOpenAI(
+            model=cred.model, openai_api_key=SecretStr(cred.api_key), temperature=0, **kwargs
+        )
 
     if cred.provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
