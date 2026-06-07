@@ -76,7 +76,9 @@ services:
       APP_KEY: ${APP_KEY}
       APP_DEBUG: "false"
       APP_URL: https://${APP_DOMAIN}
-      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-https://${APP_DOMAIN}}
+      # Empty when unset (the nested ${...} default broke Swarm interpolation,
+      # leaving a stray "}" in the URL). The app falls back to APP_URL.
+      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-}
       DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
@@ -140,7 +142,9 @@ services:
       # ProvisionChatwootAgentBotJob). Without APP_URL the job falls back to
       # http://localhost and registers the wrong webhook in Chatwoot.
       APP_URL: https://${APP_DOMAIN}
-      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-https://${APP_DOMAIN}}
+      # Empty when unset (the nested ${...} default broke Swarm interpolation,
+      # leaving a stray "}" in the URL). The app falls back to APP_URL.
+      CHATWOOT_WEBHOOK_BASE_URL: ${CHATWOOT_WEBHOOK_BASE_URL:-}
       # Queued jobs broadcast over Reverb (e.g. agent run events the playground
       # listens to). Without BROADCAST_CONNECTION the worker defaults to the
       # "null" driver and silently drops every event; without the REVERB_*
