@@ -345,7 +345,7 @@ export function createServer(config: OryntraMcpConfig): McpServer {
         {
             title: 'List Products',
             description:
-                'List products. Filter with search (name/sku/description), category (name or slug), active, min_price, max_price. Required scope: product:read.',
+                'List products. Filter with search (matches name/sku/description and tags/synonyms), category (name or slug), active, min_price, max_price. Required scope: product:read.',
             inputSchema: {
                 search: z.string().optional(),
                 category: z.string().optional().describe('Category name or slug.'),
@@ -372,6 +372,10 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 price: z.number().min(0).optional(),
                 active: z.boolean().optional(),
                 metadata: z.record(z.string(), z.unknown()).optional().describe('Arbitrary key/value metadata.'),
+                tags: z
+                    .array(z.string().min(1).max(60))
+                    .optional()
+                    .describe('Search synonyms/aliases so customers find this product by other words (e.g. "televisor","tv","led" for a Smart TV). Used only to match queries, not shown to the agent.'),
                 agent_ids: z
                     .array(z.number().int().positive())
                     .optional()
@@ -394,6 +398,11 @@ export function createServer(config: OryntraMcpConfig): McpServer {
                 description: z.string().nullable().optional(),
                 price: z.number().min(0).nullable().optional(),
                 active: z.boolean().optional(),
+                tags: z
+                    .array(z.string().min(1).max(60))
+                    .nullable()
+                    .optional()
+                    .describe('Replace the search synonyms/aliases (e.g. "televisor","tv","led"). [] or null clears them. Used only to match queries, not shown to the agent.'),
                 agent_ids: z
                     .array(z.number().int().positive())
                     .optional()

@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property int                       $id
@@ -21,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property string|null               $description
  * @property float|null                $price
  * @property array<string, mixed>|null $metadata
+ * @property array<int, string>|null   $tags
  * @property bool                      $active
  * @property Carbon                    $created_at
  * @property Carbon                    $updated_at
@@ -39,6 +41,7 @@ class Product extends Model
         'description',
         'price',
         'metadata',
+        'tags',
         'active',
     ];
 
@@ -48,6 +51,7 @@ class Product extends Model
             'price' => 'float',
             'active' => 'bool',
             'metadata' => 'array',
+            'tags' => 'array',
         ];
     }
 
@@ -117,13 +121,42 @@ class Product extends Model
      */
     public function scopeBySearch(Builder $query, string $search): Builder
     {
-        $operator = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+        $operator = self::driverNameForQuery($query) === 'pgsql' ? 'ilike' : 'like';
 
         return $query->where(function (Builder $q) use ($operator, $search): void {
             $q->where('name', $operator, "%{$search}%")
                 ->orWhere('description', $operator, "%{$search}%")
                 ->orWhere('sku', $operator, "%{$search}%");
+
+            self::orWhereTagMatches($q, $search);
         });
+    }
+
+    /**
+     * Add an OR clause matching products whose `tags` array contains the term.
+     * Postgres: accent-insensitive ILIKE over each jsonb array element.
+     * Other drivers (SQLite in tests): LIKE over the serialized JSON column.
+     *
+     * @param Builder<Product> $query
+     */
+    public static function orWhereTagMatches(Builder $query, string $term): void
+    {
+        if (self::driverNameForQuery($query) === 'pgsql') {
+            $query->orWhereRaw(
+                'EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) AS tag WHERE unaccent(lower(tag)) ILIKE unaccent(lower(?)))',
+                ['%' . $term . '%'],
+            );
+        } else {
+            $query->orWhereRaw('lower(tags) like ?', ['%' . mb_strtolower($term) . '%']);
+        }
+    }
+
+    /**
+     * @param Builder<Product> $query
+     */
+    private static function driverNameForQuery(Builder $query): string
+    {
+        return DB::connection($query->getModel()->getConnectionName())->getDriverName();
     }
 
     /**
