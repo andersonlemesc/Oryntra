@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\AgentResponseMode;
 use App\Enums\AgentRunStatus;
 use App\Jobs\Agent\FinalizeAgentRunJob;
+use App\Jobs\Agent\OpenConversationOnAgentFailureJob;
 use App\Models\Agent;
 use App\Models\AgentRun;
 use App\Models\ChatwootConnection;
@@ -164,10 +165,13 @@ it('does not deliver twice when response delivery already completed', function (
     Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/conversations/'));
 });
 
-it('marks the run failed when the runtime reports failure', function () {
+it('marks the run failed and opens the conversation for a human when the runtime reports failure', function () {
+    Bus::fake();
+
     $run = AgentRun::factory()->create([
         'status' => AgentRunStatus::Running,
         'started_at' => now(),
+        'conversation_id' => 99,
     ]);
 
     (new FinalizeAgentRunJob($run->id, [
@@ -178,6 +182,40 @@ it('marks the run failed when the runtime reports failure', function () {
     $freshRun = $run->fresh();
     expect($freshRun?->status)->toBe(AgentRunStatus::Failed)
         ->and($freshRun?->error_message)->toBe('runtime_timeout');
+
+    Bus::assertDispatched(
+        OpenConversationOnAgentFailureJob::class,
+        fn (OpenConversationOnAgentFailureJob $job): bool => $job->agentRunId === $run->id
+            && $job->reason === 'runtime_timeout',
+    );
+});
+
+it('does not open a conversation on a completed run', function () {
+    Bus::fake();
+
+    $workspace = Workspace::factory()->create();
+    $connection = ChatwootConnection::factory()->for($workspace)->create([
+        'base_url' => 'http://chatwoot.test',
+        'account_id' => 5,
+        'api_access_token' => 'agent-bot-token',
+    ]);
+    Http::fake([
+        'http://chatwoot.test/api/v1/accounts/5/conversations/99/messages' => Http::response(['id' => 1]),
+    ]);
+    $run = AgentRun::factory()->create([
+        'workspace_id' => $workspace->id,
+        'chatwoot_connection_id' => $connection->id,
+        'chatwoot_account_id' => 5,
+        'conversation_id' => 99,
+        'status' => AgentRunStatus::Running,
+        'started_at' => now(),
+    ]);
+
+    (new FinalizeAgentRunJob($run->id, finalizeRuntimeResult([
+        'response' => ['type' => 'text', 'content' => 'Ola!', 'confidence' => 1.0],
+    ])))->handle();
+
+    Bus::assertNotDispatched(OpenConversationOnAgentFailureJob::class);
 });
 
 it('preserves the resolution payload written by resolve_conversation when merging', function () {
