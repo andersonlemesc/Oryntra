@@ -117,6 +117,18 @@ class FinalizeAgentRunJob implements ShouldQueue
                 if ($output['status'] === AgentRunStatus::Completed->value) {
                     ExtractContactMemoryJob::dispatch($run->id)->afterCommit();
                 }
+
+                // A failed run cannot answer the customer. Open the conversation
+                // for a human (and assign the configured handoff destination) so
+                // the message is never left unanswered. Covers both the runtime
+                // failure callback and the stuck-run reaper, which both finalize
+                // through here with a Failed status.
+                if ($output['status'] === AgentRunStatus::Failed->value) {
+                    OpenConversationOnAgentFailureJob::dispatch(
+                        $run->id,
+                        $this->stringValue($output['error'] ?? null) ?: 'runtime_failed',
+                    )->afterCommit();
+                }
             } catch (Throwable $e) {
                 $run->forceFill([
                     'status' => AgentRunStatus::Failed,

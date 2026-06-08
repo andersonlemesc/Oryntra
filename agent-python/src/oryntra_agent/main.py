@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from oryntra_agent.agent.supervisor import close_runtime_checkpointer
 from oryntra_agent.api.chatwoot_messages import router as chatwoot_messages_router
 from oryntra_agent.api.health import router as health_router
 from oryntra_agent.api.memory_extraction import router as memory_extraction_router
@@ -33,6 +34,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.exception("Failed to set up LangGraph checkpointer tables on startup.")
 
     yield
+
+    close_runtime_checkpointer()
 
 
 app = FastAPI(

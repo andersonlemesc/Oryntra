@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     agent_runtime_internal_token: str = ""
     postgres_url: str = "postgresql://oryntra:oryntra_dev_pw@postgres:5432/oryntra"
     langgraph_checkpointer: str = "memory"
+    # Connection pool for the LangGraph Postgres checkpointer. A pooled
+    # connection is validated (check) before each checkout, so a connection the
+    # server/network dropped while the agent was idle is discarded instead of
+    # being reused dead — which previously surfaced as "server closed the
+    # connection unexpectedly" on the first query of a run after an idle gap.
+    pg_pool_min_size: int = 1
+    pg_pool_max_size: int = 10
     log_level: str = "INFO"
 
     # Max concurrent agent runs executed per uvicorn worker process. With N

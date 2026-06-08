@@ -11,6 +11,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import SecretStr
+
 EMBEDDING_PROVIDERS: frozenset[str] = frozenset({"openai", "local", "gemini"})
 DEFAULT_BATCH_SIZE = 100
 
@@ -33,7 +35,7 @@ def _build_embedder(provider: str, model: str, api_key: str, base_url: str | Non
         kwargs: dict[str, Any] = {}
         if base_url:
             kwargs["base_url"] = base_url
-        return OpenAIEmbeddings(model=model, openai_api_key=api_key, **kwargs)
+        return OpenAIEmbeddings(model=model, openai_api_key=SecretStr(api_key), **kwargs)
 
     if provider == "gemini":
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -41,7 +43,9 @@ def _build_embedder(provider: str, model: str, api_key: str, base_url: str | Non
         kwargs = {}
         if base_url:
             kwargs["client_options"] = {"api_endpoint": base_url}
-        return GoogleGenerativeAIEmbeddings(model=model, google_api_key=api_key, **kwargs)
+        return GoogleGenerativeAIEmbeddings(
+            model=model, google_api_key=SecretStr(api_key), **kwargs
+        )
 
     raise UnsupportedEmbeddingProviderError(f"provider '{provider}' does not support embeddings")
 
