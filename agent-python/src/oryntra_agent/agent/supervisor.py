@@ -155,13 +155,42 @@ class SpecialistDecision(BaseModel):
         "request_human_handoff",
         "request_reroute",
         "resolve_conversation",
-    ]
-    content: str | None = None
-    handoff_reason: str | None = None
-    reroute_reason: str | None = None
+    ] = Field(
+        description=(
+            "What to do with this turn. Pick exactly one:\n"
+            "- respond_text: reply to the customer yourself (default). Put the reply in `content`.\n"
+            "- request_human_handoff: hand the conversation to a HUMAN agent/team. Use this whenever "
+            "the customer asks to talk to a person, is unhappy, or you cannot resolve it. This transfers "
+            "the conversation — it does NOT close it. Set `handoff_reason` (and `suggested_team` if a "
+            "specific team fits). Never say you will transfer without choosing this action.\n"
+            "- resolve_conversation: CLOSE the conversation. Use ONLY when the customer confirmed their "
+            "problem is solved and they need nothing else. This ends the chat and assigns no human — "
+            "never use it to transfer someone to an agent.\n"
+            "- request_reroute: the question belongs to a different specialist; send it back to routing. "
+            "Set `reroute_reason`."
+        ),
+    )
+    content: str | None = Field(
+        default=None,
+        description="The customer-facing reply text. Required when action is respond_text.",
+    )
+    handoff_reason: str | None = Field(
+        default=None,
+        description="Short internal reason for the human handoff. Set when action is request_human_handoff.",
+    )
+    reroute_reason: str | None = Field(
+        default=None,
+        description="Short internal reason for rerouting. Set when action is request_reroute.",
+    )
     handoff_priority: Literal["low", "normal", "high", "urgent"] = "normal"
-    suggested_team: str | None = None
-    resolution_reason: str | None = None
+    suggested_team: str | None = Field(
+        default=None,
+        description="Optional name of the human team that should receive the handoff.",
+    )
+    resolution_reason: str | None = Field(
+        default=None,
+        description="Short internal note on what was resolved. Set when action is resolve_conversation.",
+    )
     resolution_summary: str | None = None
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
 

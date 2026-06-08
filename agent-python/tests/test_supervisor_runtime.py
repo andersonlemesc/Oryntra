@@ -402,3 +402,15 @@ def test_single_agent_path_stays_compatible() -> None:
     assert response.status == "completed"
     assert response.specialist_id is None
     assert response.response.content == "[mock] Recebi 1 mensagem(ns)."
+
+
+def test_specialist_decision_action_documents_handoff_vs_resolve() -> None:
+    """The action enum carries no per-value schema text on its own, so the field
+    description is the only embedded instruction the model gets to tell a human
+    handoff (transfer) apart from resolving (closing). Lock that guidance in."""
+    description = (SpecialistDecision.model_fields["action"].description or "").lower()
+
+    assert "request_human_handoff" in description
+    assert "resolve_conversation" in description
+    assert "transfer" in description
+    assert "close" in description or "ends the chat" in description
