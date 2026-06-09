@@ -1,4 +1,4 @@
-<x-auth.layout title="Setup inicial | Oryntra" subtitle="Configure a conexao Chatwoot Platform para sincronizar workspaces e usuarios.">
+<x-auth.layout title="Setup inicial | Oryntra" subtitle="Configure a conexao Chatwoot Platform para sincronizar workspaces e usuarios." :wide="true">
     <div class="info">
         <strong>Como obter o Platform App Token</strong>
         <ol>
@@ -42,6 +42,10 @@
         </div>
     @endif
 
+    <form id="logout-form" method="POST" action="{{ route('logout') }}" hidden>
+        @csrf
+    </form>
+
     <form method="POST" action="{{ route('setup.platform.store') }}">
         @csrf
 
@@ -66,7 +70,7 @@
         >
 
         <div class="actions">
-            <a href="{{ route('login') }}">Sair</a>
+            <button form="logout-form" class="btn-link">Sair</button>
             <button type="submit">Configurar e sincronizar</button>
         </div>
     </form>
