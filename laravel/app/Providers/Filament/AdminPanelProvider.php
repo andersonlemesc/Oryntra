@@ -14,6 +14,7 @@ use App\Filament\Widgets\RecentContactsTable;
 use App\Filament\Widgets\RecentFailedRunsTable;
 use App\Filament\Widgets\RecentLeadsStatsOverview;
 use App\Filament\Widgets\RunsThroughputChart;
+use App\Http\Middleware\RedirectToPlatformSetupIfNeeded;
 use App\Http\Middleware\RedirectToRegisterIfNoUsers;
 use App\Models\Workspace;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
@@ -117,6 +118,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
+                RedirectToPlatformSetupIfNeeded::class,
             ]);
     }
 }

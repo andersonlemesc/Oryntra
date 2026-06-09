@@ -1,3 +1,10 @@
+@props([
+    'title' => null,
+    'subtitle' => null,
+    'statusLabel' => null,
+    'versionLabel' => null,
+    'wide' => false,
+])
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
@@ -82,12 +89,80 @@
 
             .auth-panel {
                 width: min(100%, 460px);
+                min-width: 0;
                 background: var(--panel);
                 border: 0;
                 border-radius: var(--radius);
                 padding: 36px 36px 32px;
                 position: relative;
                 box-shadow: none;
+            }
+
+            .auth-panel.wide {
+                width: min(100%, 760px);
+            }
+
+            .info {
+                background: var(--bg-1);
+                border: 1px solid var(--line);
+                border-radius: var(--radius-sm);
+                padding: 16px 18px;
+                margin: 0 0 18px;
+                font-size: 13.5px;
+                line-height: 1.6;
+                color: var(--ink-soft);
+            }
+
+            .info strong {
+                color: var(--ink);
+                font-weight: 600;
+            }
+
+            .info > strong:first-child {
+                display: block;
+                margin-bottom: 8px;
+            }
+
+            .info p {
+                margin: 8px 0 0;
+            }
+
+            .info ol {
+                margin: 8px 0 0;
+                padding-left: 20px;
+            }
+
+            .info li {
+                margin: 4px 0;
+            }
+
+            code {
+                font-family: 'JetBrains Mono', ui-monospace, monospace;
+                font-size: 12px;
+                background: rgba(108, 199, 255, 0.08);
+                border: 1px solid var(--line);
+                border-radius: 6px;
+                padding: 1px 6px;
+                color: var(--accent);
+                word-break: break-word;
+            }
+
+            pre {
+                margin: 10px 0 0;
+                background: var(--bg-0);
+                border: 1px solid var(--line);
+                border-radius: var(--radius-sm);
+                padding: 12px 14px;
+                overflow-x: auto;
+            }
+
+            pre code {
+                background: none;
+                border: 0;
+                padding: 0;
+                color: var(--ink-soft);
+                white-space: pre;
+                word-break: normal;
             }
 
             .auth-panel::before {
@@ -243,14 +318,25 @@
                 transform: translateY(1px);
             }
 
-            a {
+            a,
+            .btn-link {
                 color: var(--ink-soft);
                 font-size: 13.5px;
                 text-decoration: none;
                 transition: color 0.15s ease;
             }
 
-            a:hover {
+            .btn-link {
+                appearance: none;
+                background: none;
+                border: 0;
+                padding: 0;
+                font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+                cursor: pointer;
+            }
+
+            a:hover,
+            .btn-link:hover {
                 color: var(--accent);
             }
 
@@ -337,7 +423,7 @@
         <div class="bg-grid"></div>
 
         <main>
-            <section class="auth-panel">
+            <section class="auth-panel {{ $wide ? 'wide' : '' }}">
                 <img class="brand-logo" src="{{ asset('logo.png') }}" alt="Oryntra">
                 <p class="lede">{{ $subtitle ?? 'Acesse o painel operacional.' }}</p>
 
