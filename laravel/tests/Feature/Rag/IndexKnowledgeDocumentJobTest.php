@@ -101,6 +101,32 @@ it('marks the document failed when ingest fails', function () {
         ->and($document->index_error)->toContain('ingest failed');
 });
 
+it('does not mark the document indexed when ingest returns no chunks', function () {
+    configureRuntime();
+    $document = knowledgeDocument();
+
+    Http::fake([
+        '*/internal/rag/ingest' => Http::response([
+            'chunks' => [],
+            'vectors' => [],
+            'embedding_provider' => 'openai',
+            'embedding_model' => 'text-embedding-3-small',
+            'embedding_dim' => 3,
+            'usage' => [],
+        ]),
+    ]);
+
+    $job = new IndexKnowledgeDocumentJob($document->id);
+
+    expect(fn () => $job->handle(app(AgentRuntimeClient::class)))
+        ->toThrow(AgentRuntimeException::class, 'no chunks');
+
+    $job->failed(new AgentRuntimeException('Knowledge ingest produced no chunks; document was not indexed.'));
+
+    expect($document->refresh()->index_status)->toBe(AgentDocumentStatus::Failed)
+        ->and($document->chunks()->count())->toBe(0);
+});
+
 it('reindexes by replacing existing chunks', function () {
     configureRuntime();
     $document = knowledgeDocument();
