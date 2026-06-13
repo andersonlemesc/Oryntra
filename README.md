@@ -16,6 +16,16 @@ multiempresa e integração nativa com o Chatwoot via webhook e API.
 
 ---
 
+<div align="center">
+
+[![Oryntra — demonstração em vídeo](https://img.youtube.com/vi/4n6mnRIG1pc/maxresdefault.jpg)](https://youtu.be/4n6mnRIG1pc)
+
+▶️ **[Assista à demonstração do Oryntra](https://youtu.be/4n6mnRIG1pc)**
+
+</div>
+
+---
+
 ## O que é
 
 O Oryntra adiciona uma camada de **agentes de IA** ao atendimento no Chatwoot, sem ser um
