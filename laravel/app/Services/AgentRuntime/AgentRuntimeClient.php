@@ -225,6 +225,10 @@ class AgentRuntimeClient
             throw new AgentRuntimeException('Knowledge ingest response failed contract validation.');
         }
 
+        if ($chunks === []) {
+            throw new AgentRuntimeException('Knowledge ingest produced no chunks; document was not indexed.');
+        }
+
         /** @var array<int, array{index:int,content:string,tokens:int|null,metadata:array<string,mixed>}> $chunks */
         /** @var array<int, array<int, float>> $vectors */
         /** @var array<string, mixed> $usage */
