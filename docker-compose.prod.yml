@@ -116,7 +116,7 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-${APP_NAME:-Oryntra}}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Oryntra}
     networks:
       - app_network
     secrets:
@@ -189,7 +189,7 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-${APP_NAME:-Oryntra}}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Oryntra}
     networks:
       - app_network
     secrets:
