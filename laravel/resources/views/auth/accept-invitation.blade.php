@@ -11,7 +11,8 @@
         <input id="password" name="password" type="password" autocomplete="new-password" required autofocus>
 
         <label for="password_confirmation">Confirmar senha</label>
-        <input id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" required>
+        <input id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password"
+            required>
 
         <div class="actions">
             <a href="{{ route('login') }}">Já tenho conta</a>
