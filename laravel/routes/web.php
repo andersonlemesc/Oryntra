@@ -20,6 +20,7 @@ Route::get('/', function (): RedirectResponse {
     if (! User::query()->exists()) {
         return redirect()->to('/register');
     }
+
     return redirect()->to(route('login'));
 });
 
