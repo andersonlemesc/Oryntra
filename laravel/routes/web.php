@@ -9,10 +9,11 @@ use App\Http\Controllers\Setup\PlatformSetupController;
 use App\Http\Middleware\EnsurePlatformSetupNeeded;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function (): RedirectResponse {
-    if (auth()->check()) {
+    if (Auth::check()) {
         return redirect()->to('/admin');
     }
 
