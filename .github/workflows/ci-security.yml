@@ -10,12 +10,15 @@ on:
     branches: [main, develop]
   schedule:
     - cron: '0 6 * * 1'  # weekly Monday 06:00 UTC
+  # Run the full-history scan on demand — the weekly schedule is otherwise the
+  # only way to reproduce it, which makes triaging a finding a week-long loop.
+  workflow_dispatch:
 
 jobs:
   composer-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
@@ -26,7 +29,7 @@ jobs:
   pip-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -40,7 +43,7 @@ jobs:
   secret-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: TruffleHog PR scan
@@ -60,16 +63,33 @@ jobs:
           head: ${{ github.sha }}
           extra_args: --only-verified
       - name: TruffleHog full scan
-        if: github.event_name == 'schedule' || (github.event_name == 'push' && github.event.before == '0000000000000000000000000000000000000000')
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.event.before == '0000000000000000000000000000000000000000')
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
           extra_args: --only-verified
 
+      # The enforcing step above only prints "Found verified <Detector> result",
+      # with no location — so a finding cannot be triaged from the log alone.
+      # This step re-runs the same scan and reports detector/commit/file/line.
+      # `Raw`/`RawV2` are deliberately never printed: the point is *where* the
+      # match is, and the value itself must not land in CI logs.
+      - name: TruffleHog full scan (locations of verified findings)
+        if: always() && github.event_name == 'workflow_dispatch'
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/trufflesecurity/trufflehog:latest \
+            git file:///repo --only-verified --json --no-update 2>/dev/null \
+            | jq -r '[.DetectorName, (.SourceMetadata.Data.Git.commit // "-")[0:8],
+                      (.SourceMetadata.Data.Git.file // "-"),
+                      (.SourceMetadata.Data.Git.line // "-" | tostring)] | @tsv' \
+            | sort -u \
+            | tee /tmp/th-locations.tsv
+          echo "verified findings: $(wc -l < /tmp/th-locations.tsv)"
+
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Gitleaks (full history, pattern-based)
