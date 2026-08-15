@@ -18,6 +18,6 @@
         "pusher-js": "^8.4"
     },
     "overrides": {
-        "shell-quote": "1.8.4"
+        "shell-quote": "1.9.0"
     }
 }
