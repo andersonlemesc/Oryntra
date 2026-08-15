@@ -16,6 +16,17 @@ class DocumentChunkFactory extends Factory
 {
     protected $model = DocumentChunk::class;
 
+    /**
+     * Monotonic source for `chunk_index`.
+     *
+     * `document_chunks` is UNIQUE (agent_document_id, chunk_index). Drawing the
+     * index at random collided whenever a test made several chunks for one
+     * document — three independent draws out of 101 values collide ~3% of the
+     * time — which made AgentDocumentSchemaTest fail on roughly 1 run in 34.
+     * A counter also mirrors production, where chunks are numbered in order.
+     */
+    private static int $nextChunkIndex = 0;
+
     public function definition(): array
     {
         $dim = 1536;
@@ -23,7 +34,7 @@ class DocumentChunkFactory extends Factory
         return [
             'workspace_id' => Workspace::factory(),
             'agent_document_id' => AgentDocument::factory(),
-            'chunk_index' => fake()->numberBetween(0, 100),
+            'chunk_index' => self::$nextChunkIndex++,
             'content' => fake()->paragraph(),
             'tokens' => fake()->numberBetween(50, 500),
             'embedding_model' => 'text-embedding-3-small',
