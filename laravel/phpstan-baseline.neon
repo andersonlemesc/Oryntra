@@ -427,12 +427,6 @@ parameters:
 			path: database/factories/CategoryFactory.php
 
 		-
-			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Console\\Command\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: database/seeders/ExternalToolDemoSeeder.php
-
-		-
 			message: '#^Function seedConnectorScenario\(\) has parameter \$allowlist with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -659,12 +653,6 @@ parameters:
 			identifier: property.notFound
 			count: 2
 			path: tests/Feature/Filament/ProductCategoryResourceTest.php
-
-		-
-			message: '#^Call to an undefined method Mockery\\ExpectationInterface\|Mockery\\HigherOrderMessage\:\:andReturnUsing\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Playground/StreamPlaygroundRunJobTest.php
 
 		-
 			message: '#^Cannot access property \$status on App\\Models\\AgentRun\|null\.$#'
