@@ -56,7 +56,7 @@ it('lists workspace members and resends an invitation', function (): void {
 
     Livewire::test(WorkspaceUsers::class)
         ->assertSuccessful()
-        ->assertCanSeeTableRecords([$member]) // @phpstan-ignore method.notFound
+        ->assertCanSeeTableRecords([$member])
         ->callAction(TestAction::make('resendInvitation')->table($member));
 
     expect(UserInvitation::query()->where('user_id', $member->id)->exists())->toBeTrue();
@@ -70,7 +70,7 @@ it('hides resend invitation for already active members', function (): void {
 
     Livewire::test(WorkspaceUsers::class)
         ->assertSuccessful()
-        ->assertActionHidden(TestAction::make('resendInvitation')->table($active)); // @phpstan-ignore method.notFound
+        ->assertActionHidden(TestAction::make('resendInvitation')->table($active));
 });
 
 it('marks a super admin as active even without email verification', function (): void {
@@ -85,5 +85,5 @@ it('marks a super admin as active even without email verification', function ():
 
     Livewire::test(WorkspaceUsers::class)
         ->assertSuccessful()
-        ->assertTableColumnStateSet('active', 'Sim', record: $admin); // @phpstan-ignore method.notFound
+        ->assertTableColumnStateSet('active', 'Sim', record: $admin);
 });

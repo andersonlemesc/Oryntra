@@ -18,7 +18,7 @@
 # -------------------------------------------------------------------------
 # base — shared runtime, also used as the dev image (code via bind-mount)
 # -------------------------------------------------------------------------
-FROM php:8.4-fpm-bookworm AS base
+FROM php:8.5.12-fpm-bookworm AS base
 
 ARG WWWUSER=1000
 ARG WWWGROUP=1000
@@ -56,7 +56,6 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
         pgsql \
         intl \
         bcmath \
-        opcache \
         pcntl \
         sockets \
         zip \

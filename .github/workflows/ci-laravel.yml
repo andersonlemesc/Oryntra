@@ -52,7 +52,7 @@ jobs:
       - name: Setup PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: '8.5.12'
           extensions: pdo_pgsql, pgsql, intl, bcmath, redis, zip, gd, pcntl, sockets
           coverage: pcov
           tools: composer:v2
