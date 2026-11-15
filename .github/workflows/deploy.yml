@@ -1,6 +1,8 @@
 name: Deploy
 
 # Automated deploy to a self-hosted Docker Swarm over SSH — `docker stack deploy`
+# The SSH session runs through a WireGuard VPN (the server's port 22 is not
+# exposed to the internet); the runner joins the VPN only for this job.
 # pulls the images published by the Build & Publish workflow (no build on the box).
 #
 # Triggers:
@@ -8,7 +10,8 @@ name: Deploy
 #   - manual run (workflow_dispatch) for a chosen ref / image tag (rollback).
 #
 # Required secrets (configure under the `production` GitHub Environment):
-#   DEPLOY_SSH_HOST   - swarm manager hostname or IP
+#   WG_CONFIG         - WireGuard client config (wg-quick format) for the deploy VPN
+#   (the SSH host is the manager's VPN address, 10.0.0.74; DEPLOY_SSH_HOST is no longer used)
 #   DEPLOY_SSH_USER   - SSH user (must be able to run docker)
 #   DEPLOY_SSH_KEY    - private key with access to the server
 #   DEPLOY_SSH_PORT   - SSH port (optional, defaults to 22)
@@ -50,10 +53,24 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Connect to the deploy VPN (WireGuard)
+        env:
+          WG_CONFIG: ${{ secrets.WG_CONFIG }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wireguard-tools >/dev/null
+          # IPv4 only on the runner: drop the IPv6 address from the config.
+          printf '%s\n' "$WG_CONFIG" | sed -E 's/^(Address = [^,]+),.*/\1/' | sudo tee /etc/wireguard/wg0.conf >/dev/null
+          sudo chmod 600 /etc/wireguard/wg0.conf
+          sudo wg-quick up wg0
+          for i in 1 2 3 4 5; do timeout 3 bash -c 'exec 3<>/dev/tcp/10.0.0.74/22' && break; sleep 2; done
+          timeout 3 bash -c 'exec 3<>/dev/tcp/10.0.0.74/22' && echo "VPN up, SSH reachable"
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          host: 10.0.0.74
           username: ${{ secrets.DEPLOY_SSH_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
